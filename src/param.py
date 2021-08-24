@@ -4,6 +4,7 @@ class ParamValX():
         
         
         self.T = []
+        self.obst = []
         self.z_i = []
         self.z_ji = []
         self.lambda_i = []
@@ -31,6 +32,7 @@ class ParamValX():
         from more_itertools import locate
         assemble_list = self.P0_list
         idx_T = list(locate(assemble_list, lambda a: a == 'T'))
+        idx_obst = list(locate(assemble_list, lambda a: a == 'obst'))
         idx_z_i = list(locate(assemble_list, lambda a: a == 'z_i'))
         idx_z_ji = list(locate(assemble_list, lambda a: a == 'z_ji'))
         idx_lambda_i = list(locate(assemble_list, lambda a: a == 'lambda_i'))
@@ -43,6 +45,9 @@ class ParamValX():
         if self.z_i != []:
             for i, idx in enumerate(idx_T):
                 P0_assemble[idx] = self.T[i]
+                
+            for i, idx in enumerate(idx_obst):
+                P0_assemble[idx] = self.obst[i]
                 
             for i, idx in enumerate(idx_z_i):
                 P0_assemble[idx] = self.z_i[i]
@@ -260,22 +265,5 @@ class DecisionVarX():
         
         return self
     
-# class VariableHistory():
-#     def __init__(self):
-#         self.xk = []
-#         self.z_i = []
-#         self.x_j = []
-#         self.z_ij = []
-#         self.variables = {'xk' : [],
-#                           'z_i' : [],
-#                           'x_j' : [],
-#                           'z_ij' : []}
-        
-#     def save_variable(self, variable_name : str, variable : list):
-#         if variable_name == 'xk':
-#             self.xk += [variable]
-            
-#         self.variables[variable_name] += [variable]
-        
-#         return self
+
         

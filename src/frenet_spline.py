@@ -1,5 +1,5 @@
 from .spline import BSpline, BSplineBasis
-from .frenet_path import FrenetPath
+# from .frenet_path import FrenetPath
 
 from casadi import MX, SX, Function, vertcat, dot, nlpsol, cos, sin, norm_2
 
@@ -93,6 +93,16 @@ class SplineFitter():
                     self.lbg += [lower_bound[i]]
                     self.ubg += [upper_bound[i]]
             return self
+            
+        elif constraint_type == 'time':
+            for i in range(len(constraint)):
+                # for j in range(constraint[i].coeffs.shape[0]):
+                self.g += [constraint[i]]
+                for j in range(constraint[i].shape[0]):
+                    self.g_list += [name]
+                    self.lbg += [lower_bound[i]]
+                    self.ubg += [upper_bound[i]]
+            return self
 
         elif constraint_type == 'initial':
             for i in range(len(constraint)):
@@ -112,6 +122,61 @@ class SplineFitter():
         else:
             raise NotImplementedError()
 
+    def fitting_single(self, f, y_min : list = [-20], y_max : list = [20], degree : int = 3):
+        self.w, self.lbw, self.ubw = [], [], []
+        self.g, self.lbg, self.ubg = [], [], []
+        self.J = 0
+        self.w_list, self.g_list, self.P_list = [], [], []
+        
+        n_dimensions = len(f)
+        n_samples = len(f[0])
+        y = self.define_splines(degree=degree, knot_intervals=self.knot_intervals, n_spl=n_dimensions,
+                                lower_bound=y_min, upper_bound=y_max,
+                                name=["y"] * n_dimensions)
+        
+        # Initial position constraint on y
+        # self.define_constraint(y,
+        #                        [f_[0] for f_ in f],
+        #                        [f_[0] for f_ in f],
+        #                        constraint_type='initial',
+        #                        name=["y0"] * n_dimensions)
+        # # Final position constraint on y
+        # self.define_constraint(y,
+        #                        [f_[-1] for f_ in f],
+        #                        [f_[-1] for f_ in f],
+        #                        constraint_type='final',
+        #                        name=["yf"] * n_dimensions)
+        
+        for i, t in enumerate(np.linspace(0, 1, n_samples)):
+            for j in range(n_dimensions):
+                self.J += (y[j](t) - f[j][i])**4
+            
+        
+        prob = {'f': self.J,
+                'x': vertcat(*self.w),
+                'g': vertcat(*self.g)
+                }
+
+        solver = nlpsol('solver', 'ipopt', prob)
+
+        arg = {'lbx': self.lbw,
+               'ubx': self.ubw,
+               'lbg': self.lbg,
+               'ubg': self.ubg
+               }
+
+        self.solution = solver.call(arg)
+        
+        
+        basis = y[0].basis
+        coeffs = self.solution['x'].full()
+        fitted_spline = []
+        for i in range(len(f)):
+            fitted_spline += [BSpline(basis, coeffs[len(basis)*i : len(basis)*(i+1)])]
+        
+        
+        return fitted_spline
+    
     
     def fitting(self, fx, fy, degree = 3, lbw = [], ubw = []):
         """ This function fits a 3-degree spline on fx and a spline on fy.
@@ -216,6 +281,167 @@ class SplineFitter():
 
 
         return fitted_spline
+
+    def min_max_fitting(self, fx, fy, degree = 3, lbw = [], ubw = []):
+        """ This function fits a 3-degree spline on fx and a spline on fy.
+        If lbw and ubw are provided, then 'overall' constraints are enforced on
+        the spline values up to a degree, specified by the length of the lbw and ubw arrays.
+        """
+        
+        # # Modification
+        # if get_module(fx.coeffs) in ['MX']:
+        #     pass
+        # else:
+        #     print()
+        #     assert 0
+            
+        self.w, self.lbw, self.ubw = [], [], []
+        self.g, self.lbg, self.ubg = [], [], []
+        self.J = 0
+        self.w_list, self.g_list, self.P_list = [], [], []
+        self.n_dimensions = 2
+
+        y = self.define_splines(degree=degree, knot_intervals=10, n_spl=self.n_dimensions,
+                                lower_bound=[-math.inf] * self.n_dimensions,
+                                upper_bound=[math.inf] * self.n_dimensions,
+                                name=["y"] * self.n_dimensions)
+        print('Reduced knot_intervals')
+        # Initial position constraint on y
+        self.define_constraint(y,
+                               [fx.coeffs[0], fy.coeffs[0]],
+                               [fx.coeffs[0], fy.coeffs[0]],
+                               constraint_type='initial',
+                               name=["y0"] * self.n_dimensions)
+        # Final position constraint on y
+        self.define_constraint(y,
+                               [fx.coeffs[-1], fy.coeffs[-1]],
+                               [fx.coeffs[-1], fy.coeffs[-1]],
+                               constraint_type='final',
+                               name=["yf"] * self.n_dimensions)
+        
+        # if len(lbw) > 0 and len(ubw) > 0:
+        if lbw != [] and ubw != []:
+            # Example: overall constraints on position, velocity and acceleration
+            for i in range(len(lbw[0])):
+                y_der = [y_.derivative(i) for y_ in y]
+                self.define_constraint(y_der,
+                                       [lbw[0][i], lbw[0][i]],
+                                       [ubw[0][i], ubw[0][i]],
+                                       constraint_type='overall',
+                                       name=["y_" + "d" * i + "_overall"] * self.n_dimensions)
+                
+                                        # [lbw[0][i] * 10, lbw[0][i] * 10],
+                                        # [ubw[0][i] * 10, ubw[0][i] * 10],
+                                       # [lbw[0][i], lbw[0][i]],
+                                       # [ubw[0][i], ubw[0][i]],
+                                       
+            # Also, we assume, that the first derivative's initial & final value is zero
+            # meaning: velocity at the start & at the beginning is zero.
+            # But! this might not be what we want, so be carefull!
+            y_der = [y_.derivative() for y_ in y]
+            self.define_constraint(y_der,
+                                   [0, 0],
+                                   [0, 0],
+                                   constraint_type='initial',
+                                   name=["y_" + "d" + "_initial"] * self.n_dimensions)
+            self.define_constraint(y_der,
+                                   [0, 0],
+                                   [0, 0],
+                                   constraint_type='final',
+                                   name=["y_" + "d" + "_final"] * self.n_dimensions)
+            
+            # Nope! We will add it to the 2nd derivative, aka to the acceleration as well ;)
+            y_der = [y_.derivative(2) for y_ in y]
+            self.define_constraint(y_der,
+                                    [0, 0],
+                                    [0, 0],
+                                    constraint_type='initial',
+                                    name=["y_" + "dd" + "_initial"] * self.n_dimensions)
+            self.define_constraint(y_der,
+                                    [0, 0],
+                                    [0, 0],
+                                    constraint_type='final',
+                                    name=["y_" + "dd" + "_final"] * self.n_dimensions)
+                
+                
+
+        for i, t in enumerate(np.linspace(0, 1, len(fx))):
+            self.J += (y[0](t) - fx(t))**2 +  (y[1](t) - fy(t))**2
+
+        self.J += 1e-4 * definite_integral(y[0].derivative().derivative()**2, 0, 1)
+        self.J += 1e-4 * definite_integral(y[1].derivative().derivative()**2, 0, 1)
+        
+        
+        for i, t in enumerate(np.linspace(0, 1, len(fx))):
+            eq_min = y[0](t) - fx(t)
+            eq_max = y[1](t) - fy(t)
+            self.define_constraint([eq_min, eq_max],
+                                    [0, -math.inf],
+                                    [math.inf, 0],
+                                    constraint_type='time',
+                                    name=["fitted_always_larger"] * self.n_dimensions)
+                
+        prob = {'f': self.J,
+                'x': vertcat(*self.w),
+                'g': vertcat(*self.g)
+                }
+        options = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 1000, 'max_cpu_time': 100}}
+        solver = nlpsol('solver', 'ipopt', prob, options)
+
+        arg = {'lbx': self.lbw,
+               'ubx': self.ubw,
+               'lbg': self.lbg,
+               'ubg': self.ubg
+               }
+
+        self.solution = solver.call(arg)
+
+        basis = y[0].basis
+        coeffs1 = self.solution['x'].full()[:len(basis)]
+        coeffs2 = self.solution['x'].full()[len(basis):len(basis) * 2]
+
+        fitted_spline = [BSpline(basis, coeffs1), BSpline(basis, coeffs2)]
+
+
+        return fitted_spline
+    
+
+# First example:
+
+# fp = FrenetPath(-5, 5, 100)
+# t = np.linspace(0, 1, 100)
+# f = np.array([fp.t_to_xy(t_) for t_ in t])
+# fx, fy = f[:, 0], f[:, 1]
+
+# sf = SplineFitter()
+# fitted_spline = sf.fitting([fx, fy], degree = 3)
+# plt.figure()
+# plt.plot(fx, fy)
+
+# # We need to fit the curve onto a spline...
+# # And the curvature too...
+
+# # Let's create a spline with unknown coefficients
+
+# fx2, fy2 = [fitted_spline[0](t_)[0] for t_ in t],[fitted_spline[1](t_)[0] for t_ in t]
+# plt.plot(fx2, fy2)
+
+# Second example:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

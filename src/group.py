@@ -6,13 +6,12 @@ from .environment import Environment
 import yaml
 
 class Group(Environment):
-    def __init__(self, n_vehicles : int, start_position = [-0.8, 0], goal_position = [0.8, 0], stage = 0, cwd = ''):
+    def __init__(self, n_vehicles : int, start_position = [-0.8, 0], goal_position = [0.8, 0], stage = 0):
         self.vehicles = []
         for i in range(n_vehicles):
             vehicle = Vehicle()
             vehicle.ID = i
             vehicle.stage = stage
-            vehicle.cwd = cwd
             self.vehicles += [vehicle]
         self.start_position = start_position
         self.goal_position = goal_position
@@ -25,7 +24,6 @@ class Group(Environment):
         self.figures["figures"] = [fig, ax]
         fig, ax = plt.subplots()
         self.figures["videos"] = [fig, ax]
-        self.cwd = cwd
 
     def set_group_position(self, position : list, targetHeight : float = 0.8,  position_type : str = 'initial'):
 
@@ -220,7 +218,7 @@ class Group(Environment):
         """
 
         # Extra step: we initialize decision variables and parameters for faster convergence
-        self.initialize_values()
+        # self.initialize_values()
 
         for i in range(len(self.vehicles)):
             self.vehicles[i].prepare0()
@@ -515,4 +513,26 @@ class Group(Environment):
     def save_trajectory_to_csv(self, t_desired = 5, t_hover = 2):
         for i in range(len(self.vehicles)):
             self.vehicles[i].save_trajectory_to_csv(t_desired = t_desired, t_hover = t_hover)
+        return self
+
+    def frenet_plotter(self, iternum : int = 0, seed = ''):
+        """This function plots the trajectories calculated by each of the agent.
+        It also plots the Frenet path.
+        """
+        
+        # Plotting trajectory of the vehicles
+        fig, ax = plt.subplots()
+        for i in range(len(self.vehicles)):
+            ax = self.vehicles[i].plot_vehicle_frenet_trajectories(ax)
+            
+        # Axis related stuff
+        ax.set_title("Trajectories of the vehicles after iteration {} with seed {} in the frenet frame".format(iternum, seed))
+        ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
+        ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
+        ax.set_xlabel("x axis")  
+        ax.set_ylabel("y axis") 
+        ax.set_aspect('equal', adjustable='box')
+        # Saving figure to folder
+        fig.savefig(self.cwd + '/figures/' +'{:0>1d}'.format(self.stage) + '{:0>2d}'.format(iternum) +'.png', dpi = 200)
+        fig.clear()
         return self
