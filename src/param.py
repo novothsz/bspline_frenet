@@ -4,6 +4,8 @@ class ParamValX():
         
         
         self.T = []
+        self.x0 = []
+        self.xf = []
         self.obst = []
         self.z_i = []
         self.z_ji = []
@@ -32,6 +34,8 @@ class ParamValX():
         from more_itertools import locate
         assemble_list = self.P0_list
         idx_T = list(locate(assemble_list, lambda a: a == 'T'))
+        idx_x0 = list(locate(assemble_list, lambda a: a == 'x0'))
+        idx_xf = list(locate(assemble_list, lambda a: a == 'xf'))
         idx_obst = list(locate(assemble_list, lambda a: a == 'obst'))
         idx_z_i = list(locate(assemble_list, lambda a: a == 'z_i'))
         idx_z_ji = list(locate(assemble_list, lambda a: a == 'z_ji'))
@@ -45,6 +49,12 @@ class ParamValX():
         if self.z_i != []:
             for i, idx in enumerate(idx_T):
                 P0_assemble[idx] = self.T[i]
+                
+            for i, idx in enumerate(idx_x0):
+                P0_assemble[idx] = self.x0[i]
+                
+            for i, idx in enumerate(idx_xf):
+                P0_assemble[idx] = self.xf[i]
                 
             for i, idx in enumerate(idx_obst):
                 P0_assemble[idx] = self.obst[i]
@@ -69,6 +79,8 @@ class ParamValX():
             
         else:
             self.T = np.zeros((1, len(idx_T))).tolist()[0]
+            self.x0 = np.zeros((1, len(idx_x0))).tolist()[0]
+            self.xf = np.zeros((1, len(idx_xf))).tolist()[0]
             self.z_i = np.zeros((1, len(idx_z_i))).tolist()[0]
             self.z_ji = np.zeros((1, len(idx_z_ji))).tolist()[0]
             self.lambda_i = np.zeros((1, len(idx_lambda_i))).tolist()[0]

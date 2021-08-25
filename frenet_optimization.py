@@ -95,7 +95,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     iteration_times = []
     
     # Optimization
-    for i in range(100):
+    for i in range(3):
         group.solve()
         
         # Time-related things

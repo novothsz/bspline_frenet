@@ -430,6 +430,8 @@ class FrenetPath(object):
             # the equations
             equation_min = vx_min_sol * cos_theta_c + vy_min_sol * sin_theta_c
             equation_max = vx_max_sol * cos_theta_c + vy_max_sol * sin_theta_c
+            
+            
             # equation_min = - vx_min_sol * sin_theta_c + vy_min_sol * cos_theta_c
             # equation_max = - vx_max_sol * sin_theta_c + vy_max_sol * cos_theta_c
             
@@ -952,6 +954,7 @@ class FrenetPath(object):
             raise NotImplementedError()
             
         "---- Pretty much same, as in the old code ----"
+            
         # sampling
         equation_min_ = np.array([equation_min(t_)[0] for t_ in t]).reshape(-1).tolist()
         equation_max_ = np.array([equation_max(t_)[0] for t_ in t]).reshape(-1).tolist()

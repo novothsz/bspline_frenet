@@ -543,6 +543,8 @@ class Group(Environment):
         ax.set_aspect('equal', adjustable='box')
         # Saving figure to folder
         fig.savefig(self.cwd + '/figures/' +'{:0>1d}'.format(self.stage) + '{:0>2d}'.format(iternum) +'.png', dpi = 200)
-        plt.cla()
+        ax.cla()
+        # fig.clf()
+        
         # fig.clear()
         return self

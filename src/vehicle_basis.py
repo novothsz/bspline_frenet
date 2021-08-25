@@ -25,7 +25,7 @@ class VehicleBasis(Environment):
         
         self.stage = []
         self.n_dimensions = 2
-        self.state_len = self.n_dimensions
+        self.state_len = self.n_dimensions * 2 # [position_x, velocity_x] * 2 if we are in 2D
         self.state_degree = 3
         self.radious = 0.08
         self.T = 5
@@ -129,6 +129,8 @@ class VehicleBasis(Environment):
         Updated values are: T, x0, z_i, z_ji, lambda_ji
         """
         self.PvX.z_i = self.DvZ.z_i
+        self.PvX.x0 = self.x0
+        self.PvX.xf = self.xf
         try:
             self.PvX.z_ji = self.message_in['z_ji']
             self.PvX.lambda_ji = self.message_in['lambda_ji']
@@ -432,6 +434,25 @@ class VehicleBasis(Environment):
                 self.g_list += [name[i]]
                 self.lbg += [lower_bound[i]]
                 self.ubg += [upper_bound[i]]
+            return self
+
+        # If we want to equal the first/last coefficient to a parameter value
+        # we have to bring the MX type parameter to the constraint and set
+        # lbg&ubg to 0
+        elif constraint_type == 'initial_param':
+            for i in range(lower_bound.shape[0]):
+                self.g += [constraint[i].coeffs[0] - lower_bound[i]] # we restrict the first coefficient
+                self.g_list += [name[i]]
+                self.lbg += [0]
+                self.ubg += [0]
+            return self
+
+        elif constraint_type == 'final_param':
+            for i in range(lower_bound.shape[0]):
+                self.g += [constraint[i].coeffs[-1] - lower_bound[i]] # we restrict the last coefficient
+                self.g_list += [name[i]]
+                self.lbg += [0]
+                self.ubg += [0]
             return self
 
         else:
