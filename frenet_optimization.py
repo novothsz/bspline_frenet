@@ -64,7 +64,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     # Obstacle 2
     dx = 0.25
-    dy = 0.6
+    dy = 0.3
     tmp_obs = ([-2.4674-dx, -1-dy],
              [-2.4674+dx, -1-dy],
              [-2.4674+dx, -6],
@@ -80,7 +80,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
             
     # Create group
-    group = Group(n_vehicles=3, start_position = start_position, goal_position = goal_position, stage = stage)
+    group = Group(n_vehicles=4, start_position = start_position, goal_position = goal_position, stage = stage)
     group.set_group_position(
         position=group.start_position,targetHeight = targetHeight, position_type='initial')
     group.set_group_position(
@@ -95,7 +95,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     iteration_times = []
     
     # Optimization
-    for i in range(10):
+    for i in range(100):
         group.solve()
         
         # Time-related things
@@ -109,6 +109,8 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     writing_parameters_to_file(iteration_times)
     
+    return group
+    
     
 group_stages = []
 corners_list = []
@@ -120,4 +122,4 @@ max_iterations = 2
 stage = 0
 start_position = [0.0, 0.0]
 goal_position = [0.0, 0.0]
-run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage)
+group = run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage)

@@ -29,7 +29,6 @@ class VehicleBasis(Environment):
         self.state_degree = 3
         self.radious = 0.08
         self.T = 5
-        self.cwd = ''
 
     
         self.x0 = []
@@ -67,8 +66,10 @@ class VehicleBasis(Environment):
         self.vehicle_avoidnce_multiplier = 2.0
         
         # Constraints on decision variables
-        self.y_min = [self.border_x[0], self.border_y[0]]
-        self.y_max = [self.border_x[1], self.border_y[1]]
+        # self.y_min = [self.border_x[0], self.border_y[0]]
+        # self.y_max = [self.border_x[1], self.border_y[1]]
+        self.y_min = [-1, -1]
+        self.y_max = [1, 1]
         
         
         self.u_min = [-50, -50]
@@ -79,6 +80,7 @@ class VehicleBasis(Environment):
         self.options = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 1000, 'max_cpu_time': 100}}
         self.options_z = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 1000, 'max_cpu_time': 100}}
 
+        self.initial_values = {}
         # variable_history
         self.variable_history =  {'y' : [],         # x_update
                                           'y_j' : [],       # data_exchange_x_receive
@@ -552,6 +554,7 @@ class VehicleBasis(Environment):
     ###########################################################################
     ###########################################################################
     ###########################################################################
+    
     "Writing data"
     def write_csv_for_stage(self, T, px, py):
         """This function writes a csv for only the specific stage.
@@ -571,9 +574,11 @@ class VehicleBasis(Environment):
         return self
     
     def write_csv(self, T, px, py):
-
-        # px, py, pz, pj = [0], [0], [0], [0]
-
+        """This function writes the provided time and 7d polinome coefficients [each as lists]
+        to a csv file, so that the crazyswarm code can upload the data to the drones.
+        OR actually, don't really remember, what is does :D :S. Read the comments pls.
+        """
+        
         pz = [0] * len(px[0])
         pj = [0] * len(px[0])
 
@@ -638,9 +643,46 @@ class VehicleBasis(Environment):
     def x_update(self):
         raise NotImplementedError('Please implement this method!')
         
+    def initialize_values(self):
+        """This function initializes saves some values into a dictionary.
+        These values will be used to initialize all decision variables & parameters
+        for the x & z update respectively. (in setup_x_update() and setup_z_update() )"""
+        
+        self.initial_values["y"] = self.DvX.y
+        self.initial_values["z_i"] = self.DvX.y
+        self.initial_values["z_ji"] = self.DvX.y * len(self.neighbours)
+        self.initial_values["y_j"] = self.message_in["y_j"]
+        self.initial_values["z_j"] = self.message_in["y_j"]
+        self.initial_values["z_ij"] = self.message_in["y_j"]
+        self.initial_values["lambda_i"] = [1] * len(self.DvX.y)
+        self.initial_values["lambda_ij"] = [1] * len(self.DvX.y) * len(self.neighbours)
+        self.initial_values["lambda_ji"] = [1] * len(self.DvX.y) * len(self.neighbours)
+        
+        # Setting back every variable that belong to the ADMM iterations
+        # (this step is actually not necessary)
+        self.DvX = []
+        self.message_in = {}
+        self.variable_history =  {'y' : [],         # x_update
+                                  'y_j' : [],       # data_exchange_x_receive
+        }
+        
     def initialize_x(self):
-        print('Please implement the initialize_x method!')
-        pass
+        # tmp_obstacles = self.obstacles
+        # self.obstacles = []
+        tmp_neighbours = self.neighbours
+        self.neighbours = []
+        tmp_t_resolution_length = self.t_resolution_length
+        self.t_resolution_length = 30
+        self.setup_x_update()
+        self.setup_z_update()
+        self.x_update()
+        self.initial_values["w0_initial"] = self.solution['x']# .full().reshape(1, -1).tolist()[0]
+        self.initial_values["DvX"] = self.DvX
+        # self.obstacles = tmp_obstacles
+        self.neighbours = tmp_neighbours
+        self.t_resolution_length = tmp_t_resolution_length
+        print("Should be working, but please implement this method properly")
+        # raise NotImplementedError('Please implement this method!')
 
 
 

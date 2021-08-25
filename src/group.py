@@ -35,7 +35,7 @@ class Group(Environment):
         # yaml.add_representer(float, float_representer)
         if position_type == 'initial':
             position = self.start_position
-            positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 4)
+            positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 6)
 
             if self.stage == 0:
                 yaml_dict = {'crazyflies' : []}
@@ -62,7 +62,7 @@ class Group(Environment):
             #     positions += [initialPosition['crazyflies'][i]['initialPosition'][:2]]
         elif position_type == 'final':
             position = self.goal_position
-            positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 4)
+            positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 3)
 
             if self.stage == 0:
                 yaml_dict = {'crazyflies' : []}
@@ -85,7 +85,7 @@ class Group(Environment):
 
     def position_generator(self, centerpoint : list, n_positions : int, r : float):
         positions = []
-        alpha = np.pi / 4.0 #+ np.pi / 8.0 # initial angle
+        alpha = np.pi / 4.0 + np.pi / 8.0 # initial angle
         for i in range(n_positions):
             positions += [ [centerpoint[0] + r * np.sin(alpha), centerpoint[1] + r * np.cos(alpha)] ] # [x, vx, y, vy, z, vz]
             alpha = alpha - np.pi * 2.0 / n_positions
@@ -183,6 +183,12 @@ class Group(Environment):
         optimization stepd and all lambda values are set to 1.
         The data_exchange functions are reused here to exchange the data between
         the agents.
+        
+        Besides the below step the following steps have to be taken in the 
+        vehicle group:
+            - define initialize_x()
+            - define initialize_values()
+            - update DvX.w0, DvZ.w0, PvX, PvZ before creating the solver in setup_x_update() and setup_y_update()
         """
 
         "Step 1: trajectory optimization"
@@ -209,7 +215,7 @@ class Group(Environment):
             self.vehicles[i].initialize_values()
 
         "Step 4: plotting"
-        self.plot_initial_values()
+        # self.plot_initial_values()
 
     def prepare(self):
         """ Requests all vehicles to perform the preparation processes for
@@ -218,7 +224,7 @@ class Group(Environment):
         """
 
         # Extra step: we initialize decision variables and parameters for faster convergence
-        # self.initialize_values()
+        self.initialize_values()
 
         for i in range(len(self.vehicles)):
             self.vehicles[i].prepare0()
@@ -480,7 +486,7 @@ class Group(Environment):
     def plot_moovie_frames(self, iternum : int = 0, seed = ''):
 
         # self.check_collision()
-        self.calculate_formation_error()
+        # self.calculate_formation_error()
         fig, ax = self.figures["figures"]
 
         frame_num = 0
@@ -489,8 +495,8 @@ class Group(Environment):
             # fig, ax = plt.subplots()
 
             # First we plot the paths
-            for i in range(len(self.vehicles)):
-                ax = self.vehicles[i].plot_path_frames(ax, t)
+            # for i in range(len(self.vehicles)):
+                # ax = self.vehicles[i].plot_path_frames(ax, t)
 
             # Then we plot the vehicles
             for i in range(len(self.vehicles)):
@@ -498,8 +504,11 @@ class Group(Environment):
 
             # Axis related stuff
             ax.set_title("Trajectories of the vehicles after iteration {} with seed {}".format(iternum, seed))
-            ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
-            ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
+            # ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
+            # ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
+            # Or setting the ax limits 
+            ax.set_xlim(self.vehicles[0].fp.fx_spline(t)[0][0] - 2, self.vehicles[0].fp.fx_spline(t)[0][0] + 2)
+            ax.set_ylim(self.vehicles[0].fp.fy_spline(t)[0][0] - 1, self.vehicles[0].fp.fy_spline(t)[0][0] + 1)
             ax.set_xlabel("x axis")
             ax.set_ylabel("y axis")
             ax.set_aspect('equal', adjustable='box')
@@ -521,7 +530,7 @@ class Group(Environment):
         """
         
         # Plotting trajectory of the vehicles
-        fig, ax = plt.subplots()
+        fig, ax = self.figures["figures"] # plt.subplots()
         for i in range(len(self.vehicles)):
             ax = self.vehicles[i].plot_vehicle_frenet_trajectories(ax)
             
@@ -534,5 +543,6 @@ class Group(Environment):
         ax.set_aspect('equal', adjustable='box')
         # Saving figure to folder
         fig.savefig(self.cwd + '/figures/' +'{:0>1d}'.format(self.stage) + '{:0>2d}'.format(iternum) +'.png', dpi = 200)
-        fig.clear()
+        plt.cla()
+        # fig.clear()
         return self
