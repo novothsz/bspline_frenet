@@ -48,6 +48,15 @@ class FrenetPath(object):
         self.fx_dd = grad(self.fx_d)
         self.fy_dd = grad(self.fy_d)
         self.fz_dd = grad(self.fz_d)
+        
+        # Ezt is csináljuk meg, hamár :)
+        
+        [equation_min_p, equation_max_p] = self.equation_min_max('p')
+        [equation_min_q, equation_max_q] = self.equation_min_max('q')
+        self.equation_min_p = equation_min_p
+        self.equation_max_p = equation_max_p
+        self.equation_min_q = equation_min_q
+        self.equation_max_q = equation_max_q
 
 
 
@@ -246,7 +255,7 @@ class FrenetPath(object):
     
         
         
-        
+    """    
     def min_max_p_dot(self):
         
         try:
@@ -626,7 +635,9 @@ class FrenetPath(object):
             
             
             return [equation_min, equation_max]
-        
+    """
+       
+       
     "Plot"
     def plot_rotation(self, x, y, theta):
         x_new = x * cos(theta) - y * sin(theta)
@@ -955,6 +966,9 @@ class FrenetPath(object):
             
         "---- Pretty much same, as in the old code ----"
             
+        
+
+        
         # sampling
         equation_min_ = np.array([equation_min(t_)[0] for t_ in t]).reshape(-1).tolist()
         equation_max_ = np.array([equation_max(t_)[0] for t_ in t]).reshape(-1).tolist()

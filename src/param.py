@@ -6,7 +6,15 @@ class ParamValX():
         self.T = []
         self.x0 = []
         self.xf = []
+        # For the mooving Frenet-frame
+        self.v_s = []
+        self.curvature = []
+        self.equation_min_p = []
+        self.equation_max_p = []
+        self.equation_min_q = []
+        self.equation_max_q = []
         self.obst = []
+        
         self.z_i = []
         self.z_ji = []
         self.lambda_i = []
@@ -36,7 +44,15 @@ class ParamValX():
         idx_T = list(locate(assemble_list, lambda a: a == 'T'))
         idx_x0 = list(locate(assemble_list, lambda a: a == 'x0'))
         idx_xf = list(locate(assemble_list, lambda a: a == 'xf'))
+        # For the mooving Frenet-frame
+        idx_v_s = list(locate(assemble_list, lambda a: a == 'v_s'))
+        idx_curvature = list(locate(assemble_list, lambda a: a == 'curvature'))
+        idx_equation_min_p = list(locate(assemble_list, lambda a: a == 'equation_min_p'))
+        idx_equation_max_p = list(locate(assemble_list, lambda a: a == 'equation_max_p'))
+        idx_equation_min_q = list(locate(assemble_list, lambda a: a == 'equation_min_q'))
+        idx_equation_max_q = list(locate(assemble_list, lambda a: a == 'equation_max_q'))
         idx_obst = list(locate(assemble_list, lambda a: a == 'obst'))
+        
         idx_z_i = list(locate(assemble_list, lambda a: a == 'z_i'))
         idx_z_ji = list(locate(assemble_list, lambda a: a == 'z_ji'))
         idx_lambda_i = list(locate(assemble_list, lambda a: a == 'lambda_i'))
@@ -56,8 +72,22 @@ class ParamValX():
             for i, idx in enumerate(idx_xf):
                 P0_assemble[idx] = self.xf[i]
                 
+            # For the mooving Frenet-frame
+            for i, idx in enumerate(idx_v_s):
+                P0_assemble[idx] = self.v_s[i]
+            for i, idx in enumerate(idx_curvature):
+                P0_assemble[idx] = self.curvature[i]
+            for i, idx in enumerate(idx_equation_min_p):
+                P0_assemble[idx] = self.equation_min_p[i]
+            for i, idx in enumerate(idx_equation_max_p):
+                P0_assemble[idx] = self.equation_max_p[i]
+            for i, idx in enumerate(idx_equation_min_q):
+                P0_assemble[idx] = self.equation_min_q[i]
+            for i, idx in enumerate(idx_equation_max_q):
+                P0_assemble[idx] = self.equation_max_q[i]
             for i, idx in enumerate(idx_obst):
                 P0_assemble[idx] = self.obst[i]
+                
                 
             for i, idx in enumerate(idx_z_i):
                 P0_assemble[idx] = self.z_i[i]
@@ -81,6 +111,16 @@ class ParamValX():
             self.T = np.zeros((1, len(idx_T))).tolist()[0]
             self.x0 = np.zeros((1, len(idx_x0))).tolist()[0]
             self.xf = np.zeros((1, len(idx_xf))).tolist()[0]
+            
+            # For the mooving Frenet-frame
+            self.v_s = np.zeros((1, len(idx_v_s))).tolist()[0]
+            self.curvature = np.zeros((1, len(idx_curvature))).tolist()[0]
+            self.equation_min_p = np.zeros((1, len(idx_equation_min_p))).tolist()[0]
+            self.equation_max_p = np.zeros((1, len(idx_equation_max_p))).tolist()[0]
+            self.equation_min_q = np.zeros((1, len(idx_equation_min_q))).tolist()[0]
+            self.equation_max_q = np.zeros((1, len(idx_equation_max_q))).tolist()[0]
+            self.obst = np.zeros((1, len(idx_obst))).tolist()[0]
+        
             self.z_i = np.zeros((1, len(idx_z_i))).tolist()[0]
             self.z_ji = np.zeros((1, len(idx_z_ji))).tolist()[0]
             self.lambda_i = np.zeros((1, len(idx_lambda_i))).tolist()[0]

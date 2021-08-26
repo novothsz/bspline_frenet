@@ -232,6 +232,11 @@ class Group(Environment):
             self.vehicles[i].prepare2()
 
         return self
+    
+    def simulation_step(self):
+        for i in range(len(self.vehicles)):
+            self.vehicles[i].simulation_step()
+        
 
     def solve(self):
         """

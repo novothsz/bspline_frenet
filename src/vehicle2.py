@@ -19,12 +19,6 @@ from .param import ParamValX, ParamValZ, DecisionVarX, DecisionVarZ
 class Vehicle(VehicleBasis):
     def __init__(self):
         super().__init__()
-        
-        self.t_start = 0
-        self.t_window_size = 1.0
-        self.t_step = self.t_window_size / 2.0
-        self.t_end = self.t_start + self.t_window_size
-        
     
 
 
@@ -165,8 +159,8 @@ class Vehicle(VehicleBasis):
             # We add an extra constraint, if we are in the Frenet-frame.
             
             # Péni féle
-            # If we add the p components and if we add the q components together, 
-            # each of these should equal to zero. Meaning, the center of gravity 
+            # If we add the p components and if we add the q components together,
+            # each of these should equal to zero. Meaning, the center of gravity
             # should be in the (0, 0) point of the Frenet-frame.
             
             # This is defined outside of this loop :)
@@ -292,13 +286,7 @@ class Vehicle(VehicleBasis):
                                 x0[self.n_dimensions:self.n_dimensions*2],
                                 constraint_type='initial_param',
                                 name=["dy0"] * self.n_dimensions)
-        # Version 2
-        
-        # self.J += self.rho_final_value * ((p.coeffs[-1] - self.xf[0])**2 \
-        #                                 + (p.derivative().coeffs[-1] - self.xf[2])**2 \
-        #                                 + (q.coeffs[-1] - self.xf[1])**2 \
-        #                                 + (q.derivative().coeffs[-1] - self.xf[3])**2)
-        # Version 1
+
         # Final position constraint on y
         self.define_constraint([p, q],
                                 xf[:self.n_dimensions],
@@ -314,71 +302,7 @@ class Vehicle(VehicleBasis):
                                 name=["dyf"] * self.n_dimensions)
 
         # TODO: overall constraints on y, dy and u
-        
-        "Version 2"
-        # """
-        v_s = MX.sym('v_s', self.t_resolution_length); self.P += [v_s]; self.P_list += ['v_s'] * self.t_resolution_length; self.P0 += [0] * self.t_resolution_length
-        curvature = MX.sym('curvature', self.t_resolution_length); self.P += [curvature]; self.P_list += ['curvature'] * self.t_resolution_length; self.P0 += [0] * self.t_resolution_length
-        equation_min_p = MX.sym('equation_min_p', self.t_resolution_length); self.P += [equation_min_p]; self.P_list += ['equation_min_p'] * self.t_resolution_length; self.P0 += [0] * self.t_resolution_length
-        equation_max_p = MX.sym('equation_max_p', self.t_resolution_length); self.P += [equation_max_p]; self.P_list += ['equation_max_p'] * self.t_resolution_length; self.P0 += [0] * self.t_resolution_length
-        equation_min_q = MX.sym('equation_min_q', self.t_resolution_length); self.P += [equation_min_q]; self.P_list += ['equation_min_q'] * self.t_resolution_length; self.P0 += [0] * self.t_resolution_length
-        equation_max_q = MX.sym('equation_max_q', self.t_resolution_length); self.P += [equation_max_q]; self.P_list += ['equation_max_q'] * self.t_resolution_length; self.P0 += [0] * self.t_resolution_length
-        # obst_corners
-        
-        "p_dot equation"
-        for i, t in enumerate(np.linspace(0, 1, self.t_resolution_length)):
-            expression1 = -p_dot(t) -v_s[i] * (1 - curvature[i] * q(t)) + equation_min_p[i]
-            expression2 = -p_dot(t) -v_s[i] * (1 - curvature[i] * q(t)) + equation_max_p[i]
-            
-            self.define_constraint([expression1],
-                                    [-math.inf],
-                                    [0],
-                                    constraint_type='time',
-                                    name=["p_dot_min"])
-            
-            self.define_constraint([expression2],
-                                    [0],
-                                    [math.inf],
-                                    constraint_type='time',
-                                    name=["p_dot_max"])
-            
-        "q_dot equation"
-        for i, t in enumerate(np.linspace(0, 1, self.t_resolution_length)):
-            expression1 = -q_dot(t) -v_s[i] * p(t) * curvature[i] + equation_min_q[i]
-            expression2 = -q_dot(t) -v_s[i] * p(t) * curvature[i] + equation_max_q[i]
-            
-            self.define_constraint([expression1],
-                                    [-math.inf],
-                                    [0],
-                                    constraint_type='time',
-                                    name=["q_dot_min"])
-            
-            self.define_constraint([expression2],
-                                    [0],
-                                    [math.inf],
-                                    constraint_type='time',
-                                    name=["q_dot_max"])
-            
-        # Collision avoidance with obstacles and neighbours or w.t.f.?
-        for i, obstacle in enumerate(self.obstacles):
-            obst_corners = []
-            for j, t in enumerate(np.linspace(0, 1, self.t_resolution_length)):
-                corner1 = MX.sym('obst_' + str(i) + '_corner1', 2); self.P += [corner1]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
-                corner2 = MX.sym('obst_' + str(i) + '_corner2', 2); self.P += [corner2]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
-                corner3 = MX.sym('obst_' + str(i) + '_corner3', 2); self.P += [corner3]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
-                corner4 = MX.sym('obst_' + str(i) + '_corner4', 2); self.P += [corner4]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
-                obst_corners += [[corner1, corner2, corner3, corner4]]
-        
-            self.collision_avoidance_hyperplane([p, q], obst_corners,
-                                                radious=self.radious, name="obst_" + str(i),
-                                                constraint_type='spline_obstacle_param',
-                                                n_samples=self.t_resolution_length)
-            
-            
-        # """    
-        
-        """
-        "Version 1"
+
         # Invoke the frenet frame so that we can fill up the parameters
         v_s  = self.fp.fx_d_spline + self.fp.fy_d_spline
         # sin_theta_c = self.fp.sin_f_theta_spline
@@ -388,7 +312,7 @@ class Vehicle(VehicleBasis):
         
         
         # This is what we are going to do... We will be searching for p_dot and q_dot values
-        # that are not equal to the value that the system dynamics dictates. Instead 
+        # that are not equal to the value that the system dynamics dictates. Instead
         # we replace vx & vy with their minimum and maximum values. This gives us constraints
         # on how we are allowed to choose p_dot and q_dot. Thus, we will find optimal values for
         # the states of the system that adhere to the minimum and maximum constraints of vx & vy.
@@ -446,8 +370,7 @@ class Vehicle(VehicleBasis):
                                                 radious=self.radious, name="obst_" + str(i),
                                                 constraint_type='spline_obstacle_spline_t',
                                                 n_samples=self.t_resolution_length)
-        """
-        
+            
         # Cost function
         # TODO In frenet frame this cost function does not apply! It needs to be changed!
         cost = 0
@@ -542,19 +465,6 @@ class Vehicle(VehicleBasis):
         self.solution = self.solver.call(self.arg)
         # Extracting the solution
         self.DvX.extract(self.solution)
-        
-        # Create [p,q] spline member variable from solution (so that later we can do
-        # time stepping with it :) )
-        flatten = lambda t: [item for sublist in t for item in sublist]
-        basis = self.define_knots(degree = 3, knot_intervals = self.knot_intervals)
-        solution = self.solution['x'].full()
-        coeffs1 = flatten([solution[x] for x in np.arange(0, len(basis))])
-        coeffs2 = flatten([solution[x] for x in np.arange(len(basis), len(basis)*2)])
-
-        p = BSpline(basis, coeffs1)
-        q = BSpline(basis, coeffs2)
-        self.pq_spline = [p, q]
-        
 
         return self
     
@@ -719,7 +629,7 @@ class Vehicle(VehicleBasis):
             x_t += [x_]
             y_t += [y_]
             
-        ax.plot(x_t, y_t, 'k')    
+        ax.plot(x_t, y_t, 'k')
             
 
         theta_c = 0

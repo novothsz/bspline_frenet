@@ -57,6 +57,7 @@ class VehicleBasis(Environment):
         self.rho = 50
         self.rho_formation = 100
         self.rho_input = 1
+        self.rho_final_value = 1
         
         self.epsilon = 0.01 # try to keep minimum epsilon distance from the obstacle
         self.safety_weight = 0 # cost parameter for epsilon
@@ -131,6 +132,23 @@ class VehicleBasis(Environment):
         self.PvX.z_i = self.DvZ.z_i
         self.PvX.x0 = self.x0
         self.PvX.xf = self.xf
+        
+        if True: # self.t_start != 0:
+            # updating values because we are following the mooving Frenet-frame
+            self.PvX.x0 = self.x0
+            self.PvX.xf = self.xf
+            self.PvX.v_s = [self.fp.fx_d_spline(t_).tolist()[0][0] + self.fp.fy_d_spline(t_).tolist()[0][0] for t_ in np.linspace(self.t_start, self.t_end, self.t_resolution_length)]
+            self.PvX.curvature = [self.fp.fy_c_spline(t_).tolist()[0][0] for t_ in np.linspace(self.t_start, self.t_end, self.t_resolution_length)]
+            self.PvX.equation_min_p = [self.fp.equation_min_p(t_).tolist()[0][0] for t_ in np.linspace(self.t_start, self.t_end, self.t_resolution_length)]
+            self.PvX.equation_max_p = [self.fp.equation_max_p(t_).tolist()[0][0] for t_ in np.linspace(self.t_start, self.t_end, self.t_resolution_length)]
+            self.PvX.equation_min_q = [self.fp.equation_min_q(t_).tolist()[0][0] for t_ in np.linspace(self.t_start, self.t_end, self.t_resolution_length)]
+            self.PvX.equation_max_q = [self.fp.equation_max_q(t_).tolist()[0][0] for t_ in np.linspace(self.t_start, self.t_end, self.t_resolution_length)]
+            self.PvX.obst = []
+            for obstacle in self.obstacles:
+                for t_ in np.linspace(self.t_start, self.t_end, self.t_resolution_length):
+                    for corner in obstacle.corners_spline:
+                        self.PvX.obst += [corner[0](t_).tolist()[0][0], corner[1](t_).tolist()[0][0]]
+            
         try:
             self.PvX.z_ji = self.message_in['z_ji']
             self.PvX.lambda_ji = self.message_in['lambda_ji']
@@ -516,8 +534,8 @@ class VehicleBasis(Environment):
 
         elif constraint_type == 'spline_obstacle_t':
             t = np.linspace(0, 1, n_samples)
-            for t_ in t:
-                for point in points:
+            for t_ in t: # 100
+                for point in points: # 4
                     # const2 += [a[0](t) * point[0](t) + a[1](t) * point[1](t) - b[0](t)]
                     const2 += [a[0](t) * point[0] + a[1](t) * point[1] - b[0](t)  - d_tau[0](t) ]
 
@@ -532,6 +550,18 @@ class VehicleBasis(Environment):
                 for point in points:
                     # const2 += [a[0](t) * point[0](t) + a[1](t) * point[1](t) - b[0](t)]
                     const2 += [a[0](t) * point[0](t) + a[1](t) * point[1](t) - b[0](t)  - d_tau[0](t) ]
+
+            # ----
+            for i in range(len(const2)):
+                self.define_constraint([const2[i]], lower_bound = [0], upper_bound = [math.inf], constraint_type = "time", name = "eq2" + "_corn_" + str(i))
+
+        # Dude, these namings... Oh well, whatever...
+        elif constraint_type == 'spline_obstacle_param':
+            t = np.linspace(0, 1, n_samples)
+            for t_, points_t in zip(t, points): # 100
+                for point in points_t: # 4
+                        # const2 += [a[0](t) * point[0](t) + a[1](t) * point[1](t) - b[0](t)]
+                        const2 += [a[0](t_) * point[0] + a[1](t_) * point[1] - b[0](t_)  - d_tau[0](t_) ]
 
             # ----
             for i in range(len(const2)):
@@ -663,6 +693,18 @@ class VehicleBasis(Environment):
 
     def x_update(self):
         raise NotImplementedError('Please implement this method!')
+        
+    def simulation_step(self):
+        self.t_start = self.t_start + self.t_step
+        self.t_end = self.t_end + self.t_step
+        from .spline_extra import shift_spline
+        self.pq_spline[0].coeffs = shift_spline(self.pq_spline[0].coeffs, self.t_step, self.pq_spline[0].basis)
+        self.pq_spline[1].coeffs = shift_spline(self.pq_spline[1].coeffs, self.t_step, self.pq_spline[1].basis)
+        x = self.pq_spline[0].coeffs[0]
+        y = self.pq_spline[1].coeffs[0]
+        vx = self.pq_spline[0].derivative().coeffs[0]
+        vy = self.pq_spline[1].derivative().coeffs[0]
+        self.x0 = [x, y, vx, vy]
         
     def initialize_values(self):
         """This function initializes saves some values into a dictionary.
