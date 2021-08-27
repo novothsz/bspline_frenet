@@ -94,21 +94,8 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     t_iter = time.time()
     iteration_times = []
     
-    # Optimization
-    for i in range(3):
-        group.solve()
-        
-        # Time-related things
-        iteration_times += [time.time() - t_iter]
-        print(str(i) + "th iteration time: " + str(time.time() - t_iter) + " seconds")
-        t_iter = time.time()
-        
-        group.frenet_plotter(iternum = i, seed = seed)
-        
-    # Simulation steps
-    # for i in range(3, 15):
-    #     group.simulation_step()
-        
+    # # Optimization
+    # for i in range(3):
     #     group.solve()
         
     #     # Time-related things
@@ -117,6 +104,22 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     #     t_iter = time.time()
         
     #     group.frenet_plotter(iternum = i, seed = seed)
+        
+    # Simulation steps
+    group.set_simulation(simulation=True)
+    for i in range(0, 40):
+        for j in range(3):
+            group.solve()
+        
+        # Time-related things
+        iteration_times += [time.time() - t_iter]
+        print(str(i) + "th iteration time: " + str(time.time() - t_iter) + " seconds")
+        t_iter = time.time()
+        
+        group.frenet_plotter(iternum = i, seed = seed)
+        
+        group.simulation_step()
+            
         
 
     # group.plot_moovie_frames(iternum=i, seed=seed)

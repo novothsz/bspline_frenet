@@ -236,6 +236,11 @@ class Group(Environment):
     def simulation_step(self):
         for i in range(len(self.vehicles)):
             self.vehicles[i].simulation_step()
+            
+    def set_simulation(self, simulation = False):
+        for i in range(len(self.vehicles)):
+            self.vehicles[i].simulation = simulation
+        
         
 
     def solve(self):
@@ -543,6 +548,8 @@ class Group(Environment):
         ax.set_title("Trajectories of the vehicles after iteration {} with seed {} in the frenet frame".format(iternum, seed))
         ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
         ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
+        # ax.set_xlim(0, 1)
+        # ax.set_ylim(-0.1, 0)
         ax.set_xlabel("x axis")  
         ax.set_ylabel("y axis") 
         ax.set_aspect('equal', adjustable='box')

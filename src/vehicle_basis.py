@@ -15,7 +15,7 @@ import random
 
 from casadi import MX, SX, Function, vertcat, dot, nlpsol, cos, sin, norm_2
 from .spline import BSpline, BSplineBasis
-from .spline_extra import definite_integral
+from .spline_extra import definite_integral, shift_spline
 from .environment import Environment
 
 
@@ -36,6 +36,8 @@ class VehicleBasis(Environment):
         self.neighbours = []
         self.obstacles = []
         self.ID = -1
+        self.iteration_count = 0
+        self.shift_enabled = False
 
         # Temporary containers
         self.w, self.lbw, self.ubw = [], [], []
@@ -54,12 +56,12 @@ class VehicleBasis(Environment):
         self.slack = 0.00001
         self.t_resolution_length = 30
         # Hyperparams
-        self.rho = 50
-        self.rho_formation = 100
-        self.rho_input = 1
-        self.rho_final_value = 1
+        self.rho = 50/50
+        self.rho_formation = 100/50
+        self.rho_input = 0.1
+        self.rho_final_value = 0.1
         
-        self.epsilon = 0.01 # try to keep minimum epsilon distance from the obstacle
+        self.epsilon = 0.001 # try to keep minimum epsilon distance from the obstacle
         self.safety_weight = 0 # cost parameter for epsilon
         self.knot_intervals = 15 # number of knots for the output (position) spline of the vehicle
         
@@ -152,11 +154,142 @@ class VehicleBasis(Environment):
         try:
             self.PvX.z_ji = self.message_in['z_ji']
             self.PvX.lambda_ji = self.message_in['lambda_ji']
+            
         except:
             pass
 
 
         return self
+    
+    def shift_DvZ(self):
+        # shift DvZ comes first, then shift_PvZ! Same for x!
+        # Values, that need to be shifted: z_i, z_ij
+        basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
+        
+        
+        z_i_coeffs_shifted = []
+        for i in range(2):
+            idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
+            z_i_coeffs_shifted += shift_spline(self.DvZ.z_i[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
+        self.DvZ.z_i = z_i_coeffs_shifted
+        
+        
+        z_ij_coeffs_shifted = []
+        for i in range(len(self.neighbours) * 2):
+            idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
+            z_ij_coeffs_shifted += shift_spline(self.DvZ.z_ij[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
+        self.DvZ.z_ij = z_ij_coeffs_shifted
+        
+        return self
+        
+    
+    def shift_PvZ(self):
+        # Values, that need to be shifted are:
+        # y, y_j, lambda_i, lambda_ij
+        basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
+        
+        # shifting y, lambda_i NO!!!!
+        # This is already shifted!!!! Don't shift again
+        
+        # shifting lambda_i as the shifted version, which is found in self.DvX ....
+        self.PvX.lambda_i = self.PvX.lambda_i
+        
+        # shifting lambda_ij
+        lambda_ij_coeffs_shifted = []
+        for i in range(len(self.neighbours) * 2):
+            idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
+            lambda_ij_coeffs_shifted += shift_spline(self.PvZ.lambda_ij[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
+        self.PvZ.lambda_ij = lambda_ij_coeffs_shifted
+        
+        return self
+
+    def shift_PvX(self):
+        # Values, which are not being shifted, are:
+        # v_s, curvature, equation_min/max_p/q -> these are re-evaluated according the current time-window inside update_PvX
+        # Values, which need to be shifted, are:
+        # x0, z_i, z_ji, lambda_i, lambda_ji
+        
+        # x0
+        basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
+        coeffs1 = self.DvX.y[0:len(basis)]
+        coeffs2 = self.DvX.y[len(basis):len(basis)*2]
+        p = BSpline(basis, coeffs1)
+        q = BSpline(basis, coeffs2)
+        p0 = p(self.t_step).tolist()[0]
+        q0 = q(self.t_step).tolist()[0]
+        p_dot0 = p.derivative()(self.t_step).tolist()[0]
+        q_dot0 = q.derivative()(self.t_step).tolist()[0]
+        # updating x0 in PvX
+        self.x0 = [p0, q0, p_dot0, q_dot0]
+        self.PvX.x0 = [p0, q0, p_dot0, q_dot0]
+        
+        # shifting z_i, lambda_i
+        basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
+        z_i_coeffs_shifted = []
+        lambda_i_coeffs_shifted = []
+        for i in range(2):
+            idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
+            z_i_coeffs_shifted += shift_spline(self.PvX.z_i[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
+            lambda_i_coeffs_shifted += shift_spline(self.PvX.lambda_i[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
+        self.PvX.z_i = z_i_coeffs_shifted
+        self.PvX.lambda_i = lambda_i_coeffs_shifted
+        
+        
+        # shifting z_i, lambda_i
+        basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
+        z_ji_coeffs_shifted = []
+        lambda_ji_coeffs_shifted = []
+        for i in range(len(self.neighbours) * 2):
+            idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
+            z_ji_coeffs_shifted += shift_spline(self.PvX.z_ji[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
+            lambda_ji_coeffs_shifted += shift_spline(self.PvX.lambda_ji[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
+        self.PvX.z_ji = z_ji_coeffs_shifted
+        self.PvX.lambda_ji = lambda_ji_coeffs_shifted
+        
+        
+        
+        
+    def shift_DvX(self):
+        # shifting y
+        basis_y = self.define_knots(degree = 3, knot_intervals = self.knot_intervals)
+        
+        coeffs1 = self.DvX.y[0:len(basis_y)]
+        coeffs2 = self.DvX.y[len(basis_y):len(basis_y)*2]
+        coeffs1 = shift_spline(coeffs1, self.t_step, basis_y).tolist()
+        coeffs2 = shift_spline(coeffs2, self.t_step, basis_y).tolist()
+        self.DvX.y = coeffs1
+        self.DvX.y += coeffs2
+        
+        # shifting a
+        basis_a = self.define_knots(degree = 1, knot_intervals = self.knot_intervals)
+        a_coeffs_shifted = []
+        for i in range(len(self.obstacles) * 2): # * 2, because a is 2 dimensional 
+            idx = np.arange(len(basis_a)*i,len(basis_a)*i+len(basis_a)) # 4 values, step by step
+            a_coeffs_shifted += shift_spline(self.DvX.a[idx[0]:idx[-1]+1], self.t_step, basis_a).tolist()
+        self.DvX.a = a_coeffs_shifted
+        
+        # shifting b, d_tau
+        b_coeffs_shifted = []
+        d_tau_coeffs_shifted = []
+        for i in range(len(self.obstacles)):
+            idx = np.arange(len(basis_a)*i,len(basis_a)*i+len(basis_a)) # 4 values, step by step
+            b_coeffs_shifted += shift_spline(self.DvX.b[idx[0]:idx[-1]+1], self.t_step, basis_a).tolist()
+            d_tau_coeffs_shifted += shift_spline(self.DvX.d_tau[idx[0]:idx[-1]+1], self.t_step, basis_a).tolist()
+        self.DvX.b = b_coeffs_shifted
+        self.DvX.d_tau = d_tau_coeffs_shifted
+    
+    
+        
+    
+    def simulation_step(self):
+        # self.t_step = 0.01
+        self.t_start = self.t_start + self.t_step
+        self.t_end = self.t_start + self.t_window_size
+        
+        self.shift_enabled = True
+        
+        return self
+                
     ###########################################################################
     ###########################################################################
     ###########################################################################
@@ -694,17 +827,7 @@ class VehicleBasis(Environment):
     def x_update(self):
         raise NotImplementedError('Please implement this method!')
         
-    def simulation_step(self):
-        self.t_start = self.t_start + self.t_step
-        self.t_end = self.t_end + self.t_step
-        from .spline_extra import shift_spline
-        self.pq_spline[0].coeffs = shift_spline(self.pq_spline[0].coeffs, self.t_step, self.pq_spline[0].basis)
-        self.pq_spline[1].coeffs = shift_spline(self.pq_spline[1].coeffs, self.t_step, self.pq_spline[1].basis)
-        x = self.pq_spline[0].coeffs[0]
-        y = self.pq_spline[1].coeffs[0]
-        vx = self.pq_spline[0].derivative().coeffs[0]
-        vy = self.pq_spline[1].derivative().coeffs[0]
-        self.x0 = [x, y, vx, vy]
+    
         
     def initialize_values(self):
         """This function initializes saves some values into a dictionary.

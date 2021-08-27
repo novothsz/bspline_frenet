@@ -20,10 +20,11 @@ class Vehicle(VehicleBasis):
     def __init__(self):
         super().__init__()
         
-        self.t_start = 0
-        self.t_window_size = 1.0
-        self.t_step = self.t_window_size / 2.0
+        self.t_start = 0.4
+        self.t_step = 0.01 # Changed in simulation_step() upon first call
+        self.t_window_size = 0.2
         self.t_end = self.t_start + self.t_window_size
+        self.simulation = False
         
     
 
@@ -234,7 +235,9 @@ class Vehicle(VehicleBasis):
     
     def z_update(self):
         self.update_PvZ()
-
+        if self.shift_enabled == True:
+            self.shift_DvZ()
+            self.shift_PvZ()
         # Updating the necessary arguments for the solver
         self.arg_z['x0'] = self.DvZ.w0_z
         self.arg_z['p'] = self.PvZ.assemble()
@@ -294,24 +297,24 @@ class Vehicle(VehicleBasis):
                                 name=["dy0"] * self.n_dimensions)
         # Version 2
         
-        # self.J += self.rho_final_value * ((p.coeffs[-1] - self.xf[0])**2 \
-        #                                 + (p.derivative().coeffs[-1] - self.xf[2])**2 \
-        #                                 + (q.coeffs[-1] - self.xf[1])**2 \
-        #                                 + (q.derivative().coeffs[-1] - self.xf[3])**2)
+        self.J += self.rho_final_value * ((p.coeffs[-1] - self.xf[0])**2 \
+                                        + (p.derivative().coeffs[-1] - self.xf[2])**2 \
+                                        + (q.coeffs[-1] - self.xf[1])**2 \
+                                        + (q.derivative().coeffs[-1] - self.xf[3])**2)
         # Version 1
         # Final position constraint on y
-        self.define_constraint([p, q],
-                                xf[:self.n_dimensions],
-                                xf[:self.n_dimensions],
-                                constraint_type='final_param',
-                                name=["yf"] * self.n_dimensions)
+        # self.define_constraint([p, q],
+        #                         xf[:self.n_dimensions],
+        #                         xf[:self.n_dimensions],
+        #                         constraint_type='final_param',
+        #                         name=["yf"] * self.n_dimensions)
 
-        # Final velocity constraint on dy
-        self.define_constraint([p_dot, q_dot],
-                                xf[self.n_dimensions:self.n_dimensions*2],
-                                xf[self.n_dimensions:self.n_dimensions*2],
-                                constraint_type='final_param',
-                                name=["dyf"] * self.n_dimensions)
+        # # Final velocity constraint on dy
+        # self.define_constraint([p_dot, q_dot],
+        #                         xf[self.n_dimensions:self.n_dimensions*2],
+        #                         xf[self.n_dimensions:self.n_dimensions*2],
+        #                         constraint_type='final_param',
+        #                         name=["dyf"] * self.n_dimensions)
 
         # TODO: overall constraints on y, dy and u
         
@@ -535,25 +538,16 @@ class Vehicle(VehicleBasis):
 
     def x_update(self):
         self.update_PvX()
+        if self.shift_enabled == True:
+            self.shift_DvX()
+            self.shift_PvX()
         # Updating the necessary arguments for the solver
-        self.arg['x0'] = self.DvX.w0
+        self.arg['x0'] = self.DvX.assemble()
         self.arg['p'] = self.PvX.assemble()
         # Solving the problem
         self.solution = self.solver.call(self.arg)
         # Extracting the solution
         self.DvX.extract(self.solution)
-        
-        # Create [p,q] spline member variable from solution (so that later we can do
-        # time stepping with it :) )
-        flatten = lambda t: [item for sublist in t for item in sublist]
-        basis = self.define_knots(degree = 3, knot_intervals = self.knot_intervals)
-        solution = self.solution['x'].full()
-        coeffs1 = flatten([solution[x] for x in np.arange(0, len(basis))])
-        coeffs2 = flatten([solution[x] for x in np.arange(len(basis), len(basis)*2)])
-
-        p = BSpline(basis, coeffs1)
-        q = BSpline(basis, coeffs2)
-        self.pq_spline = [p, q]
         
 
         return self
@@ -589,12 +583,14 @@ class Vehicle(VehicleBasis):
         
         
         # Sampling
-        t = np.linspace(0, 1, 100)
+        t_solution = np.linspace(0, 1, 100)
+        t = np.linspace(self.t_start, self.t_end, 100)
         
         x_t, y_t = [], []
-        for t_ in t:
-            p_solution_, q_solution_ = p_solution(t_)[0], q_solution(t_)[0]
+        for t_, t_solution_ in zip(t, t_solution):
+            p_solution_, q_solution_ = p_solution(t_solution_)[0], q_solution(t_solution_)[0]
             x_, y_ = self.fp.frenet_to_inertial(p_solution_, q_solution_, t_)
+            # x_, y_ = p_solution_, q_solution_
             x_t += [x_]
             y_t += [y_]
         

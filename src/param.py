@@ -317,5 +317,54 @@ class DecisionVarX():
         
         return self
     
+    def assemble(self):       
+        """Assembles an array of values which the x optimization solver accepts.
+        The array is constructed from the class member values and arranged in a 
+        sequence described by assemble_list
 
+        Parameters
+        ----------
+        None
+            
+        Returns
+        -------
+        P0_assemble : array
+            A list of parameter values for the x optimization solver.
+        """
+        from more_itertools import locate
+        assemble_list = self.w_list
+        
+    
+        idx_T = list(locate(assemble_list, lambda a: a == 'T'))
+        idx_y = list(locate(assemble_list, lambda a: a == 'y'))
+        idx_a = list(locate(assemble_list, lambda a: a == 'a'))
+        idx_b = list(locate(assemble_list, lambda a: a == 'b'))
+        idx_d_tau = list(locate(assemble_list, lambda a: a == 'd_tau'))
+
+        DvX_assemble = np.zeros((1, len(self.w_list)))[0]
+        
+        # Only if this is not the first iteration. Otherwise: return self.w0, which should contain a good initialization.
+        # (this is becase upon instantiating DvX in the Vehicle() class, we feed in a w0 array to the constructor)
+        if self.y != []:
+            for i, idx in enumerate(idx_T):
+                DvX_assemble[idx] = self.T[i]
+                
+            for i, idx in enumerate(idx_y):
+                DvX_assemble[idx] = self.y[i]
+                
+            for i, idx in enumerate(idx_a):
+                DvX_assemble[idx] = self.a[i]
+                
+            for i, idx in enumerate(idx_b):
+                DvX_assemble[idx] = self.b[i]
+                
+            for i, idx in enumerate(idx_d_tau):
+                DvX_assemble[idx] = self.d_tau[i]
+            
+            DvX_assemble = DvX_assemble.tolist()
+            
+            return DvX_assemble
+            
+        else:
+            return self.w0
         
