@@ -107,9 +107,10 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         
     # Simulation steps
     group.set_simulation(simulation=True)
-    for i in range(0, 40):
-        for j in range(3):
+    for i in range(0, 20):
+        for j in range(10):
             group.solve()
+            group.set_simulation(False)
         
         # Time-related things
         iteration_times += [time.time() - t_iter]
@@ -120,7 +121,6 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         
         group.simulation_step()
             
-        
 
     # group.plot_moovie_frames(iternum=i, seed=seed)
     

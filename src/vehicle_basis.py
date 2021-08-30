@@ -15,8 +15,11 @@ import random
 
 from casadi import MX, SX, Function, vertcat, dot, nlpsol, cos, sin, norm_2
 from .spline import BSpline, BSplineBasis
-from .spline_extra import definite_integral, shift_spline
+from .spline_extra import definite_integral, shift_spline, shift_knot1_fwd, shift_knot1_bwd, shift_over_knot, extrapolate
 from .environment import Environment
+
+
+        
 
 
 class VehicleBasis(Environment):
@@ -37,7 +40,6 @@ class VehicleBasis(Environment):
         self.obstacles = []
         self.ID = -1
         self.iteration_count = 0
-        self.shift_enabled = False
 
         # Temporary containers
         self.w, self.lbw, self.ubw = [], [], []
@@ -56,12 +58,13 @@ class VehicleBasis(Environment):
         self.slack = 0.00001
         self.t_resolution_length = 30
         # Hyperparams
-        self.rho = 50/50
-        self.rho_formation = 100/50
-        self.rho_input = 0.1
+        self.rho = 50# /5 # /50
+        self.rho_formation = 100# /5 # /50
+        self.rho_input = 0.1 * 10 * 2
         self.rho_final_value = 0.1
         
         self.epsilon = 0.001 # try to keep minimum epsilon distance from the obstacle
+        # self.epsilon = self.radious # try to keep minimum epsilon distance from the obstacle
         self.safety_weight = 0 # cost parameter for epsilon
         self.knot_intervals = 15 # number of knots for the output (position) spline of the vehicle
         
@@ -93,6 +96,9 @@ class VehicleBasis(Environment):
         self.message_in = {}
         self.message_out = {}
         
+        # for spline fitting
+        
+        
     ###########################################################################
     ###########################################################################
     ###########################################################################
@@ -100,6 +106,20 @@ class VehicleBasis(Environment):
     ###########################################################################
     ###########################################################################
     ###########################################################################
+    
+
+        
+        
+        
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    
+    
 
     def set_position(self, position : list, position_type : str):
         # 2D
@@ -112,6 +132,15 @@ class VehicleBasis(Environment):
 
         return self
     
+    
+        
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
 
     def update_PvZ(self):
         """Updating P0_z parameter. Values, that are commented out are not
@@ -135,21 +164,19 @@ class VehicleBasis(Environment):
         self.PvX.x0 = self.x0
         self.PvX.xf = self.xf
         
-        if True: # self.t_start != 0:
-            # updating values because we are following the mooving Frenet-frame
-            self.PvX.x0 = self.x0
-            self.PvX.xf = self.xf
-            self.PvX.v_s = [self.fp.fx_d_spline(t_).tolist()[0][0] + self.fp.fy_d_spline(t_).tolist()[0][0] for t_ in np.linspace(self.t_start, self.t_end, self.t_resolution_length)]
-            self.PvX.curvature = [self.fp.fy_c_spline(t_).tolist()[0][0] for t_ in np.linspace(self.t_start, self.t_end, self.t_resolution_length)]
-            self.PvX.equation_min_p = [self.fp.equation_min_p(t_).tolist()[0][0] for t_ in np.linspace(self.t_start, self.t_end, self.t_resolution_length)]
-            self.PvX.equation_max_p = [self.fp.equation_max_p(t_).tolist()[0][0] for t_ in np.linspace(self.t_start, self.t_end, self.t_resolution_length)]
-            self.PvX.equation_min_q = [self.fp.equation_min_q(t_).tolist()[0][0] for t_ in np.linspace(self.t_start, self.t_end, self.t_resolution_length)]
-            self.PvX.equation_max_q = [self.fp.equation_max_q(t_).tolist()[0][0] for t_ in np.linspace(self.t_start, self.t_end, self.t_resolution_length)]
-            self.PvX.obst = []
-            for obstacle in self.obstacles:
-                for t_ in np.linspace(self.t_start, self.t_end, self.t_resolution_length):
-                    for corner in obstacle.corners_spline:
-                        self.PvX.obst += [corner[0](t_).tolist()[0][0], corner[1](t_).tolist()[0][0]]
+        # updating values because we are following the mooving Frenet-frame
+        t_evaluation = np.linspace(self.t_start, self.t_start + self.t_window_size, self.t_resolution_length)
+        self.PvX.v_s = [self.fp.fx_d_spline(t_).tolist()[0][0] + self.fp.fy_d_spline(t_).tolist()[0][0] for t_ in t_evaluation]
+        self.PvX.curvature = [self.fp.fy_c_spline(t_).tolist()[0][0] for t_ in t_evaluation]
+        self.PvX.equation_min_p = [self.fp.equation_min_p(t_).tolist()[0][0] for t_ in t_evaluation]
+        self.PvX.equation_max_p = [self.fp.equation_max_p(t_).tolist()[0][0] for t_ in t_evaluation]
+        self.PvX.equation_min_q = [self.fp.equation_min_q(t_).tolist()[0][0] for t_ in t_evaluation]
+        self.PvX.equation_max_q = [self.fp.equation_max_q(t_).tolist()[0][0] for t_ in t_evaluation]
+        self.PvX.obst = []
+        for obstacle in self.obstacles:
+            for t_ in t_evaluation:
+                for corner in obstacle.corners_spline:
+                    self.PvX.obst += [corner[0](t_).tolist()[0][0], corner[1](t_).tolist()[0][0]]
             
         try:
             self.PvX.z_ji = self.message_in['z_ji']
@@ -157,7 +184,6 @@ class VehicleBasis(Environment):
             
         except:
             pass
-
 
         return self
     
@@ -211,14 +237,19 @@ class VehicleBasis(Environment):
         
         # x0
         basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
-        coeffs1 = self.DvX.y[0:len(basis)]
-        coeffs2 = self.DvX.y[len(basis):len(basis)*2]
+        # coeffs1 = self.DvX.y[0:len(basis)]
+        # coeffs2 = self.DvX.y[len(basis):len(basis)*2]
+        sol = self.solution['x'].full().reshape(-1).tolist()
+        coeffs1 = sol[0:len(basis)]
+        coeffs2 = sol[len(basis):len(basis)*2]
         p = BSpline(basis, coeffs1)
         q = BSpline(basis, coeffs2)
-        p0 = p(self.t_step).tolist()[0]
-        q0 = q(self.t_step).tolist()[0]
-        p_dot0 = p.derivative()(self.t_step).tolist()[0]
-        q_dot0 = q.derivative()(self.t_step).tolist()[0]
+        # p_ = [p(t_).tolist()[0] for t_ in np.linspace(0, 1, 100)]
+        # q_ = [q(t_).tolist()[0] for t_ in np.linspace(0, 1, 100)]
+        p0 = p(self.t_step*1/self.t_window_size).tolist()[0]
+        q0 = q(self.t_step*1/self.t_window_size).tolist()[0]
+        p_dot0 = p.derivative()(self.t_step*1/self.t_window_size).tolist()[0]
+        q_dot0 = q.derivative()(self.t_step*1/self.t_window_size).tolist()[0]
         # updating x0 in PvX
         self.x0 = [p0, q0, p_dot0, q_dot0]
         self.PvX.x0 = [p0, q0, p_dot0, q_dot0]
@@ -245,6 +276,9 @@ class VehicleBasis(Environment):
             lambda_ji_coeffs_shifted += shift_spline(self.PvX.lambda_ji[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
         self.PvX.z_ji = z_ji_coeffs_shifted
         self.PvX.lambda_ji = lambda_ji_coeffs_shifted
+        
+        # Also, we need to update some other parameters
+        
         
         
         

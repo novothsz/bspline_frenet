@@ -20,11 +20,12 @@ class Vehicle(VehicleBasis):
     def __init__(self):
         super().__init__()
         
-        self.t_start = 0.4
-        self.t_step = 0.01 # Changed in simulation_step() upon first call
+        self.t_start = 0.0
+        self.t_step = 0.04 # 0.04 # Changed in simulation_step() upon first call
         self.t_window_size = 0.2
         self.t_end = self.t_start + self.t_window_size
         self.simulation = False
+        self.shift_enabled = False
         
     
 
@@ -239,7 +240,7 @@ class Vehicle(VehicleBasis):
             self.shift_DvZ()
             self.shift_PvZ()
         # Updating the necessary arguments for the solver
-        self.arg_z['x0'] = self.DvZ.w0_z
+        self.arg_z['x0'] = self.DvZ.assemble()
         self.arg_z['p'] = self.PvZ.assemble()
 
         # Solving the problem
@@ -549,7 +550,6 @@ class Vehicle(VehicleBasis):
         # Extracting the solution
         self.DvX.extract(self.solution)
         
-
         return self
     
     
@@ -643,7 +643,7 @@ class Vehicle(VehicleBasis):
         # ax.plot(poly7_x_t, poly7_y_t, 'k*')
 
         # Plotting of spline & control points
-        ax.plot(coeffs1, coeffs2, 'ro')
+        # ax.plot(coeffs1, coeffs2, 'ro')
         ax.plot(x_t, y_t, 'k')
 
         # Plotting of obstacle

@@ -245,6 +245,45 @@ class DecisionVarZ():
         
         return self
     
+    def assemble(self):       
+        """Assembles an array of values which the z optimization solver accepts.
+        The array is constructed from the class member values and arranged in a 
+        sequence described by assemble_list
+
+        Parameters
+        ----------
+        None
+            
+        Returns
+        -------
+        DvZ_assemble : array
+            A list of parameter values for the x optimization solver.
+        """
+        from more_itertools import locate
+        assemble_list = self.w_z_list
+        
+    
+        idx_z_i = list(locate(assemble_list, lambda a: a == 'z_i'))
+        idx_z_ij = list(locate(assemble_list, lambda a: a == 'z_ij'))
+
+        DvZ_assemble = np.zeros((1, len(self.w_z_list)))[0]
+        
+        # Only if this is not the first iteration. Otherwise: return self.w0, which should contain a good initialization.
+        # (this is becase upon instantiating DvX in the Vehicle() class, we feed in a w0 array to the constructor)
+        if self.z_i != []:
+            for i, idx in enumerate(idx_z_i):
+                DvZ_assemble[idx] = self.z_i[i]
+                
+            for i, idx in enumerate(idx_z_ij):
+                DvZ_assemble[idx] = self.z_ij[i]
+                
+            DvZ_assemble = DvZ_assemble.tolist()
+            
+            return DvZ_assemble
+            
+        else:
+            return self.w0_z
+    
 class DecisionVarX():
     def __init__(self, w_list, g_list, lbg, ubg):
         
@@ -328,7 +367,7 @@ class DecisionVarX():
             
         Returns
         -------
-        P0_assemble : array
+        DvX_assemble : array
             A list of parameter values for the x optimization solver.
         """
         from more_itertools import locate

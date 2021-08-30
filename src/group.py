@@ -240,6 +240,7 @@ class Group(Environment):
     def set_simulation(self, simulation = False):
         for i in range(len(self.vehicles)):
             self.vehicles[i].simulation = simulation
+            self.vehicles[i].shift_enabled = simulation
         
         
 

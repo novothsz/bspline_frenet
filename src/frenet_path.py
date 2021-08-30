@@ -11,7 +11,8 @@ from .frenet_spline import SplineFitter
 from casadi import MX, SX, Function, vertcat, cos, sin, nlpsol
 from .spline import BSpline, BSplineBasis
 
-from .spline_extra import definite_integral
+from .spline_extra import definite_integral, shift_spline, shift_knot1_fwd, shift_knot1_bwd, shift_over_knot, extrapolate
+
 
 
 
@@ -185,7 +186,7 @@ class FrenetPath(object):
 
     def t_to_tau(self, t):
         return interp(t,[0,1],[self.tau_0,self.tau_f])
-    def tau_tot(self, tau):
+    def tau_to_t(self, tau):
         return interp(tau,[self.tau_0,self.tau_f],[0,1])
 
 
@@ -965,9 +966,6 @@ class FrenetPath(object):
             raise NotImplementedError()
             
         "---- Pretty much same, as in the old code ----"
-            
-        
-
         
         # sampling
         equation_min_ = np.array([equation_min(t_)[0] for t_ in t]).reshape(-1).tolist()
@@ -1015,6 +1013,72 @@ class FrenetPath(object):
         ax.plot(equation_max_fitted_, '*')
         
         return [equation_min_fitted, equation_max_fitted]
+    
+    ###########################################################################
+    ###########################################################################
+    
+    # def shift_spline_khm(self, spline, shift_type = ''):
+        
+        
+        
+    def shift_spline_khm(spline, shift_type = ''):
+        
+        spline_original = BSpline(spline.basis, spline.coeffs)
+        t = np.linspace(0, 1, 100)
+        t_shift = np.linspace(0, 1, 100)
+        # shifting
+        if shift_type == 'extrapolate':
+            shift = 0.15
+            original_coeffs_len = len(spline.coeffs)
+            tmp_coeffs = extrapolate(spline.coeffs, shift, spline.basis)
+            extra_coeffs_len = len(tmp_coeffs) - original_coeffs_len
+            spline.coeffs = tmp_coeffs[extra_coeffs_len:] # deleting the couple of coefficients
+            
+            t_shift = np.linspace(0+0.1, 1+0.1, 100)
+            
+        if shift_type == 'cut_beginning':
+            shift = 0.15
+            spline.coeffs = shift_knot1_fwd(spline.coeffs, spline.basis, shift)
+            t_shift = np.linspace(0, 1, 100)
+            
+        if shift_type == 'cut_back':
+            shift = 0.15
+            spline.coeffs = np.flip(spline.coeffs)
+            spline.coeffs = shift_knot1_fwd(spline.coeffs, spline.basis, shift)
+            spline.coeffs = np.flip(spline.coeffs)
+            t_shift = np.linspace(0, 1, 100)
+            
+        if shift_type == 'cut_beginning2':
+            shift = 0.15
+            spline.coeffs = shift_spline(spline.coeffs, shift, spline.basis)
+            t_shift = np.linspace(0.15, 1, 100)
+        
+        # plotting
+        spline_original_t = np.array([spline_original(t_)[0] for t_ in t]).reshape(-1).tolist()
+        spline_t = np.array([spline(t_)[0] for t_ in t]).reshape(-1).tolist()
+        
+        fig, ax = plt.subplots()
+        ax.plot(t, spline_original_t, 'go')
+        ax.plot(t_shift, spline_t, 'k')
+        ax.set_title("spline evaluation")
+        fig, ax = plt.subplots()
+        ax.plot(spline_original.coeffs, 'go')
+        ax.plot(spline.coeffs, 'k*')
+        ax.set_title("--coefficients--")
+        plt.show()
+                
+    # # Choosing the equation
+    # if equation_name == 'p':
+    # 	equation_min = vx_min_sol * cos_theta_c + vy_min_sol * sin_theta_c
+    # 	equation_max = vx_max_sol * cos_theta_c + vy_max_sol * sin_theta_c
+    # elif equation_name == 'q':
+    # 	equation_min = - vx_min_sol * sin_theta_c + vy_min_sol * cos_theta_c
+    # 	equation_max = - vx_max_sol * sin_theta_c + vy_max_sol * cos_theta_c
+    # elif equation_name == '':
+    # 	raise NotImplementedError()
+    
+    # plt.close('all')
+    # shift_spline_khm(equation_min, 'extrapolate')
         
     ###########################################################################
     ###########################################################################
