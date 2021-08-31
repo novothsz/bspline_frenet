@@ -60,6 +60,12 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     corners = ([0.0, -0.3], [0.5,-0.3], [0.5, 0.3], [0.0, 0.3])
     delta = 0.15
     corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
+    # obstacles += [Obstacle(ID = 0, corners = corners)]
+    # Obstacle 1 NEW
+    corners = ([0.0, -0.3], [0.5,-0.3], [0.5, 0.3], [0.0, 0.3])
+    delta = 0.15
+    corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
+    corners = ([0.15, -0.15], [0.5, 0.053], [0.25, 0.38], [-0.145, 0.145])
     obstacles += [Obstacle(ID = 0, corners = corners)]
     
     # Obstacle 2
@@ -107,10 +113,13 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         
     # Simulation steps
     group.set_simulation(simulation=True)
+    n_intermediate_ADMM = 5
+    group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
     for i in range(0, 20):
-        for j in range(10):
+        for j in range(n_intermediate_ADMM):
             group.solve()
             group.set_simulation(False)
+            
         
         # Time-related things
         iteration_times += [time.time() - t_iter]
@@ -118,7 +127,6 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         t_iter = time.time()
         
         group.frenet_plotter(iternum = i, seed = seed)
-        
         group.simulation_step()
             
 
@@ -140,3 +148,4 @@ stage = 0
 start_position = [0.0, 0.0]
 goal_position = [0.0, 0.0]
 group = run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage)
+group.plot_moovie_frames(iternum=0, seed=0)

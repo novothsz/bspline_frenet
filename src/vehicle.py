@@ -99,6 +99,11 @@ class Vehicle(VehicleBasis):
                 a1, a2 = spline1[0], spline1[1]
                 b1, b2 = spline2[0], spline2[1]
                 return (a1 * b2 - a2 * b1)**2
+            
+            def dot_product(spline1, spline2):
+                a1, a2 = spline1[0], spline1[1]
+                b1, b2 = spline2[0], spline2[1]
+                return (a1 * b1 + a2 * b2)
 
 
             # vec1: what is should be
@@ -107,6 +112,7 @@ class Vehicle(VehicleBasis):
             vec1 = z_i - z_ij
             vec2 = np.array(self.xf[:self.n_dimensions]) - np.array(self.neighbours[i].xf[:self.n_dimensions])
             cross = cross_product(vec1, vec2)
+            dot = dot_product(vec1, vec2)
             
             
             # Formation constraint.
@@ -119,12 +125,12 @@ class Vehicle(VehicleBasis):
             # But the dot product should be > 0, to avoid the vehicles switching place and still
             # fulfilling the formation requirements (at least for those two vehicles)
 
-            # for t in np.linspace(0, 1, self.t_resolution_length):
-            #     self.define_constraint([dot(t)],
-            #                             [0],
-            #                             [math.inf],
-            #                             constraint_type='time',
-            #                             name=["formation_dot_vehicle_" + str(i)] * self.n_dimensions)
+            for t in np.linspace(0, 1, self.t_resolution_length):
+                self.define_constraint([dot(t)],
+                                        [0],
+                                        [math.inf],
+                                        constraint_type='time',
+                                        name=["formation_dot_vehicle_" + str(i)] * self.n_dimensions)
 
             # TODO: I think this is not really needed anymore, but need to check
             # for j in range(len(y)):
@@ -298,10 +304,13 @@ class Vehicle(VehicleBasis):
                                 name=["dy0"] * self.n_dimensions)
         # Version 2
         
-        self.J += self.rho_final_value * ((p.coeffs[-1] - self.xf[0])**2 \
-                                        + (p.derivative().coeffs[-1] - self.xf[2])**2 \
-                                        + (q.coeffs[-1] - self.xf[1])**2 \
-                                        + (q.derivative().coeffs[-1] - self.xf[3])**2)
+        # self.J += self.rho_final_value * ((p.coeffs[-1] - self.xf[0])**2 \
+        #                                 + (p.derivative().coeffs[-1] - self.xf[2])**2 \
+        #                                 + (q.coeffs[-1] - self.xf[1])**2 \
+        #                                 + (q.derivative().coeffs[-1] - self.xf[3])**2)
+        self.J += self.rho_final_value * ((p.coeffs[-1] - self.xf[0])**2)
+        self.J += self.rho_final_value * ((q.coeffs[-1] - self.xf[1])**2)
+                                        
         # Version 1
         # Final position constraint on y
         # self.define_constraint([p, q],
@@ -549,6 +558,9 @@ class Vehicle(VehicleBasis):
         self.solution = self.solver.call(self.arg)
         # Extracting the solution
         self.DvX.extract(self.solution)
+        self.variable_history['y'] += [self.DvX.y]
+        self.variable_history['t_start'] += [self.t_start]
+        self.variable_history['t_end'] += [self.t_end]
         
         return self
     
@@ -666,6 +678,131 @@ class Vehicle(VehicleBasis):
         x_new = x * cos(theta) - y * sin(theta)
         y_new = x * sin(theta) + y * cos(theta)
         return x_new, y_new
+    
+    def plot_moovie_frames_mooving_horizon(self, ax, horizon_num):
+        
+        # Plotting the environment
+        ax = self.plot_environment(ax)
+
+        # Plotting of obstacle
+        for obstacle in self.obstacles:
+            obstacle.plot_obstacle(ax)
+             
+            
+        horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
+        # Creating the splines
+        basis = self.define_knots(degree = 3, knot_intervals = self.knot_intervals)
+        solution = self.variable_history['y'][horizon_num]
+        t_start = self.variable_history['t_start'][horizon_num]
+        t_end = self.variable_history['t_end'][horizon_num]
+        coeffs1 = solution[0:len(basis)]
+        coeffs2 = solution[len(basis):len(basis)*2]
+        p_solution = BSpline(basis, coeffs1)
+        q_solution = BSpline(basis, coeffs2)
+        x_t, y_t = [], []
+        for t_pq, t_frenet in zip(np.linspace(0, 1, 100), np.linspace(t_start, t_end, 100)):
+            p_solution_, q_solution_ = p_solution(t_pq)[0], q_solution(t_pq)[0]
+            x_, y_ = self.fp.frenet_to_inertial(p_solution_, q_solution_, t_frenet)
+            x_t += [x_]
+            y_t += [y_]
+            
+        assert not((self.t_step * 100) % 1)
+        idx = int(100 * self.t_step * 1 / self.t_window_size + 1) # int(1 / self.t_step - 1)
+        
+        ax.plot(x_t[0:idx], y_t[0:idx], c = 'k',lw=0.8,alpha = 1, zorder = 5)
+        ax.plot(x_t[idx:], y_t[idx:], c = 'cornflowerblue',lw=0.8,alpha = 0.5, zorder = 3)
+        
+        
+        x0, y0 = self.fp.frenet_to_inertial(p_solution(0)[0], q_solution(0)[0], t_start)
+        
+        # self.plot_drone(ax, x0 = x0,
+        #                 y0 = y0,
+        #                 theta_c = math.atan2(self.fp.fy_d_spline(t_start)[0][0] + q_solution.derivative()(0),
+        #                            self.fp.fx_d_spline(t_start)[0][0] + p_solution.derivative()(0)))
+        
+        # theta_c = self.fp.fy_d_spline(t_start)[0][0] / self.fp.fx_d_spline(t_start)[0][0] + \
+        #                     q_solution.derivative()(0) / p_solution.derivative()(0)
+        
+        return t_start, ax
+        
+    def plot_drone(self, ax, x0, y0, theta_c):
+        
+        # Draw body
+        radious = 0.05
+        radious = self.radious * 0.5 * 0.9
+        height = radious
+        width = radious
+
+
+        # Draw arms
+        l = 0.1
+        l = radious * 2
+
+
+        # x0 = x(t) + self.fp.fx_spline(t)
+        # y0 = y(t) + self.fp.fy_spline(t)
+        # p_solution_, q_solution_ = p_solution(t)[0], q_solution(t)[0]
+        # x0, y0 = self.fp.frenet_to_inertial(p_solution_, q_solution_, t)
+
+
+
+        rot_x, rot_y = self.plot_rotation(l, 0, theta_c + np.pi/4)
+        x1 = x0 + rot_x
+        y1 = y0 + rot_y
+
+        rot_x, rot_y = self.plot_rotation(l, 0, theta_c + np.pi/4*3)
+        x2 = x0 + rot_x
+        y2 = y0 + rot_y
+
+        rot_x, rot_y = self.plot_rotation(l, 0, theta_c + np.pi/4*5)
+        x3 = x0 + rot_x
+        y3 = y0 + rot_y
+
+        rot_x, rot_y = self.plot_rotation(l, 0, theta_c + np.pi/4*7)
+        x4 = x0 + rot_x
+        y4 = y0 + rot_y
+
+
+        # Rotors
+        # https://stackoverflow.com/questions/9215658/plot-a-circle-with-pyplot
+        r_rotor = 0.03
+        r_rotor = l * 0.3
+
+        # Adding stuff to ax
+
+        # Lines
+        line1 = Line2D([x0, x1], [y0, y1], zorder = 8)
+        line2 = Line2D([x0, x2], [y0, y2], zorder = 8)
+        line3 = Line2D([x0, x3], [y0, y3], zorder = 8)
+        line4 = Line2D([x0, x4], [y0, y4], zorder = 8)
+        ax.add_line(line1)
+        ax.add_line(line2)
+        ax.add_line(line3)
+        ax.add_line(line4)
+
+        # Circles
+        circle1 = plt.Circle((x1, y1), r_rotor, color='k', alpha=0.5, zorder = 10)
+        circle2 = plt.Circle((x2, y2), r_rotor, color='k', alpha=0.5, zorder = 10)
+        circle3 = plt.Circle((x3, y3), r_rotor, color='k', alpha=0.5, zorder = 10)
+        circle4 = plt.Circle((x4, y4), r_rotor, color='k', alpha=0.5, zorder = 10)
+        ax.add_patch(circle1)
+        ax.add_patch(circle2)
+        ax.add_patch(circle3)
+        ax.add_patch(circle4)
+
+
+
+        rect_x = - width/2
+        rect_y = - height/2
+        rot_x, rot_y = self.plot_rotation(rect_x, rect_y, theta_c)
+
+        rectangle = patches.Rectangle((x0 + rot_x, y0 + rot_y), height, width,
+                                      linewidth=1, edgecolor='k', facecolor='k',
+                                      zorder = 9, angle = theta_c / np.pi * 180)
+        ax.add_patch(rectangle)
+
+        return ax
+        
 
     def plot_moovie_frames(self, ax, t):
         # https://nickcharlton.net/posts/drawing-animating-shapes-matplotlib.html

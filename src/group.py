@@ -237,6 +237,11 @@ class Group(Environment):
         for i in range(len(self.vehicles)):
             self.vehicles[i].simulation_step()
             
+    def set_var(self, var):
+        for i in range(len(self.vehicles)):
+            if 'n_intermediate_ADMM' in var:
+                self.vehicles[i].n_intermediate_ADMM = var['n_intermediate_ADMM']
+            
     def set_simulation(self, simulation = False):
         for i in range(len(self.vehicles)):
             self.vehicles[i].simulation = simulation
@@ -494,7 +499,40 @@ class Group(Environment):
 
 
         return self
+    
+    
     def plot_moovie_frames(self, iternum : int = 0, seed = ''):
+        fig, ax = self.figures["figures"]
+        ax.clear()
+        frame_num = 0
+        horizon_num = 0
+        for t in np.linspace(0, 1, 80):
+
+            # Then we plot the vehicles
+            for i in range(len(self.vehicles)):
+                t_start, ax = self.vehicles[i].plot_moovie_frames_mooving_horizon(ax, horizon_num)
+            horizon_num += 1
+
+            # Axis related stuff
+            ax.set_title("Trajectories of the vehicles after iteration {} with seed {}".format(iternum, seed))
+            # Or setting the ax limits 
+            ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
+            ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
+            # ax.set_xlim(self.vehicles[0].fp.fx_spline(t_start)[0][0] - 2, self.vehicles[0].fp.fx_spline(t_start)[0][0] + 2*2)
+            # ax.set_ylim(self.vehicles[0].fp.fy_spline(t_start)[0][0] - 2, self.vehicles[0].fp.fy_spline(t_start)[0][0] + 2)
+            ax.set_xlabel("x axis")
+            ax.set_ylabel("y axis")
+            ax.set_aspect('equal', adjustable='box')
+            # Saving figure to folder
+            fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 800)
+            # »
+            frame_num += 1
+
+        return self
+    
+    
+    
+    def plot_moovie_frames_old(self, iternum : int = 0, seed = ''):
 
         # self.check_collision()
         # self.calculate_formation_error()
@@ -518,8 +556,8 @@ class Group(Environment):
             # ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
             # ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
             # Or setting the ax limits 
-            ax.set_xlim(self.vehicles[0].fp.fx_spline(t)[0][0] - 2, self.vehicles[0].fp.fx_spline(t)[0][0] + 2)
-            ax.set_ylim(self.vehicles[0].fp.fy_spline(t)[0][0] - 1, self.vehicles[0].fp.fy_spline(t)[0][0] + 1)
+            ax.set_xlim(self.vehicles[0].fp.fx_spline(t)[0][0] - 2*2, self.vehicles[0].fp.fx_spline(t)[0][0] + 2*2)
+            ax.set_ylim(self.vehicles[0].fp.fy_spline(t)[0][0] - 1*2, self.vehicles[0].fp.fy_spline(t)[0][0] + 1*2)
             ax.set_xlabel("x axis")
             ax.set_ylabel("y axis")
             ax.set_aspect('equal', adjustable='box')

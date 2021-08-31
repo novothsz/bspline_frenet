@@ -46,18 +46,18 @@ class Environment():
         
         
         # Plotting border
-        corners = [[self.border_x[0], self.border_y[0]],
-                   [self.border_x[1], self.border_y[0]],
-                   [self.border_x[1], self.border_y[1]],
-                   [self.border_x[0], self.border_y[1]],
-                   [self.border_x[0], self.border_y[0]]
-                   ]
-        for obstacle in self.obstacles:
-            corners = np.array(corners)
-            polygon = Polygon(corners, closed=True, fill=False,
-                              linestyle = '--',
-                              fc=(0,0,0,0.1), ec=(0,0,0,1), lw=1, zorder = 1)
-            ax.add_patch(polygon)
+        # corners = [[self.border_x[0], self.border_y[0]],
+        #            [self.border_x[1], self.border_y[0]],
+        #            [self.border_x[1], self.border_y[1]],
+        #            [self.border_x[0], self.border_y[1]],
+        #            [self.border_x[0], self.border_y[0]]
+        #            ]
+        # for obstacle in self.obstacles:
+        #     corners = np.array(corners)
+        #     polygon = Polygon(corners, closed=True, fill=False,
+        #                       linestyle = '--',
+        #                       fc=(0,0,0,0.1), ec=(0,0,0,1), lw=1, zorder = 1)
+        #     ax.add_patch(polygon)
             
         self.fp.plot_path(ax)
             

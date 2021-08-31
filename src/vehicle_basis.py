@@ -56,17 +56,17 @@ class VehicleBasis(Environment):
 
         # Test hyperparam
         self.slack = 0.00001
-        self.t_resolution_length = 30
+        self.t_resolution_length = 10
         # Hyperparams
         self.rho = 50# /5 # /50
         self.rho_formation = 100# /5 # /50
         self.rho_input = 0.1 * 10 * 2
-        self.rho_final_value = 0.1
+        self.rho_final_value = 0.1 * 100
         
         self.epsilon = 0.001 # try to keep minimum epsilon distance from the obstacle
         # self.epsilon = self.radious # try to keep minimum epsilon distance from the obstacle
-        self.safety_weight = 0 # cost parameter for epsilon
-        self.knot_intervals = 15 # number of knots for the output (position) spline of the vehicle
+        self.safety_weight = 1 # cost parameter for epsilon
+        self.knot_intervals = 5 # number of knots for the output (position) spline of the vehicle
         
         self.obstacle_avoidance_multiplier = 1.5
         self.vehicle_avoidnce_multiplier = 2.0
@@ -89,9 +89,11 @@ class VehicleBasis(Environment):
         self.initial_values = {}
         # variable_history
         self.variable_history =  {'y' : [],         # x_update
-                                          'y_j' : [],       # data_exchange_x_receive
+                                  'y_j' : [],       # data_exchange_x_receive
+                                  't_start' : [],
+                                  't_end' : []
                 }
-        
+        self.n_intermediate_ADMM = 1
         # message
         self.message_in = {}
         self.message_out = {}
@@ -884,6 +886,8 @@ class VehicleBasis(Environment):
         self.message_in = {}
         self.variable_history =  {'y' : [],         # x_update
                                   'y_j' : [],       # data_exchange_x_receive
+                                  't_start' : [],
+                                  't_end' : []
         }
         
     def initialize_x(self):
