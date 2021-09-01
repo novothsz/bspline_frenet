@@ -12,6 +12,7 @@ import numpy as np
 
 import random
 import sys
+import math
 
 import os
 os.system("mkdir log")
@@ -60,13 +61,13 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     corners = ([0.0, -0.3], [0.5,-0.3], [0.5, 0.3], [0.0, 0.3])
     delta = 0.15
     corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
-    # obstacles += [Obstacle(ID = 0, corners = corners)]
+    obstacles += [Obstacle(ID = 0, corners = corners)]
     # Obstacle 1 NEW
     corners = ([0.0, -0.3], [0.5,-0.3], [0.5, 0.3], [0.0, 0.3])
     delta = 0.15
     corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
     corners = ([0.15, -0.15], [0.5, 0.053], [0.25, 0.38], [-0.145, 0.145])
-    obstacles += [Obstacle(ID = 0, corners = corners)]
+    # obstacles += [Obstacle(ID = 0, corners = corners)]
     
     # Obstacle 2
     dx = 0.25
@@ -113,7 +114,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         
     # Simulation steps
     group.set_simulation(simulation=True)
-    n_intermediate_ADMM = 5
+    n_intermediate_ADMM = 10
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
     for i in range(0, 20):
         for j in range(n_intermediate_ADMM):
@@ -145,7 +146,8 @@ max_iterations = 2
 
 # Stage 0
 stage = 0
-start_position = [0.0, 0.0]
-goal_position = [0.0, 0.0]
+start_position = [0.0, 0.0, 0.0]
+goal_position = [0.0, 0.0, 0.0]
 group = run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage)
 group.plot_moovie_frames(iternum=0, seed=0)
+# group.plot_moovie_frames_old(iternum=0, seed=0)

@@ -7,7 +7,7 @@ import matplotlib.patches as patches
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 
-from casadi import MX, SX, Function, vertcat, dot, nlpsol, cos, sin, norm_2
+from casadi import MX, SX, Function, vertcat, nlpsol, cos, sin, norm_2 #, dot
 from .spline import BSpline, BSplineBasis
 from .spline_extra import definite_integral
 
@@ -23,6 +23,7 @@ class Vehicle(VehicleBasis):
         self.t_start = 0.0
         self.t_step = 0.04 # 0.04 # Changed in simulation_step() upon first call
         self.t_window_size = 0.2
+        # self.t_window_size = 1.0
         self.t_end = self.t_start + self.t_window_size
         self.simulation = False
         self.shift_enabled = False
@@ -50,7 +51,7 @@ class Vehicle(VehicleBasis):
 
         z_i = self.define_MX_spline(degree = self.state_degree, knot_intervals = self.knot_intervals, n_spl = self.n_dimensions,
                                lower_bound=self.y_min, upper_bound=self.y_max,
-                               initial_value = [[self.x0[0], self.xf[0]], [self.x0[1], self.xf[1]]],
+                               initial_value = [[self.x0[0], self.xf[0]], [self.x0[1], self.xf[1]], [self.x0[2], self.xf[2]]],
                                name = ['z_i'] * self.n_dimensions)
 
         lambda_i  = self.define_MX_spline(degree = self.state_degree, knot_intervals = self.knot_intervals, n_spl = self.n_dimensions,
@@ -82,7 +83,7 @@ class Vehicle(VehicleBasis):
 
             z_ij = self.define_MX_spline(degree = self.state_degree, knot_intervals = self.knot_intervals, n_spl = self.n_dimensions,
                                    lower_bound=self.y_min, upper_bound=self.y_max,
-                                   initial_value = [[self.neighbours[i].x0[0], self.neighbours[i].xf[0]], [self.neighbours[i].x0[1], self.neighbours[i].xf[1]]],
+                                   initial_value = [[self.neighbours[i].x0[0], self.neighbours[i].xf[0]], [self.neighbours[i].x0[1], self.neighbours[i].xf[1]], [self.neighbours[i].x0[2], self.neighbours[i].xf[2]]],
                                    name = ['z_ij'] * self.n_dimensions)
             lambda_ij  = self.define_MX_spline(degree = self.state_degree, knot_intervals = self.knot_intervals, n_spl = self.n_dimensions,
                                    lower_bound = [], upper_bound = [],
@@ -104,33 +105,40 @@ class Vehicle(VehicleBasis):
                 a1, a2 = spline1[0], spline1[1]
                 b1, b2 = spline2[0], spline2[1]
                 return (a1 * b1 + a2 * b2)
+            
+            def vector_rotation(spline, alpha, t):
+                a1, a2 = spline[0], spline[1]
+                return (a1 * cos(alpha(t)) - a2 * sin(alpha(t)), \
+                        a1 * sin(alpha(t)) + a2 * cos(alpha(t)))
+                
 
 
             # vec1: what is should be
             # vec2: what we have
             # cross: the cross product of the two vectors. It is a function of t.
             vec1 = z_i - z_ij
-            vec2 = np.array(self.xf[:self.n_dimensions]) - np.array(self.neighbours[i].xf[:self.n_dimensions])
-            cross = cross_product(vec1, vec2)
-            dot = dot_product(vec1, vec2)
+            vec2 = np.array(self.xf[:self.n_dimensions_old]) - np.array(self.neighbours[i].xf[:self.n_dimensions_old])
+            # cross = cross_product(vec1, vec2)
+            # dot = dot_product(vec1, vec2)
+            # usage: cross(t), dot(t)
             
             
             # Formation constraint.
             for t in np.linspace(0, 1, self.t_resolution_length):
-                self.define_constraint([cross(t)],
+                self.define_constraint([cross_product(vec1, vector_rotation(vec2, z_i[2], t))(t)],
                                         [-self.slack * 1],
                                         [self.slack * 1],
                                         constraint_type='time',
-                                        name=["formation_vehicle_" + str(i)] * self.n_dimensions)
+                                        name=["formation_vehicle_" + str(i)] * self.n_dimensions_old)
             # But the dot product should be > 0, to avoid the vehicles switching place and still
             # fulfilling the formation requirements (at least for those two vehicles)
 
             for t in np.linspace(0, 1, self.t_resolution_length):
-                self.define_constraint([dot(t)],
+                self.define_constraint([dot_product(vec1, vector_rotation(vec2, z_i[2], t))(t)],
                                         [0],
                                         [math.inf],
                                         constraint_type='time',
-                                        name=["formation_dot_vehicle_" + str(i)] * self.n_dimensions)
+                                        name=["formation_dot_vehicle_" + str(i)] * self.n_dimensions_old)
 
             # TODO: I think this is not really needed anymore, but need to check
             # for j in range(len(y)):
@@ -140,8 +148,8 @@ class Vehicle(VehicleBasis):
             """Special distance-constraint"""
             """Special distance-constraint"""
             # frenet_zero = MX((0, 0))
-            xf = np.array(self.xf[:self.n_dimensions])
-            xf_j = np.array(self.neighbours[i].xf[:self.n_dimensions])
+            xf = np.array(self.xf[:self.n_dimensions_old])
+            xf_j = np.array(self.neighbours[i].xf[:self.n_dimensions_old])
 
             dist_we_have = (z_i[0] - z_ij[0])**2 \
                             + (z_i[1] - z_ij[1])**2
@@ -155,14 +163,14 @@ class Vehicle(VehicleBasis):
                                         [0.0],
                                         [math.inf],
                                         constraint_type='time',
-                                        name=["formation_vehicle_" + str(i)] * self.n_dimensions)
+                                        name=["formation_vehicle_" + str(i)] * self.n_dimensions_old)
 
                 # We can add collision avoidance here too :)
                 self.define_constraint([dist_we_have(t)],
                                         [(self.radious * 2 * self.vehicle_avoidnce_multiplier)**2],
                                         [math.inf],
                                         constraint_type='time',
-                                        name=["formation_vehicle_" + str(i)] * self.n_dimensions)
+                                        name=["formation_vehicle_" + str(i)] * self.n_dimensions_old)
             """Special distance-constraint"""
             """Special distance-constraint"""
 
@@ -196,7 +204,7 @@ class Vehicle(VehicleBasis):
                                     [-self.slack,-self.slack],
                                     [ self.slack, self.slack],
                                     constraint_type='time',
-                                    name=["frenet_zero_" + str(i)] * self.n_dimensions)
+                                    name=["frenet_zero_" + str(i)] * self.n_dimensions_old)
         """ ---- Frenet ---- """
         """ ---- Frenet ---- """
 
@@ -274,7 +282,7 @@ class Vehicle(VehicleBasis):
 
         pq = self.define_MX_spline(degree=3, knot_intervals=self.knot_intervals, n_spl=self.n_dimensions,
                                 lower_bound=self.y_min, upper_bound=self.y_max,
-                                initial_value = [[self.x0[0], self.xf[0]], [self.x0[1], self.xf[1]]],
+                                initial_value = [ [self.x0[0], self.xf[0]], [self.x0[1], self.xf[1]], [self.x0[2], self.xf[2]] ],
                                 name=["y"] * self.n_dimensions)
 
         y = pq # we basically rename the thing :)
@@ -283,21 +291,23 @@ class Vehicle(VehicleBasis):
 
         p = pq[0]
         q = pq[1]
+        phi = pq[2]
         
         p_dot = pq_dot[0]
         q_dot = pq_dot[1]
+        phi_dot = pq_dot[2]
         
         # p_dotdot = pq_dotdot[0]
         # q_dodott = pq_dotdot[1]
         
         # Initial position constraint on y
-        self.define_constraint([p, q],
+        self.define_constraint([p, q, phi],
                                 x0[:self.n_dimensions],
                                 x0[:self.n_dimensions],
                                 constraint_type='initial_param',
                                 name=["y0"] * self.n_dimensions)
         # Initial velocity constraint on dy
-        self.define_constraint([p_dot, q_dot],
+        self.define_constraint([p_dot, q_dot, phi_dot],
                                 x0[self.n_dimensions:self.n_dimensions*2],
                                 x0[self.n_dimensions:self.n_dimensions*2],
                                 constraint_type='initial_param',
@@ -308,19 +318,32 @@ class Vehicle(VehicleBasis):
         #                                 + (p.derivative().coeffs[-1] - self.xf[2])**2 \
         #                                 + (q.coeffs[-1] - self.xf[1])**2 \
         #                                 + (q.derivative().coeffs[-1] - self.xf[3])**2)
-        self.J += self.rho_final_value * ((p.coeffs[-1] - self.xf[0])**2)
-        self.J += self.rho_final_value * ((q.coeffs[-1] - self.xf[1])**2)
+        
+        "final_param"
+        # self.J += self.rho_final_value * ((p.coeffs[-1] - self.xf[0])**2)
+        # self.J += self.rho_final_value * ((q.coeffs[-1] - self.xf[1])**2)
+        # self.J += self.rho_final_value * ((phi.coeffs[-1] - self.xf[2])**2)
+        
+        a = p.coeffs[-1] - self.xf[0]
+        b = q.coeffs[-1] - self.xf[1]
+        self.J += self.rho_final_value * (a**2 + b**2)**2
+        # self.J += self.rho_final_value * ((phi.coeffs[-1] - self.xf[2])**2)
+        self.define_constraint([phi],
+                                xf[self.n_dimensions],
+                                xf[self.n_dimensions],
+                                constraint_type='final_param',
+                                name=["yf"] * self.n_dimensions)
                                         
-        # Version 1
-        # Final position constraint on y
-        # self.define_constraint([p, q],
+        # # Version 1
+        # # Final position constraint on y
+        # self.define_constraint([p, q, phi],
         #                         xf[:self.n_dimensions],
         #                         xf[:self.n_dimensions],
         #                         constraint_type='final_param',
         #                         name=["yf"] * self.n_dimensions)
 
         # # Final velocity constraint on dy
-        # self.define_constraint([p_dot, q_dot],
+        # self.define_constraint([p_dot, q_dot, phi_dot],
         #                         xf[self.n_dimensions:self.n_dimensions*2],
         #                         xf[self.n_dimensions:self.n_dimensions*2],
         #                         constraint_type='final_param',

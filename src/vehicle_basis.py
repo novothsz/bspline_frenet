@@ -27,8 +27,14 @@ class VehicleBasis(Environment):
         super().__init__()
         
         self.stage = []
-        self.n_dimensions = 2
-        self.state_len = self.n_dimensions * 2 # [position_x, velocity_x] * 2 if we are in 2D
+        self.n_dimensions = 3 # this is considering a third state, the phi rotation angle
+        self.state_len = 6 
+        
+        
+        self.n_dimensions_old = 2
+        self.state_len_old = self.n_dimensions_old * 2 # [position_x, velocity_x] * 2 if we are in 2D
+        
+        
         self.state_degree = 3
         self.radious = 0.08
         self.T = 5
@@ -74,8 +80,8 @@ class VehicleBasis(Environment):
         # Constraints on decision variables
         # self.y_min = [self.border_x[0], self.border_y[0]]
         # self.y_max = [self.border_x[1], self.border_y[1]]
-        self.y_min = [-1, -1]
-        self.y_max = [1, 1]
+        self.y_min = [-1, -1, -math.pi]
+        self.y_max = [1, 1, math.pi]
         
         
         self.u_min = [-50, -50]
@@ -126,9 +132,9 @@ class VehicleBasis(Environment):
     def set_position(self, position : list, position_type : str):
         # 2D
         if position_type == 'initial':
-            self.x0 = position + [0, 0]
+            self.x0 = position + [0, 0, 0]
         elif position_type == 'final':
-            self.xf = position + [0, 0]
+            self.xf = position + [0, 0, 0]
         else:
             raise NotImplementedError()
 
@@ -196,14 +202,14 @@ class VehicleBasis(Environment):
         
         
         z_i_coeffs_shifted = []
-        for i in range(2):
+        for i in range(3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
             z_i_coeffs_shifted += shift_spline(self.DvZ.z_i[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
         self.DvZ.z_i = z_i_coeffs_shifted
         
         
         z_ij_coeffs_shifted = []
-        for i in range(len(self.neighbours) * 2):
+        for i in range(len(self.neighbours) * 3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
             z_ij_coeffs_shifted += shift_spline(self.DvZ.z_ij[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
         self.DvZ.z_ij = z_ij_coeffs_shifted
@@ -224,7 +230,7 @@ class VehicleBasis(Environment):
         
         # shifting lambda_ij
         lambda_ij_coeffs_shifted = []
-        for i in range(len(self.neighbours) * 2):
+        for i in range(len(self.neighbours) * 3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
             lambda_ij_coeffs_shifted += shift_spline(self.PvZ.lambda_ij[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
         self.PvZ.lambda_ij = lambda_ij_coeffs_shifted
@@ -244,23 +250,27 @@ class VehicleBasis(Environment):
         sol = self.solution['x'].full().reshape(-1).tolist()
         coeffs1 = sol[0:len(basis)]
         coeffs2 = sol[len(basis):len(basis)*2]
+        coeffs3 = sol[len(basis)*2:len(basis)*3]
         p = BSpline(basis, coeffs1)
         q = BSpline(basis, coeffs2)
+        phi = BSpline(basis, coeffs3)
         # p_ = [p(t_).tolist()[0] for t_ in np.linspace(0, 1, 100)]
         # q_ = [q(t_).tolist()[0] for t_ in np.linspace(0, 1, 100)]
         p0 = p(self.t_step*1/self.t_window_size).tolist()[0]
         q0 = q(self.t_step*1/self.t_window_size).tolist()[0]
+        phi0 = phi(self.t_step*1/self.t_window_size).tolist()[0]
         p_dot0 = p.derivative()(self.t_step*1/self.t_window_size).tolist()[0]
         q_dot0 = q.derivative()(self.t_step*1/self.t_window_size).tolist()[0]
+        phi_dot0 = phi.derivative()(self.t_step*1/self.t_window_size).tolist()[0]
         # updating x0 in PvX
-        self.x0 = [p0, q0, p_dot0, q_dot0]
-        self.PvX.x0 = [p0, q0, p_dot0, q_dot0]
+        self.x0 = [p0, q0, phi0, p_dot0, q_dot0, phi_dot0]
+        self.PvX.x0 = self.x0
         
         # shifting z_i, lambda_i
         basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
         z_i_coeffs_shifted = []
         lambda_i_coeffs_shifted = []
-        for i in range(2):
+        for i in range(3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
             z_i_coeffs_shifted += shift_spline(self.PvX.z_i[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
             lambda_i_coeffs_shifted += shift_spline(self.PvX.lambda_i[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
@@ -272,7 +282,7 @@ class VehicleBasis(Environment):
         basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
         z_ji_coeffs_shifted = []
         lambda_ji_coeffs_shifted = []
-        for i in range(len(self.neighbours) * 2):
+        for i in range(len(self.neighbours) * 3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
             z_ji_coeffs_shifted += shift_spline(self.PvX.z_ji[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
             lambda_ji_coeffs_shifted += shift_spline(self.PvX.lambda_ji[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
@@ -291,10 +301,13 @@ class VehicleBasis(Environment):
         
         coeffs1 = self.DvX.y[0:len(basis_y)]
         coeffs2 = self.DvX.y[len(basis_y):len(basis_y)*2]
+        coeffs3 = self.DvX.y[len(basis_y)*2:len(basis_y)*3]
         coeffs1 = shift_spline(coeffs1, self.t_step, basis_y).tolist()
         coeffs2 = shift_spline(coeffs2, self.t_step, basis_y).tolist()
+        coeffs3 = shift_spline(coeffs3, self.t_step, basis_y).tolist()
         self.DvX.y = coeffs1
         self.DvX.y += coeffs2
+        self.DvX.y += coeffs3
         
         # shifting a
         basis_a = self.define_knots(degree = 1, knot_intervals = self.knot_intervals)
@@ -672,7 +685,7 @@ class VehicleBasis(Environment):
                                 upper_bound = [math.inf] * len(splines),
                                 initial_value = [[1, -1], [0, 0]],
                                 # name = ["a"+ str(i) for i in range(len(splines))])
-                                name = ["a"] * self.n_dimensions)
+                                name = ["a"] * self.n_dimensions_old)
 
         # b
         b = self.define_MX_spline(degree = 1, knot_intervals = self.knot_intervals, n_spl = 1,

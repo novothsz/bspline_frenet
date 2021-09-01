@@ -6,7 +6,7 @@ from .environment import Environment
 import yaml
 
 class Group(Environment):
-    def __init__(self, n_vehicles : int, start_position = [-0.8, 0], goal_position = [0.8, 0], stage = 0):
+    def __init__(self, n_vehicles : int, start_position = [-0.8, 0, 0], goal_position = [0.8, 0, 0], stage = 0):
         self.vehicles = []
         for i in range(n_vehicles):
             vehicle = Vehicle()
@@ -86,8 +86,9 @@ class Group(Environment):
     def position_generator(self, centerpoint : list, n_positions : int, r : float):
         positions = []
         alpha = np.pi / 4.0 + np.pi / 8.0 # initial angle
+        alpha += centerpoint[2]
         for i in range(n_positions):
-            positions += [ [centerpoint[0] + r * np.sin(alpha), centerpoint[1] + r * np.cos(alpha)] ] # [x, vx, y, vy, z, vz]
+            positions += [ [centerpoint[0] + r * np.sin(alpha), centerpoint[1] + r * np.cos(alpha), centerpoint[2]] ] # [x, vx, y, vy, z, vz]
             alpha = alpha - np.pi * 2.0 / n_positions
 
         return positions
@@ -524,7 +525,7 @@ class Group(Environment):
             ax.set_ylabel("y axis")
             ax.set_aspect('equal', adjustable='box')
             # Saving figure to folder
-            fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 800)
+            fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
             # »
             frame_num += 1
 

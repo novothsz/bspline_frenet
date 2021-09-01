@@ -18,8 +18,8 @@ class Environment():
         # self.start_position = [-0.8, 0]
         # self.goal_position = [0.8, 0]
         # 0 in the frenet frame :)
-        self.start_position = [0, 0]
-        self.goal_position = [0, 0]
+        # self.start_position = [0, 0]
+        # self.goal_position = [0, 0]
         
         self.obstacle_area = { 'x_limits': [[-0.2, 0.2]], 'y_limits': [[-0.3, 0.3]] }
         self.fp = FrenetPath()
