@@ -70,7 +70,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     # obstacles += [Obstacle(ID = 0, corners = corners)]
     
     # Obstacle 2
-    dx = 0.25
+    dx = 0.4
     dy = 0.3
     tmp_obs = ([-2.4674-dx, -1-dy],
              [-2.4674+dx, -1-dy],

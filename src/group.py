@@ -86,8 +86,8 @@ class Group(Environment):
             scaling_step = 2.0
             # scaling_factors = [  [1 * scaling_step ** i, 1 / (scaling_step ** i) ] for i in range(0, math.floor(abs(math.log(0.010) / math.log(scaling_step))))  ]
             # scaling_factors = np.array(scaling_factors).reshape(-1).tolist()
-            scaling_factors_shrink = [  1 / (scaling_step ** i)  for i in range(0, math.floor(abs(math.log(0.010) / math.log(scaling_step))))  ]
-            scaling_factors_expand = [  1 * scaling_step ** i  for i in range(0, math.floor(abs(math.log(0.010) / math.log(scaling_step))))  ]
+            scaling_factors_shrink = [  1 / (scaling_step ** i)  for i in range(0, math.floor(abs(math.log(0.25) / math.log(scaling_step))))  ]
+            scaling_factors_expand = [  1 * scaling_step ** i  for i in range(0, math.floor(abs(math.log(0.25) / math.log(scaling_step))))  ]
             scaling_factors = scaling_factors_shrink + scaling_factors_expand
             scaling_factors = np.array(scaling_factors).reshape(-1).tolist()
             
@@ -121,7 +121,19 @@ class Group(Environment):
                     if collision == True:
                         costs += [math.inf]
                     else:
-                        cost = self.formation_change_cost_calculator(vehicle_positions, vehicle_positions_scaled_rotated)
+                        cost = self.formation_change_cost_calculator(vehicle_positions, vehicle_positions_scaled_rotated, rotation_angle, scaling_factor)
+                        # check collision for previous and future steps too!
+                        obstacle_corners_zizz = []
+                        for t_zizz in np.linspace(t_end - self.vehicles[0].t_step / 10 * 10 , t_end + self.vehicles[0].t_step / 10 * 10, 6):
+                        
+                            for obstacle in self.vehicles[0].obstacles:
+                                corners = [ [corner[0](t_zizz).tolist()[0][0], corner[1](t_zizz).tolist()[0][0]] for corner in obstacle.corners_spline]
+                                obstacle_corners_zizz += [corners]
+            
+                        all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, obstacle_corners_zizz)   
+                        if collision == True:
+                            cost = math.inf
+            
                         costs += [cost]
                     vehicle_positions_new_saved += [vehicle_positions_scaled_rotated]
                     
@@ -154,10 +166,22 @@ class Group(Environment):
     ###########################################################################
     ###########################################################################
     
-    def formation_change_cost_calculator(self, vehicle_positions_original, vehicle_positions_new):
+    def formation_change_cost_calculator(self, vehicle_positions_original, vehicle_positions_new, rotation_angle = 0, scaling_factor = 1):
         cost = 0
+        alpha_distance = 0.1
+        alpha_rotation = 0.0001
+        alpha_scaling_up = 1000
+        alpha_scaling_down = 1
         for original, new in zip(vehicle_positions_original, vehicle_positions_new):
-            cost += (original[0] - new[0])**2 + (original[1] - new[1])**2
+            cost += alpha_distance * (original[0] - new[0])**2 + (original[1] - new[1])**2
+            cost += alpha_rotation * abs(rotation_angle)
+            # cost += alpha_scaling * abs(1-scaling_factor)
+            if scaling_factor > 1:
+                cost += alpha_scaling_up * abs(1-scaling_factor)
+            if scaling_factor < 1:
+                cost += alpha_scaling_down * abs(1-scaling_factor)
+                
+            # cost += alpha_scaling_up * scaling_factor * abs(1-scaling_factor)
             
         return cost
     
@@ -232,7 +256,15 @@ class Group(Environment):
         if position_type == 'initial':
             position = self.start_position
             positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 6)
-
+            positions = self.ellipse_generator(centerpoint = position, n_positions = len(self.vehicles), a = self.vehicles[0].radious * 6, b = self.vehicles[0].radious * 3,
+                                               ellipse_rotation = math.pi / 2)
+            
+            
+    # def ellipse_generator(self, centerpoint : list, n_positions : int, a : float, b : float, 
+    #                       ellipse_rotation : float = 0, vehicles_rotation : float = 0,
+    #                       ellipse_scale_x : float = 1, ellipse_scale_y : float = 1):
+        
+        
             if self.stage == 0:
                 yaml_dict = {'crazyflies' : []}
                 for i, vehicle in enumerate(self.vehicles):
@@ -259,6 +291,8 @@ class Group(Environment):
         elif position_type == 'final':
             position = self.goal_position
             positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 6)
+            positions = self.ellipse_generator(centerpoint = position, n_positions = len(self.vehicles), a = self.vehicles[0].radious * 6, b = self.vehicles[0].radious * 3,
+                                               ellipse_rotation = math.pi / 2)
 
             if self.stage == 0:
                 yaml_dict = {'crazyflies' : []}
@@ -279,6 +313,16 @@ class Group(Environment):
         for i in range(len(self.vehicles)):
             self.vehicles[i].set_position(position = positions[i], position_type = position_type)
 
+
+    
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    
     def position_generator(self, centerpoint : list, n_positions : int, r : float):
         positions = []
         alpha = np.pi / 4.0 + np.pi / 8.0 # initial angle
@@ -288,6 +332,52 @@ class Group(Environment):
             alpha = alpha - np.pi * 2.0 / n_positions
 
         return positions
+    
+    # def ellipse_generator(self,
+    def ellipse_generator(self, centerpoint : list, n_positions : int, a : float, b : float, 
+                          ellipse_rotation : float = 0, vehicles_rotation : float = 0,
+                          ellipse_scale_x : float = 1, ellipse_scale_y : float = 1):
+        # centerpoint = [0, 0, 0]
+        # n_positions = 30
+        # a = self.vehicles[0].radious * 6
+        # b = self.vehicles[0].radious * 2
+        
+        # Rotating vehicles on the ellipse
+        alpha = 0 + vehicles_rotation
+        # Scaling
+        a *= ellipse_scale_x
+        b *= ellipse_scale_y
+        positions = []
+        for i in range(n_positions):
+            positions += [ [centerpoint[0] + a * np.cos(alpha), centerpoint[1] + b * np.sin(alpha), centerpoint[2]] ] # [x, vx, y, vy, z, vz]
+            alpha += np.pi * 2.0 / n_positions
+        
+        # Rotating the ellipse itself with the vehicles already in place
+        if ellipse_rotation != 0 and centerpoint[:2] == [0.0, 0.0]:
+            for i, pos in enumerate(positions):
+                positions[i][:2] = self.rotate_vector(pos[:2], ellipse_rotation)
+                
+        if ellipse_rotation != 0 and centerpoint[:2] != [0.0, 0.0]:
+            raise NotImplementedError()
+            
+        
+        return positions
+        # plt.figure()
+        # for pos in positions:
+        #     plt.plot(pos[0], pos[1], '.')
+        # plt.show()
+        # kappa = True
+        # return self
+    
+    
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    
 
     def add_obstacles(self, obstacles : list):
         for i in range(len(self.vehicles)):
