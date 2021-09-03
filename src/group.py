@@ -74,6 +74,8 @@ class Group(Environment):
         rotation_angle_new = 0
         scaling_factor_new = 1
         vehicle_positions_new = []
+        costs = []
+        vehicle_positions_new_saved = []
         if collision == True:
             degree_step = 10
             radian_step = degree_step/360*2 * math.pi
@@ -89,22 +91,46 @@ class Group(Environment):
             scaling_factors = scaling_factors_shrink + scaling_factors_expand
             scaling_factors = np.array(scaling_factors).reshape(-1).tolist()
             
+            
+            # Version 1: take the first non-colliding result
+            
+            # for scaling_factor in scaling_factors:
+            #     vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
+            #     for rotation_angle in rotation_angles:
+            #         vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
+            #         all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, obstacle_corners)
+            #         if collision == False:
+            #             vehicle_positions_new = vehicle_positions_scaled_rotated
+            #             rotation_angle_new = rotation_angle
+            #             break
+            #     if collision == False:
+            #         scaling_factor_new = scaling_factor
+            #         break
+            
+            # if collision == True:
+            #     import warnings
+            #     warnings.warn("Warning...........Collision is still happening :/ Nothing we can do... Formation dissolve!")
+            
+            # Version 2: give costs and choose the least-cost formation change
+            
             for scaling_factor in scaling_factors:
                 vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
                 for rotation_angle in rotation_angles:
                     vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
                     all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, obstacle_corners)
-                    if collision == False:
-                        vehicle_positions_new = vehicle_positions_scaled_rotated
-                        rotation_angle_new = rotation_angle
-                        break
-                if collision == False:
-                    scaling_factor_new = scaling_factor
-                    break
+                    if collision == True:
+                        costs += [math.inf]
+                    else:
+                        cost = self.formation_change_cost_calculator(vehicle_positions, vehicle_positions_scaled_rotated)
+                        costs += [cost]
+                    vehicle_positions_new_saved += [vehicle_positions_scaled_rotated]
+                    
+            # find the least-cost version
+            cost_min = min(costs)
+            cost_min_idx = costs.index(cost_min)
+            vehicle_positions_new = vehicle_positions_new_saved[cost_min_idx]
             
-            if collision == True:
-                import warnings
-                warnings.warn("Warning...........Collision is still happening :/ Nothing we can do... Formation dissolve!")
+            
             
         # Step 6: setting new positions
         self.vehicle_positions_new = vehicle_positions_new
@@ -127,6 +153,13 @@ class Group(Environment):
     ###########################################################################
     ###########################################################################
     ###########################################################################
+    
+    def formation_change_cost_calculator(self, vehicle_positions_original, vehicle_positions_new):
+        cost = 0
+        for original, new in zip(vehicle_positions_original, vehicle_positions_new):
+            cost += (original[0] - new[0])**2 + (original[1] - new[1])**2
+            
+        return cost
     
     def rotate_formation(self, vehicle_positions, angle):
         vehicle_positions_new = []
