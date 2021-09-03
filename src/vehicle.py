@@ -324,9 +324,19 @@ class Vehicle(VehicleBasis):
         # self.J += self.rho_final_value * ((q.coeffs[-1] - self.xf[1])**2)
         # self.J += self.rho_final_value * ((phi.coeffs[-1] - self.xf[2])**2)
         
-        a = p.coeffs[-1] - self.xf[0]
-        b = q.coeffs[-1] - self.xf[1]
-        self.J += self.rho_final_value * (a**2 + b**2)**2
+        lambda_ = np.power(np.linspace(1, 0, p.coeffs.shape[0]), 2)
+        for i in range(p.coeffs.shape[0]):
+            self.J += self.rho_final_value * ((p.coeffs[i] -      (lambda_[i] * x0[0] + (1 - lambda_[i]) * xf[0])     )**2)
+            self.J += self.rho_final_value * ((q.coeffs[i] -      (lambda_[i] * x0[1] + (1 - lambda_[i]) * xf[1])     )**2)
+            
+        # self.J += self.rho_final_value * ((p.coeffs[-1] - xf[0])**2)
+        # self.J += self.rho_final_value * ((q.coeffs[-1] - xf[1])**2)
+        
+        # self.J += self.rho_final_value * ((phi.coeffs[-1] - self.xf[2])**2)
+        
+        # a = p.coeffs[-1] - self.xf[0]
+        # b = q.coeffs[-1] - self.xf[1]
+        # self.J += self.rho_final_value * (a**2 + b**2)**2
         # self.J += self.rho_final_value * ((phi.coeffs[-1] - self.xf[2])**2)
         self.define_constraint([phi],
                                 xf[self.n_dimensions],
@@ -336,9 +346,9 @@ class Vehicle(VehicleBasis):
                                         
         # # Version 1
         # # Final position constraint on y
-        # self.define_constraint([p, q, phi],
-        #                         xf[:self.n_dimensions],
-        #                         xf[:self.n_dimensions],
+        # self.define_constraint([p, q],
+        #                         xf[:self.n_dimensions_old],
+        #                         xf[:self.n_dimensions_old],
         #                         constraint_type='final_param',
         #                         name=["yf"] * self.n_dimensions)
 

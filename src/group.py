@@ -1,5 +1,6 @@
 from .vehicle import Vehicle
 import numpy as np
+import math
 import matplotlib.pyplot as plt
 from .frenet_path import FrenetPath
 from .environment import Environment
@@ -24,6 +25,168 @@ class Group(Environment):
         self.figures["figures"] = [fig, ax]
         fig, ax = plt.subplots()
         self.figures["videos"] = [fig, ax]
+        
+    
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+        
+    def intermediate_position_generator(self):
+        # get current final time
+        # get obstacle positions at final time
+        # get position of vehicles at the final time of the previously calculated horizon
+        # rotate this formation with incremental +/- phi angles till no collision
+        # if not found, shrink/blow up till no collision
+        # if - found: set this as final position & phi for the vehicles
+        # if - not found: all hope is lost, we throw in the towel
+        
+        # Step 1: get the current final time
+        t_end = self.vehicles[0].t_end + self.vehicles[0].t_step #... well, maybe  - self.vehicles[0].t_step? Depends on when we call this method
+        # Step 2: get obstacle positions at final time
+        obstacle_corners = []
+        for obstacle in self.vehicles[0].obstacles:
+            corners = [ [corner[0](t_end).tolist()[0][0], corner[1](t_end).tolist()[0][0]] for corner in obstacle.corners_spline]
+            obstacle_corners += [corners]
+        # Step 3: get position of vehicles at the final time of the previously calculated horizon
+        # t_previous = self.vehicles[0].t_end - self.vehicles[0].t_step
+        vehicle_positions = []
+        for vehicle in self.vehicles:
+            idx_len = int(len(vehicle.DvX.y) / vehicle.n_dimensions)
+            # try:
+            #     vehicle_positions += [[vehicle.DvX.y[idx_len-1].full()[0][0], vehicle.DvX.y[idx_len*2 - 1].full()[0][0]]] # final predicted p and q positions
+            # except:
+            #     vehicle_positions += [[vehicle.DvX.y[idx_len-1], vehicle.DvX.y[idx_len*2 - 1]]] # final predicted p and q positions
+                
+                
+            vehicle_positions += [vehicle.xf[:2]]
+                
+                
+        # Step 4: check for collision
+        all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions, obstacle_corners)   
+        if collision == True:
+            kappa = True
+            
+        # Step 5: rotating & scaling
+        rotation_angle_new = 0
+        scaling_factor_new = 1
+        vehicle_positions_new = []
+        if collision == True:
+            degree_step = 10
+            radian_step = degree_step/360*2 * math.pi
+            rotation_angles = [[0 + radian_step * i, 0 - radian_step * i] for i in range(1, int(math.pi/radian_step))]
+            rotation_angles = np.array(rotation_angles).reshape(-1).tolist()
+            
+            scaling_step = 1.1
+            scaling_step = 2.0
+            # scaling_factors = [  [1 * scaling_step ** i, 1 / (scaling_step ** i) ] for i in range(0, math.floor(abs(math.log(0.010) / math.log(scaling_step))))  ]
+            # scaling_factors = np.array(scaling_factors).reshape(-1).tolist()
+            scaling_factors_shrink = [  1 / (scaling_step ** i)  for i in range(0, math.floor(abs(math.log(0.010) / math.log(scaling_step))))  ]
+            scaling_factors_expand = [  1 * scaling_step ** i  for i in range(0, math.floor(abs(math.log(0.010) / math.log(scaling_step))))  ]
+            scaling_factors = scaling_factors_shrink + scaling_factors_expand
+            scaling_factors = np.array(scaling_factors).reshape(-1).tolist()
+            
+            for scaling_factor in scaling_factors:
+                vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
+                for rotation_angle in rotation_angles:
+                    vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
+                    all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, obstacle_corners)
+                    if collision == False:
+                        vehicle_positions_new = vehicle_positions_scaled_rotated
+                        rotation_angle_new = rotation_angle
+                        break
+                if collision == False:
+                    scaling_factor_new = scaling_factor
+                    break
+            
+            if collision == True:
+                import warnings
+                warnings.warn("Warning...........Collision is still happening :/ Nothing we can do... Formation dissolve!")
+            
+        # Step 6: setting new positions
+        self.vehicle_positions_new = vehicle_positions_new
+        if vehicle_positions_new != []:
+            for i, position in enumerate(vehicle_positions_new):
+                self.vehicles[i].xf = [position[0], position[1]] + [self.vehicles[i].xf[2] + rotation_angle_new] + self.vehicles[i].xf[3:]
+        if rotation_angle_new != 0:        
+            print("rotation_angle_new = " + str(rotation_angle_new))
+        if scaling_factor_new != 1:
+            print("scaling_factor_new = " + str(scaling_factor_new))
+                
+        return self
+            
+          
+     
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    
+    def rotate_formation(self, vehicle_positions, angle):
+        vehicle_positions_new = []
+        for position in vehicle_positions:
+            vehicle_positions_new += [self.rotate_vector(position, angle)]
+            
+        return vehicle_positions_new
+        
+    def scale_formation(self, vehicle_positions, scaling_factor):
+        vehicle_positions_new = []
+        for position in vehicle_positions:
+            vehicle_positions_new += [self.scale_vector(position, scaling_factor)]
+            
+        return vehicle_positions_new
+        
+    def rotate_vector(self, vector, angle):
+        a1, a2 = vector[0], vector[1]
+        
+        return (a1 * math.cos(angle) - a2 * math.sin(angle), \
+                        a1 * math.sin(angle) + a2 * math.cos(angle))
+        
+        
+    def scale_vector(self, vector, scaling_factor):
+        scaled_vector = [vector[0] * scaling_factor, vector[1] * scaling_factor]
+        
+        return scaled_vector
+        
+        
+        
+    def check_collision_with_obstacles(self, vehicle_positions, obstacle_corners):
+        any_inside = []
+        for corners in obstacle_corners:
+            for position in vehicle_positions:
+                try:
+                    any_inside += [self.check_collision_with_obstacle(position, corners)]
+                except:
+                    kappa = True
+                        
+        return any_inside, any(any_inside)
+                    
+    
+    def check_collision_with_obstacle(self, vehicle_pos, obstacle_corners):
+        import matplotlib.path as mpltPath
+        path = mpltPath.Path(obstacle_corners)
+        try:
+            inside = path.contains_points(np.array([vehicle_pos]))[0] #, radius = 0.001)
+        except:
+            kappa = True
+            
+        return inside
+    
+    
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+        
 
     def set_group_position(self, position : list, targetHeight : float = 0.8,  position_type : str = 'initial'):
 
@@ -35,7 +198,7 @@ class Group(Environment):
         # yaml.add_representer(float, float_representer)
         if position_type == 'initial':
             position = self.start_position
-            positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 6)
+            positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 10)
 
             if self.stage == 0:
                 yaml_dict = {'crazyflies' : []}
@@ -162,10 +325,6 @@ class Group(Environment):
             res = False
         return res
 
-
-
-
-
     ###########################################################################
     ###########################################################################
     ###########################################################################
@@ -251,6 +410,8 @@ class Group(Environment):
         
 
     def solve(self):
+        
+        # self.intermediate_position_generator()
         """
         1) x_update(), which optimizes the trajectory of the given vehicle.
         """
@@ -583,6 +744,17 @@ class Group(Environment):
         fig, ax = self.figures["figures"] # plt.subplots()
         for i in range(len(self.vehicles)):
             ax = self.vehicles[i].plot_vehicle_frenet_trajectories(ax)
+        
+        if self.vehicle_positions_new != []:
+            for position in self.vehicle_positions_new:
+                x, y = self.fp.frenet_to_inertial(position[0], position[1], self.vehicles[0].t_end + self.vehicles[0].t_step)
+                ax.plot(x, y, 'ro', markersize = 1)
+        else:
+            for vehicle in self.vehicles:
+                position = vehicle.xf[0:2]
+                x, y = self.fp.frenet_to_inertial(position[0], position[1], self.vehicles[0].t_end + self.vehicles[0].t_step)
+                ax.plot(x, y, 'go', markersize = 1)
+            
             
         # Axis related stuff
         ax.set_title("Trajectories of the vehicles after iteration {} with seed {} in the frenet frame".format(iternum, seed))

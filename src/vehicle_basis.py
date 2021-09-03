@@ -42,6 +42,15 @@ class VehicleBasis(Environment):
     
         self.x0 = []
         self.xf = []
+        self.x_reference = [] # this value gives the reference position of the vehicle in the formation
+        # We need this value, because when mooving using an MPC the xf positions might change.
+        # This is only a problem, because the formation constraint says, that the formation
+        # has to be kept. The formation can scale and rotate freely. The rotation is given as a spline.
+        # If we abrupty change the reference, then this spline will also has to change abruptly.
+        # Because it is a negotiated variable, it would lead to poor results. So let's not do that, and have a 
+        # fix x_reference_value. Actually... We don't need an x_reference. It is enough to hard-set this vector in the solver
+        # and that is it :)
+        # Oh, wow! It is already hard-set :))
         self.neighbours = []
         self.obstacles = []
         self.ID = -1
@@ -62,17 +71,18 @@ class VehicleBasis(Environment):
 
         # Test hyperparam
         self.slack = 0.00001
-        self.t_resolution_length = 10
         # Hyperparams
         self.rho = 50# /5 # /50
         self.rho_formation = 100# /5 # /50
         self.rho_input = 0.1 * 10 * 2
-        self.rho_final_value = 0.1 * 100
+        self.rho_final_value = 0.1 * 10000
         
         self.epsilon = 0.001 # try to keep minimum epsilon distance from the obstacle
         # self.epsilon = self.radious # try to keep minimum epsilon distance from the obstacle
         self.safety_weight = 1 # cost parameter for epsilon
         self.knot_intervals = 5 # number of knots for the output (position) spline of the vehicle
+        self.t_resolution_length = 6
+        self.t_resolution_length = self.knot_intervals + 1
         
         self.obstacle_avoidance_multiplier = 1.5
         self.vehicle_avoidnce_multiplier = 2.0

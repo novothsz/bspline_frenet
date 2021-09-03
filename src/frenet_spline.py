@@ -16,6 +16,8 @@ class SplineFitter():
         self.g, self.lbg, self.ubg = [], [], []
         self.J = 0
         self.w_list, self.g_list, self.P_list = [], [], []
+        self.options = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 1000, 'max_cpu_time': 100}}
+        
 
         self.n_dimensions = 2
         self.knot_intervals = knot_intervals
@@ -157,7 +159,7 @@ class SplineFitter():
                 'g': vertcat(*self.g)
                 }
 
-        solver = nlpsol('solver', 'ipopt', prob)
+        solver = nlpsol('solver', 'ipopt', prob, self.options)
 
         arg = {'lbx': self.lbw,
                'ubx': self.ubw,
@@ -262,8 +264,8 @@ class SplineFitter():
                 'x': vertcat(*self.w),
                 'g': vertcat(*self.g)
                 }
-        options = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 1000, 'max_cpu_time': 100}}
-        solver = nlpsol('solver', 'ipopt', prob, options)
+        
+        solver = nlpsol('solver', 'ipopt', prob, self.options)
 
         arg = {'lbx': self.lbw,
                'ubx': self.ubw,
@@ -305,7 +307,7 @@ class SplineFitter():
                                 lower_bound=[-math.inf] * self.n_dimensions,
                                 upper_bound=[math.inf] * self.n_dimensions,
                                 name=["y"] * self.n_dimensions)
-        print('Reduced knot_intervals')
+        # print('Reduced knot_intervals')
         # Initial position constraint on y
         self.define_constraint(y,
                                [fx.coeffs[0], fy.coeffs[0]],
@@ -385,8 +387,8 @@ class SplineFitter():
                 'x': vertcat(*self.w),
                 'g': vertcat(*self.g)
                 }
-        options = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 1000, 'max_cpu_time': 100}}
-        solver = nlpsol('solver', 'ipopt', prob, options)
+        
+        solver = nlpsol('solver', 'ipopt', prob, self.options)
 
         arg = {'lbx': self.lbw,
                'ubx': self.ubw,

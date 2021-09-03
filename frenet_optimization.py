@@ -85,6 +85,20 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
              [-2.4674-dx, 6])
     obstacles += [Obstacle(ID = 2,  corners = tmp_obs)]
     
+    # Obstacle 4
+    tmp_obs = ([2.474-dx, 1-dy],
+             [2.474+dx, 1-dy],
+             [2.474+dx, -6],
+             [2.474-dx, -6])
+    obstacles += [Obstacle(ID = 3, corners = tmp_obs)]
+    # Obstacle 5
+    tmp_obs = ([2.474-dx, 1+dy],
+             [2.474+dx, 1+dy],
+             [2.474+dx, 6],
+             [2.474-dx, 6])
+    obstacles += [Obstacle(ID = 4, corners = tmp_obs)]
+    
+    
             
     # Create group
     group = Group(n_vehicles=4, start_position = start_position, goal_position = goal_position, stage = stage)
@@ -114,19 +128,22 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         
     # Simulation steps
     group.set_simulation(simulation=True)
-    n_intermediate_ADMM = 10
+    n_intermediate_ADMM = 1
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
     for i in range(0, 20):
         for j in range(n_intermediate_ADMM):
             group.solve()
             group.set_simulation(False)
-            
+        
         
         # Time-related things
         iteration_times += [time.time() - t_iter]
         print(str(i) + "th iteration time: " + str(time.time() - t_iter) + " seconds")
         t_iter = time.time()
         
+        if i == 12:
+            kappa = True
+        group.intermediate_position_generator()
         group.frenet_plotter(iternum = i, seed = seed)
         group.simulation_step()
             
