@@ -329,8 +329,8 @@ class Vehicle(VehicleBasis):
             self.J += self.rho_final_value * ((p.coeffs[i] -      (lambda_[i] * x0[0] + (1 - lambda_[i]) * xf[0])     )**2)
             self.J += self.rho_final_value * ((q.coeffs[i] -      (lambda_[i] * x0[1] + (1 - lambda_[i]) * xf[1])     )**2)
             
-        # self.J += self.rho_final_value * ((p.coeffs[-1] - xf[0])**2)
-        # self.J += self.rho_final_value * ((q.coeffs[-1] - xf[1])**2)
+        # self.J += self.rho_final_value * ((p.coeffs[-1] - xf[0])**2) * 10
+        # self.J += self.rho_final_value * ((q.coeffs[-1] - xf[1])**2) * 10
         
         # self.J += self.rho_final_value * ((phi.coeffs[-1] - self.xf[2])**2)
         
@@ -342,13 +342,20 @@ class Vehicle(VehicleBasis):
                                 xf[self.n_dimensions],
                                 xf[self.n_dimensions],
                                 constraint_type='final_param',
-                                name=["yf"] * self.n_dimensions)
+                                name=["phif"] * self.n_dimensions)
                                         
-        # # Version 1
-        # # Final position constraint on y
+        # Version 1
+        # Final position constraint on y
+        self.define_constraint([p, q],
+                                xf[:self.n_dimensions_old] - [self.radious*2, self.radious*2],
+                                xf[:self.n_dimensions_old] + [self.radious*2, self.radious*2],
+                                constraint_type='final_param',
+                                name=["yf"] * self.n_dimensions)
+        
+        
         # self.define_constraint([p, q],
-        #                         xf[:self.n_dimensions_old],
-        #                         xf[:self.n_dimensions_old],
+        #                         vertcat(xf[0] - self.radious*1, xf[1] - self.radious*1),
+        #                         vertcat(xf[0] + self.radious*1, xf[1] + self.radious*1),
         #                         constraint_type='final_param',
         #                         name=["yf"] * self.n_dimensions)
 
@@ -739,11 +746,25 @@ class Vehicle(VehicleBasis):
             x_t += [x_]
             y_t += [y_]
             
+            
         assert not((self.t_step * 100) % 1)
-        idx = int(100 * self.t_step * 1 / self.t_window_size + 1) # int(1 / self.t_step - 1)
+        # idx = int(100 * self.t_step * 1 / self.t_window_size + 1) # int(1 / self.t_step - 1)
+        # print("idx_old:" + str(idx))
+        # idx = int(100 - abs(self.t_step - t_start) / (t_end - t_start))
+        # print("idx_new:" + str(idx))
+        # idx = int((self.t_step + t_start) * (100))
+        # print("idx_new:" + str(idx))
+        
+        if t_end > t_start:
+            a = t_end - t_start
+            virtual_idx = self.t_window_size * 100 / a
+            idx = math.ceil(virtual_idx * self.t_step * 1 / self.t_window_size)
+        else:
+            idx = 100
         
         ax.plot(x_t[0:idx], y_t[0:idx], c = 'k',lw=0.8,alpha = 1, zorder = 5)
         ax.plot(x_t[idx:], y_t[idx:], c = 'cornflowerblue',lw=0.8,alpha = 0.5, zorder = 3)
+        
         
         
         x0, y0 = self.fp.frenet_to_inertial(p_solution(0)[0], q_solution(0)[0], t_start)

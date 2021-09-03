@@ -130,7 +130,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     group.set_simulation(simulation=True)
     n_intermediate_ADMM = 1
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
-    for i in range(0, 20):
+    for i in range(0, 26):
         for j in range(n_intermediate_ADMM):
             group.solve()
             group.set_simulation(False)

@@ -345,6 +345,13 @@ class VehicleBasis(Environment):
         self.t_start = self.t_start + self.t_step
         self.t_end = self.t_start + self.t_window_size
         
+        if self.t_end > 1:
+            self.t_end = 1
+            
+        if self.t_start > 1:
+            self.t_start = 1
+            
+        
         self.shift_enabled = True
         
         return self
@@ -654,14 +661,29 @@ class VehicleBasis(Environment):
                 self.g += [constraint[i].coeffs[0] - lower_bound[i]] # we restrict the first coefficient
                 self.g_list += [name[i]]
                 self.lbg += [0]
+                self.ubg += [math.inf]
+            for i in range(upper_bound.shape[0]):
+                self.g += [constraint[i].coeffs[0] - upper_bound[i]] # we restrict the first coefficient
+                self.g_list += [name[i]]
+                self.lbg += [-math.inf]
                 self.ubg += [0]
             return self
 
         elif constraint_type == 'final_param':
+            # for i in range(lower_bound.shape[0]):
+            #     self.g += [constraint[i].coeffs[-1] - lower_bound[i]] # we restrict the last coefficient
+            #     self.g_list += [name[i]]
+            #     self.lbg += [0]
+            #     self.ubg += [0]
             for i in range(lower_bound.shape[0]):
                 self.g += [constraint[i].coeffs[-1] - lower_bound[i]] # we restrict the last coefficient
                 self.g_list += [name[i]]
                 self.lbg += [0]
+                self.ubg += [math.inf]
+            for i in range(upper_bound.shape[0]):
+                self.g += [constraint[i].coeffs[-1] - upper_bound[i]] # we restrict the first coefficient
+                self.g_list += [name[i]]
+                self.lbg += [-math.inf]
                 self.ubg += [0]
             return self
 

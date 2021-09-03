@@ -12,7 +12,7 @@ class Environment():
     def __init__(self):
         
         self.border_x = [-6, 6]
-        self.border_y = [-2, 2]
+        self.border_y = [-5, 2]
         self.cwd = os.getcwd()
         
         # self.start_position = [-0.8, 0]

@@ -17,7 +17,7 @@ from .spline_extra import definite_integral, shift_spline, shift_knot1_fwd, shif
 
 
 class FrenetPath(object):
-    def __init__(self, tau_0 : float = float(-5), tau_f : float = float(5), N : int = 100):
+    def __init__(self, tau_0 : float = float(-8), tau_f : float = float(5), N : int = 100):
 
         self.tau_0 = tau_0
         self.tau_f = tau_f
