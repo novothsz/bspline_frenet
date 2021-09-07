@@ -76,6 +76,8 @@ class Group(Environment):
         vehicle_positions_new = []
         costs = []
         vehicle_positions_new_saved = []
+        rotation_angle_new_saved = []
+        scaling_factor_new_saved = []
         if collision == True:
             degree_step = 10
             radian_step = degree_step/360*2 * math.pi
@@ -84,6 +86,7 @@ class Group(Environment):
             
             scaling_step = 1.1
             scaling_step = 2.0
+            # scaling_step = 1.5
             # scaling_factors = [  [1 * scaling_step ** i, 1 / (scaling_step ** i) ] for i in range(0, math.floor(abs(math.log(0.010) / math.log(scaling_step))))  ]
             # scaling_factors = np.array(scaling_factors).reshape(-1).tolist()
             scaling_factors_shrink = [  1 / (scaling_step ** i)  for i in range(0, math.floor(abs(math.log(0.25) / math.log(scaling_step))))  ]
@@ -137,11 +140,15 @@ class Group(Environment):
             
                         costs += [cost]
                     vehicle_positions_new_saved += [vehicle_positions_scaled_rotated]
+                    rotation_angle_new_saved += [rotation_angle]
+                    scaling_factor_new_saved += [scaling_factor]
                     
             # find the least-cost version
             cost_min = min(costs)
             cost_min_idx = costs.index(cost_min)
             vehicle_positions_new = vehicle_positions_new_saved[cost_min_idx]
+            rotation_angle_new = rotation_angle_new_saved[cost_min_idx]
+            scaling_factor_new = scaling_factor_new_saved[cost_min_idx]
             
             
             
@@ -155,12 +162,12 @@ class Group(Environment):
         
         if rotation_angle_new != 0:        
             print("rotation_angle_new = " + str(rotation_angle_new))
-        else:
-            print("rotation angle stayed : " + str(rotation_angle_new))
+        # else:
+        #     print("rotation angle stayed : " + str(rotation_angle_new))
         if scaling_factor_new != 1:
             print("scaling_factor_new = " + str(scaling_factor_new))
-        else:
-            print("scaling factor stayed : " + str(scaling_factor_new))
+        # else:
+        #     print("scaling factor stayed : " + str(scaling_factor_new))
                 
         return self
             
