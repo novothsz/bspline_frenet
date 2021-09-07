@@ -644,7 +644,7 @@ class FrenetPath(object):
         x_new = x * cos(theta) - y * sin(theta)
         y_new = x * sin(theta) + y * cos(theta)
         return x_new, y_new
-    def plot_path(self, ax, t = 0):
+    def plot_path(self, ax, t_start = 0):
         import numpy as np
         # Plottin entire path
         t = np.linspace(0, 1, 100)
@@ -656,13 +656,16 @@ class FrenetPath(object):
 
         # Plotting current position of the frenet coordinate system
         # x_current, y_current = self.t_to_xy(t)
+        x_current, y_current = self.frenet_to_inertial(0, 0, t_start)
         # x_, _ = self.t_to_xy(t)
-        # theta_c = math.atan2(self.f_d(float(x_)), 1)
+        # theta_c = math.atan2(self.f_d(float(x_)), 1
+        theta_c = math.atan2(self.fy_d_spline(t_start)[0][0],
+                                    self.fx_d_spline(t_start)[0][0])
 
-        # rot_x, rot_y = self.plot_rotation(0.1, 0, theta_c)
-        # ax.arrow(x_current, y_current, rot_x, rot_y, head_width=0.01, head_length=0.02, fc='r', ec='r', zorder = 3)
-        # rot_x, rot_y = self.plot_rotation(0.1, 0, theta_c + np.pi/2)
-        # ax.arrow(x_current, y_current, rot_x, rot_y, head_width=0.01, head_length=0.02, fc='r', ec='r', zorder = 3)
+        rot_x, rot_y = self.plot_rotation(0.1, 0, theta_c)
+        ax.arrow(x_current, y_current, rot_x, rot_y, head_width=0.01, head_length=0.02, fc='r', ec='r', zorder = 3)
+        rot_x, rot_y = self.plot_rotation(0.1, 0, theta_c + np.pi/2)
+        ax.arrow(x_current, y_current, rot_x, rot_y, head_width=0.01, head_length=0.02, fc='r', ec='r', zorder = 3)
 
 
         return ax #, x_current, y_current

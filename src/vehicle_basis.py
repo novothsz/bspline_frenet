@@ -73,15 +73,15 @@ class VehicleBasis(Environment):
         self.slack = 0.00001
         # Hyperparams
         self.rho = 50# /5 # /50
-        self.rho_formation = 100# /5 # /50
-        self.rho_input = 0.1 * 10 * 2
-        self.rho_final_value = 0.1 * 10000
+        # self.rho_formation = 100# /5 # /50
+        self.rho_input = 0.1 * 10 * 2 * 1
+        self.rho_final_value = 0.1 * 10 * 100# * 1000
         
         self.epsilon = 0.001 # try to keep minimum epsilon distance from the obstacle
         # self.epsilon = self.radious # try to keep minimum epsilon distance from the obstacle
         self.safety_weight = 1 # cost parameter for epsilon
         self.knot_intervals = 5 # number of knots for the output (position) spline of the vehicle
-        self.t_resolution_length = 6
+        # self.t_resolution_length = 30
         self.t_resolution_length = self.knot_intervals + 1
         
         self.obstacle_avoidance_multiplier = 1.5
@@ -99,17 +99,22 @@ class VehicleBasis(Environment):
         self.u_min = [-250, -250]
         self.u_max = [250, 250]
         
-        self.options = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 1000, 'max_cpu_time': 100}}
-        self.options_z = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 1000, 'max_cpu_time': 100}}
+        # self.options = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 15, 'max_cpu_time': 100}}
+        # self.options_z = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 50, 'max_cpu_time': 100}}
+        self.options = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 10000, 'max_cpu_time': 100}}
+        self.options_z = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 10000, 'max_cpu_time': 100}}
+        # self.options_z = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 30, 'max_cpu_time': 100}}
 
         self.initial_values = {}
         # variable_history
         self.variable_history =  {'y' : [],         # x_update
                                   'y_j' : [],       # data_exchange_x_receive
                                   't_start' : [],
-                                  't_end' : []
+                                  't_end' : [],
+                                  'xf': []
                 }
         self.n_intermediate_ADMM = 1
+        self.vehicle_positions_new = {'stage' : [], 'vehicle_positions_new' : []}
         # message
         self.message_in = {}
         self.message_out = {}
@@ -145,6 +150,7 @@ class VehicleBasis(Environment):
             self.x0 = position + [0, 0, 0]
         elif position_type == 'final':
             self.xf = position + [0, 0, 0]
+            self.variable_history['xf'] += [self.xf]
         else:
             raise NotImplementedError()
 
@@ -258,6 +264,7 @@ class VehicleBasis(Environment):
         # coeffs1 = self.DvX.y[0:len(basis)]
         # coeffs2 = self.DvX.y[len(basis):len(basis)*2]
         sol = self.solution['x'].full().reshape(-1).tolist()
+        # sol = self.DvX.y
         coeffs1 = sol[0:len(basis)]
         coeffs2 = sol[len(basis):len(basis)*2]
         coeffs3 = sol[len(basis)*2:len(basis)*3]
@@ -820,6 +827,74 @@ class VehicleBasis(Environment):
     ###########################################################################
     ###########################################################################
     
+    
+    def save_trajectory_to_csv(self, t_desired = 5, t_hover = 2):
+        """ This function is pretty much doing the same as plot_vehicle_trajectories() + write_csv()
+        """
+        flatten = lambda t: [item for sublist in t for item in sublist]
+
+        hist = self.variable_history
+
+        # Creating the splines
+        basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
+
+        coeffs1 = hist["y"][-1][:len(basis)]
+        coeffs2 = hist["y"][-1][len(basis):len(basis)*2]
+        x = BSpline(basis, coeffs1)
+        y = BSpline(basis, coeffs2)
+
+        # Sampling
+        t = np.linspace(0, self.t_step/self.t_window_size, 100)
+        x_t = [x(t_) for t_ in t]
+        y_t = [y(t_) for t_ in t]
+
+        x_t = flatten(x_t)
+        y_t = flatten(y_t)
+
+        # Fitting a polynome of degree 7 onto the spline
+        poly7_x = np.poly1d(np.polyfit(t, x_t, deg=7))
+        poly7_y = np.poly1d(np.polyfit(t, y_t, deg=7))
+        
+
+        # Now, the 7 degree polynomials are calculated such that upon evaluation
+        # between t = [0, 1] we get correct values. Outside this range, they don't
+        # represent the trajectories we calculated.
+        # Below we rescale the polynomials such that they give correct values
+        # between t = [0, t_desired]
+        # Remember: x^7 --> x^7 / t_desired^7
+        power = 0
+        for i in range(len(poly7_x.coeffs)-1, 0-1, -1):
+            poly7_x.coeffs[i] = poly7_x.coeffs[i] / pow(t_desired, power)
+            poly7_y.coeffs[i] = poly7_y.coeffs[i] / pow(t_desired, power)
+            power += 1
+
+        # Adding an extra 7 degree polynomial for hoowering at the end
+        final_x = poly7_x(t_desired)
+        final_y = poly7_y(t_desired)
+        however_x = [final_x] + [0] * 7
+        however_y = [final_y] + [0] * 7
+
+        # The path !!! now with correct arrangement of the coefficients !!!
+        # Storing the coefficients in the format, that crazyswarm requires
+        # (x^0, x^1, x^2, ...)
+        poly7_x = poly7_x.coeffs.tolist()
+        poly7_x.reverse()
+        poly7_y = poly7_y.coeffs.tolist()
+        poly7_y.reverse()
+
+        # Combining the polinomials into a list
+        T_list = [[t_desired], [t_hover]]
+        poly7_x_list = [poly7_x, however_x]
+        poly7_y_list = [poly7_y, however_y]
+
+        # Writing the list to file
+        self.write_csv(T_list, poly7_x_list, poly7_y_list)
+        self.write_csv_for_stage(T_list, poly7_x_list, poly7_y_list)
+
+        return self
+    
+    
+    
     "Writing data"
     def write_csv_for_stage(self, T, px, py):
         """This function writes a csv for only the specific stage.
@@ -891,6 +966,16 @@ class VehicleBasis(Environment):
     ###########################################################################
     ###########################################################################
     ###########################################################################
+    
+    
+
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
 
     # ========================================================================
     # Methods required to override
@@ -932,7 +1017,8 @@ class VehicleBasis(Environment):
         self.variable_history =  {'y' : [],         # x_update
                                   'y_j' : [],       # data_exchange_x_receive
                                   't_start' : [],
-                                  't_end' : []
+                                  't_end' : [],
+                                  'xf': []
         }
         
     def initialize_x(self):

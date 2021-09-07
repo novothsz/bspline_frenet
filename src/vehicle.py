@@ -21,8 +21,11 @@ class Vehicle(VehicleBasis):
         super().__init__()
         
         self.t_start = 0.0
-        self.t_step = 0.04 # 0.04 # Changed in simulation_step() upon first call
+        self.t_step = 0.01 # 0.04 # Changed in simulation_step() upon first call
+        # self.t_step = 1 # 0.04 # Changed in simulation_step() upon first call
+        # self.t_step = 0.5 # 0.04 # Changed in simulation_step() upon first call
         self.t_window_size = 0.2
+        # self.t_window_size = 0.5
         # self.t_window_size = 1.0
         self.t_end = self.t_start + self.t_window_size
         self.simulation = False
@@ -324,7 +327,7 @@ class Vehicle(VehicleBasis):
         # self.J += self.rho_final_value * ((q.coeffs[-1] - self.xf[1])**2)
         # self.J += self.rho_final_value * ((phi.coeffs[-1] - self.xf[2])**2)
         
-        lambda_ = np.power(np.linspace(1, 0, p.coeffs.shape[0]), 2)
+        lambda_ = np.power(np.linspace(1, 0, p.coeffs.shape[0]), 8)
         for i in range(p.coeffs.shape[0]):
             self.J += self.rho_final_value * ((p.coeffs[i] -      (lambda_[i] * x0[0] + (1 - lambda_[i]) * xf[0])     )**2)
             self.J += self.rho_final_value * ((q.coeffs[i] -      (lambda_[i] * x0[1] + (1 - lambda_[i]) * xf[1])     )**2)
@@ -338,17 +341,18 @@ class Vehicle(VehicleBasis):
         # b = q.coeffs[-1] - self.xf[1]
         # self.J += self.rho_final_value * (a**2 + b**2)**2
         # self.J += self.rho_final_value * ((phi.coeffs[-1] - self.xf[2])**2)
+        
         self.define_constraint([phi],
-                                xf[self.n_dimensions],
-                                xf[self.n_dimensions],
+                                xf[self.n_dimensions] - [5 / 360 * math.pi * 2],
+                                xf[self.n_dimensions] + [5 / 360 * math.pi * 2],
                                 constraint_type='final_param',
                                 name=["phif"] * self.n_dimensions)
                                         
         # Version 1
         # Final position constraint on y
         self.define_constraint([p, q],
-                                xf[:self.n_dimensions_old] - [self.radious*2, self.radious*2],
-                                xf[:self.n_dimensions_old] + [self.radious*2, self.radious*2],
+                                xf[:self.n_dimensions_old] - [self.radious*1, self.radious*1],
+                                xf[:self.n_dimensions_old] + [self.radious*1, self.radious*1],
                                 constraint_type='final_param',
                                 name=["yf"] * self.n_dimensions)
         
@@ -601,8 +605,21 @@ class Vehicle(VehicleBasis):
         self.variable_history['y'] += [self.DvX.y]
         self.variable_history['t_start'] += [self.t_start]
         self.variable_history['t_end'] += [self.t_end]
-        
+        self.variable_history['xf'] += [self.xf]
         return self
+    
+    
+    
+    # basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
+    # solution = self.DvX.y
+    # coeffs1 = solution[0:len(basis)]
+    # coeffs2 = solution[len(basis):len(basis)*2]
+    # p_solution = BSpline(basis, coeffs1)
+    # q_solution = BSpline(basis, coeffs2)
+    # p_solution_, q_solution_ = p_solution(self.t_step*1/self.t_window_size)[0], q_solution(self.t_step*1/self.t_window_size)[0]
+    # print(p_solution_, q_solution_)
+    
+    # print(self.PvX.x0[:2])
     
     
     ###########################################################################
@@ -618,7 +635,7 @@ class Vehicle(VehicleBasis):
         flatten = lambda t: [item for sublist in t for item in sublist]
 
         # Plotting the environment
-        ax = self.plot_environment(ax)
+        ax = self.plot_environment(ax, self.t_start)
 
         # Creating the splines
         basis = self.define_knots(degree = 3, knot_intervals = self.knot_intervals)
@@ -645,7 +662,7 @@ class Vehicle(VehicleBasis):
             # x_, y_ = p_solution_, q_solution_
             x_t += [x_]
             y_t += [y_]
-        
+        """
         "Below is the same as for the generic plot_vehicle_trajecotries()"
         
         # Fitting a polynome of degree 7 onto the spline
@@ -691,7 +708,7 @@ class Vehicle(VehicleBasis):
 
         # Writing the list to file
         self.write_csv(T_list, poly7_x_list, poly7_y_list)
-
+        """
         # ax.plot(poly7_x_t, poly7_y_t, 'k*')
 
         # Plotting of spline & control points
@@ -711,6 +728,132 @@ class Vehicle(VehicleBasis):
     ###########################################################################
     ###########################################################################
     ###########################################################################
+    
+    "Plotting formation error"
+    
+    def calculate_formation_error(self, intermediate_ADMM_idx = []):
+        horizon0 = 0
+        horizonf = int(1 / self.t_step)  
+        # Containers
+        x_t_saved = []
+        y_t_saved = []
+        t_saved = []
+        x_j_saved = []
+        y_j_saved = []
+        
+        if intermediate_ADMM_idx == []:
+            intermediate_ADMM_idx = self.n_intermediate_ADMM - 1
+        "Collecting all the data"
+        for horizon_range in range(horizon0, horizonf):
+            horizon_num = int(horizon_range * self.n_intermediate_ADMM + intermediate_ADMM_idx)
+            # horizon_num = intermediate_ADMM_idx
+            # Creating the splines
+            basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
+            solution = self.variable_history['y'][horizon_num]
+            # print(len(self.variable_history['y']))
+            # print(horizon_num)
+            t_start = self.variable_history['t_start'][horizon_num]
+            # t_end = self.variable_history['t_end'][horizon_num]
+            coeffs1 = solution[0:len(basis)]
+            coeffs2 = solution[len(basis):len(basis)*2]
+            p_solution = BSpline(basis, coeffs1)
+            q_solution = BSpline(basis, coeffs2)
+            x_t, y_t = [], []
+            for t_pq, t_frenet in zip(np.linspace(0, self.t_step*1/self.t_window_size, 100), np.linspace(t_start, t_start + self.t_step, 100)):
+                p_solution_, q_solution_ = p_solution(t_pq)[0], q_solution(t_pq)[0]
+                # x_, y_ = self.fp.frenet_to_inertial(p_solution_, q_solution_, t_frenet)
+                x_, y_ = p_solution_, q_solution_
+                x_t += [x_]
+                y_t += [y_]
+                
+            x_t_saved += [x_t]
+            y_t_saved += [y_t]
+            t_saved += [np.linspace(t_start, t_start + self.t_step, 100)]
+            
+            
+        
+        
+            
+            y_j_all = self.variable_history['y_j'][horizon_num]
+            y_j_all = np.array(y_j_all)
+            
+            
+            x_j_saved_tmp = []
+            y_j_saved_tmp = []
+            for i in range(len(self.neighbours)):
+                idx = np.arange(len(basis)*int(self.state_len/2)*i,len(basis)*int(self.state_len/2)*i+len(basis)*int(self.state_len/2))
+                all_coeffs = y_j_all[idx]
+                coeffs1 = all_coeffs[0:len(basis)].tolist()
+                coeffs2 = all_coeffs[len(basis):len(basis)*2].tolist()
+                p_solution = BSpline(basis, coeffs1)
+                q_solution = BSpline(basis, coeffs2)
+                x_t, y_t = [], []
+                for t_pq, t_frenet in zip(np.linspace(0, self.t_step*1/self.t_window_size, 100), np.linspace(t_start, t_start + self.t_step, 100)):
+                    p_solution_, q_solution_ = p_solution(t_pq)[0], q_solution(t_pq)[0]
+                    # x_, y_ = self.fp.frenet_to_inertial(p_solution_, q_solution_, t_frenet)
+                    x_, y_ = p_solution_, q_solution_
+                    x_t += [x_]
+                    y_t += [y_]
+                    
+                x_j_saved_tmp += [x_t]
+                y_j_saved_tmp += [y_t]
+            
+            x_j_saved += [x_j_saved_tmp]
+            y_j_saved += [y_j_saved_tmp]
+            
+            
+        # plt.figure()
+        # for x_t, y_t in zip(x_t_saved, y_t_saved):
+        #     plt.plot(x_t, y_t)
+        # plt.show()
+        # plt.figure()
+        # for x_t, y_t in zip(x_j_saved, y_j_saved):
+        #     plt.plot(x_t[0], y_t[0])
+        # plt.show()
+            
+            
+        "Doing the calculation"
+        # desired angle w.r.t. the two neighbours:
+        vec1 = np.array(self.neighbours[0].xf[:2]) - np.array(self.xf[:2])
+        vec2 = np.array(self.neighbours[-1].xf[:2]) - np.array(self.xf[:2])
+        angle_original = math.acos(np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2)))
+        if angle_original > math.pi:
+            angle_original = 2 * math.pi - angle_original
+                    
+        # print(angle_original)
+        angle_error_saved = []
+        for hr in range(horizon0, horizonf):
+            angle_error = []
+            for i in range(100):
+                # for j in range(len(self.neighbours)):
+                # current angle w.r.t. the two neighbours:
+                vec1 = np.array([x_j_saved[hr][0][i], y_j_saved[hr][0][i]]) - np.array([x_t_saved[hr][i], y_t_saved[hr][i]])
+                vec2 = np.array([x_j_saved[hr][-1][i], y_j_saved[hr][-1][i]]) - np.array([x_t_saved[hr][i], y_t_saved[hr][i]])
+                angle_current = math.acos(np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2)))    
+                if angle_current > math.pi:
+                    angle_current = 2 * math.pi - angle_current
+                angle_error_tmp = abs(angle_original - angle_current)
+                angle_error += [angle_error_tmp]
+            angle_error_saved += [angle_error]
+            
+            
+        # plt.figure()
+        # for time, angle in zip(t_saved, angle_error_saved):
+        #     plt.plot(time, angle)
+        # plt.show()
+        
+        return t_saved, angle_error_saved
+                
+            
+    
+    
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
 
     "Plotting video"
     
@@ -721,14 +864,8 @@ class Vehicle(VehicleBasis):
     
     def plot_moovie_frames_mooving_horizon(self, ax, horizon_num):
         
-        # Plotting the environment
-        ax = self.plot_environment(ax)
-
-        # Plotting of obstacle
-        for obstacle in self.obstacles:
-            obstacle.plot_obstacle(ax)
-             
-            
+        t_steps = 10     
+        horizon_num_original = int(horizon_num)    
         horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
         # Creating the splines
         basis = self.define_knots(degree = 3, knot_intervals = self.knot_intervals)
@@ -740,7 +877,7 @@ class Vehicle(VehicleBasis):
         p_solution = BSpline(basis, coeffs1)
         q_solution = BSpline(basis, coeffs2)
         x_t, y_t = [], []
-        for t_pq, t_frenet in zip(np.linspace(0, 1, 100), np.linspace(t_start, t_end, 100)):
+        for t_pq, t_frenet in zip(np.linspace(0, 1, t_steps), np.linspace(t_start, t_end, t_steps)):
             p_solution_, q_solution_ = p_solution(t_pq)[0], q_solution(t_pq)[0]
             x_, y_ = self.fp.frenet_to_inertial(p_solution_, q_solution_, t_frenet)
             x_t += [x_]
@@ -757,25 +894,54 @@ class Vehicle(VehicleBasis):
         
         if t_end > t_start:
             a = t_end - t_start
-            virtual_idx = self.t_window_size * 100 / a
+            virtual_idx = self.t_window_size * t_steps / a
             idx = math.ceil(virtual_idx * self.t_step * 1 / self.t_window_size)
         else:
-            idx = 100
+            idx = t_steps
         
         ax.plot(x_t[0:idx], y_t[0:idx], c = 'k',lw=0.8,alpha = 1, zorder = 5)
+        # ax.plot(x_t[idx], y_t[idx], c = 'r', marker = 'o', markersize = 1, lxw=1,alpha = 1, zorder = 6)
         ax.plot(x_t[idx:], y_t[idx:], c = 'cornflowerblue',lw=0.8,alpha = 0.5, zorder = 3)
         
+        if self.vehicle_positions_new['vehicle_positions_new'][horizon_num_original] != []:
+            # ax.plot(x_t[-1], y_t[-1], 'go', markersize = 1, zorder = 3)
+            # print(horizon_num_original)
+            
+            x_, y_ = self.fp.frenet_to_inertial(self.vehicle_positions_new['vehicle_positions_new'][horizon_num_original][0], 
+                                                self.vehicle_positions_new['vehicle_positions_new'][horizon_num_original][1],
+                                                t_end)
+            ax.plot(x_,
+                    y_,
+                    'ro', markersize = 1, zorder = 3)
+        else:
+            # ax.plot(x_t[-1], y_t[-1], 'ro', markersize = 1, zorder = 3)
+            # ax.plot(self.xf[0], self.xf[1], 'go', markersize = 1, zorder = 3)
+            x_, y_ = self.fp.frenet_to_inertial(self.variable_history['xf'][horizon_num_original][0], 
+                                                self.variable_history['xf'][horizon_num_original][1],
+                                                t_end)
+            ax.plot(x_,
+                    y_
+                    , 'go', markersize = 1, zorder = 3)
         
         
         x0, y0 = self.fp.frenet_to_inertial(p_solution(0)[0], q_solution(0)[0], t_start)
         
-        # self.plot_drone(ax, x0 = x0,
-        #                 y0 = y0,
-        #                 theta_c = math.atan2(self.fp.fy_d_spline(t_start)[0][0] + q_solution.derivative()(0),
-        #                            self.fp.fx_d_spline(t_start)[0][0] + p_solution.derivative()(0)))
+        self.plot_drone(ax, x0 = x0,
+                        y0 = y0,
+                        theta_c = math.atan2(self.fp.fy_d_spline(t_start)[0][0] + q_solution.derivative()(0),
+                                    self.fp.fx_d_spline(t_start)[0][0] + p_solution.derivative()(0)))
         
         # theta_c = self.fp.fy_d_spline(t_start)[0][0] / self.fp.fx_d_spline(t_start)[0][0] + \
         #                     q_solution.derivative()(0) / p_solution.derivative()(0)
+        
+        
+        
+        # Plotting the environment
+        ax = self.plot_environment(ax, t_start)
+
+        # Plotting of obstacle
+        for obstacle in self.obstacles:
+            obstacle.plot_obstacle(ax)
         
         return t_start, ax
         

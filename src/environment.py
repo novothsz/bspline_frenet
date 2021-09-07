@@ -42,7 +42,7 @@ class Environment():
         #                                   y_max = [self.border_x[1], self.border_y[1]])
         
         
-    def plot_environment(self, ax):
+    def plot_environment(self, ax, t_start):
         
         
         # Plotting border
@@ -59,6 +59,6 @@ class Environment():
         #                       fc=(0,0,0,0.1), ec=(0,0,0,1), lw=1, zorder = 1)
         #     ax.add_patch(polygon)
             
-        self.fp.plot_path(ax)
+        self.fp.plot_path(ax, t_start)
             
         return ax

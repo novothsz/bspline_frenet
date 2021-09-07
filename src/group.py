@@ -124,7 +124,8 @@ class Group(Environment):
                         cost = self.formation_change_cost_calculator(vehicle_positions, vehicle_positions_scaled_rotated, rotation_angle, scaling_factor)
                         # check collision for previous and future steps too!
                         obstacle_corners_zizz = []
-                        for t_zizz in np.linspace(t_end - self.vehicles[0].t_step / 10 * 10 , t_end + self.vehicles[0].t_step / 10 * 10, 6):
+                        # for t_zizz in np.linspace(t_end - self.vehicles[0].t_step / 10 * 10 , t_end + self.vehicles[0].t_step / 10 * 10, 6):
+                        for t_zizz in np.linspace(t_end - self.vehicles[0].t_window_size / 10 * 2 , t_end + self.vehicles[0].t_window_size / 10 * 2, 10):
                         
                             for obstacle in self.vehicles[0].obstacles:
                                 corners = [ [corner[0](t_zizz).tolist()[0][0], corner[1](t_zizz).tolist()[0][0]] for corner in obstacle.corners_spline]
@@ -146,13 +147,20 @@ class Group(Environment):
             
         # Step 6: setting new positions
         self.vehicle_positions_new = vehicle_positions_new
+        self.set_var({'new_positions': {'stage' : self.stage, 'vehicle_positions_new' : vehicle_positions_new}})
         if vehicle_positions_new != []:
             for i, position in enumerate(vehicle_positions_new):
                 self.vehicles[i].xf = [position[0], position[1]] + [self.vehicles[i].xf[2] + rotation_angle_new] + self.vehicles[i].xf[3:]
+                # self.vehicles[i].variable_history['xf'] += [self.vehicles[i].xf]
+        
         if rotation_angle_new != 0:        
             print("rotation_angle_new = " + str(rotation_angle_new))
+        else:
+            print("rotation angle stayed : " + str(rotation_angle_new))
         if scaling_factor_new != 1:
             print("scaling_factor_new = " + str(scaling_factor_new))
+        else:
+            print("scaling factor stayed : " + str(scaling_factor_new))
                 
         return self
             
@@ -169,7 +177,7 @@ class Group(Environment):
     def formation_change_cost_calculator(self, vehicle_positions_original, vehicle_positions_new, rotation_angle = 0, scaling_factor = 1):
         cost = 0
         alpha_distance = 0.1
-        alpha_rotation = 0.0001
+        alpha_rotation = 0.01
         alpha_scaling_up = 1000
         alpha_scaling_down = 1
         for original, new in zip(vehicle_positions_original, vehicle_positions_new):
@@ -257,7 +265,7 @@ class Group(Environment):
             position = self.start_position
             positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 6)
             positions = self.ellipse_generator(centerpoint = position, n_positions = len(self.vehicles), a = self.vehicles[0].radious * 6, b = self.vehicles[0].radious * 3,
-                                               ellipse_rotation = math.pi / 2)
+                                               ellipse_rotation = math.pi / 2 + math.pi / 4)
             
             
     # def ellipse_generator(self, centerpoint : list, n_positions : int, a : float, b : float, 
@@ -292,7 +300,7 @@ class Group(Environment):
             position = self.goal_position
             positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 6)
             positions = self.ellipse_generator(centerpoint = position, n_positions = len(self.vehicles), a = self.vehicles[0].radious * 6, b = self.vehicles[0].radious * 3,
-                                               ellipse_rotation = math.pi / 2)
+                                               ellipse_rotation = math.pi / 2 + math.pi / 4)
 
             if self.stage == 0:
                 yaml_dict = {'crazyflies' : []}
@@ -335,7 +343,7 @@ class Group(Environment):
     
     # def ellipse_generator(self,
     def ellipse_generator(self, centerpoint : list, n_positions : int, a : float, b : float, 
-                          ellipse_rotation : float = 0, vehicles_rotation : float = 0,
+                          ellipse_rotation : float = 0, vehicles_rotation : float = math.pi / 4,
                           ellipse_scale_x : float = 1, ellipse_scale_y : float = 1):
         # centerpoint = [0, 0, 0]
         # n_positions = 30
@@ -524,6 +532,16 @@ class Group(Environment):
         for i in range(len(self.vehicles)):
             if 'n_intermediate_ADMM' in var:
                 self.vehicles[i].n_intermediate_ADMM = var['n_intermediate_ADMM']
+                self.n_intermediate_ADMM = var['n_intermediate_ADMM']
+            if 'stage' in var:
+                self.vehicles[i].stage = var['stage']
+                self.stage = var['stage']
+            if 'new_positions' in var:
+                self.vehicles[i].vehicle_positions_new['stage'] += [var['new_positions']['stage']]
+                if var['new_positions']['vehicle_positions_new'] != []:
+                    self.vehicles[i].vehicle_positions_new['vehicle_positions_new'] += [var['new_positions']['vehicle_positions_new'][i]]
+                else:
+                    self.vehicles[i].vehicle_positions_new['vehicle_positions_new'] += [var['new_positions']['vehicle_positions_new']]
             
     def set_simulation(self, simulation = False):
         for i in range(len(self.vehicles)):
@@ -738,8 +756,38 @@ class Group(Environment):
             plt.savefig('figures/' + 'stage' + '_{:0>1d}'.format(self.stage) + 'mean_and_minimum_distances.png', dpi = 100)
 
         return collision_happened # , mean_dists
-
+    
     def calculate_formation_error(self):
+        
+        angle_errors_intermediate_all = []
+        for intermediate_ADMM_idx in range(self.n_intermediate_ADMM):
+            angle_errors = []
+            for vehicle in self.vehicles:
+                t, angle_errors_tmp = vehicle.calculate_formation_error(intermediate_ADMM_idx = intermediate_ADMM_idx)
+                angle_errors += [angle_errors_tmp]
+            
+                
+            # return angle_errors
+            angle_errors_mean = []
+            for i in range(len(angle_errors_tmp)):
+                angle_errors_sum_tmp = np.array(angle_errors[0][0]) * 0
+                for j in range(len(self.vehicles)):
+                    # angle_errors_sum_tmp += np.linalg.norm(angle_errors[j][i])
+                    angle_errors_sum_tmp += np.array(angle_errors[j][i])
+                angle_errors_mean += [angle_errors_sum_tmp / len(self.vehicles)]
+            angle_errors_intermediate_all += [angle_errors_mean]
+        
+        
+        from matplotlib.pyplot import cm
+        color=cm.rainbow(np.linspace(0,1,self.n_intermediate_ADMM))
+        
+        plt.figure()
+        for angle_errors_mean, c in zip(angle_errors_intermediate_all, color):
+            for time, angle in zip(t, angle_errors_mean):
+                plt.plot(time, angle, c = c)
+        plt.show()
+
+    def calculate_formation_error_old(self):
 
         # Getting the formation errors
         formation_error_means = []
@@ -786,12 +834,12 @@ class Group(Environment):
         return self
     
     
-    def plot_moovie_frames(self, iternum : int = 0, seed = ''):
+    def plot_moovie_frames(self, n_frames, iternum : int = 0, seed = ''):
         fig, ax = self.figures["figures"]
         ax.clear()
         frame_num = 0
         horizon_num = 0
-        for t in np.linspace(0, 1, 80):
+        for t in np.linspace(0, 1, n_frames):
 
             # Then we plot the vehicles
             for i in range(len(self.vehicles)):
@@ -809,8 +857,9 @@ class Group(Environment):
             ax.set_ylabel("y axis")
             ax.set_aspect('equal', adjustable='box')
             # Saving figure to folder
-            fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
-            # »
+            # fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
+            fig.savefig(self.cwd + '/video/' + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
+            ax.clear()
             frame_num += 1
 
         return self
@@ -824,7 +873,7 @@ class Group(Environment):
         fig, ax = self.figures["figures"]
 
         frame_num = 0
-        for t in np.linspace(0, 1, 20):
+        for t in np.linspace(0, 1, 100):
             # fig.clear()
             # fig, ax = plt.subplots()
 
@@ -868,16 +917,18 @@ class Group(Environment):
         for i in range(len(self.vehicles)):
             ax = self.vehicles[i].plot_vehicle_frenet_trajectories(ax)
         
-        if self.vehicle_positions_new != []:
-            for position in self.vehicle_positions_new:
-                x, y = self.fp.frenet_to_inertial(position[0], position[1], self.vehicles[0].t_end + self.vehicles[0].t_step)
-                ax.plot(x, y, 'ro', markersize = 1)
-        else:
-            for vehicle in self.vehicles:
-                position = vehicle.xf[0:2]
-                x, y = self.fp.frenet_to_inertial(position[0], position[1], self.vehicles[0].t_end + self.vehicles[0].t_step)
-                ax.plot(x, y, 'go', markersize = 1)
-            
+        try:
+            if self.vehicle_positions_new != []:
+                for position in self.vehicle_positions_new:
+                    x, y = self.fp.frenet_to_inertial(position[0], position[1], self.vehicles[0].t_end + self.vehicles[0].t_step)
+                    ax.plot(x, y, 'ro', markersize = 1)
+            else:
+                for vehicle in self.vehicles:
+                    position = vehicle.xf[0:2]
+                    x, y = self.fp.frenet_to_inertial(position[0], position[1], self.vehicles[0].t_end + self.vehicles[0].t_step)
+                    ax.plot(x, y, 'go', markersize = 1)
+        except:
+            pass
             
         # Axis related stuff
         ax.set_title("Trajectories of the vehicles after iteration {} with seed {} in the frenet frame".format(iternum, seed))
@@ -889,8 +940,10 @@ class Group(Environment):
         ax.set_ylabel("y axis") 
         ax.set_aspect('equal', adjustable='box')
         # Saving figure to folder
-        fig.savefig(self.cwd + '/figures/' +'{:0>1d}'.format(self.stage) + '{:0>2d}'.format(iternum) +'.png', dpi = 200)
-        ax.cla()
+        # fig.savefig(self.cwd + '/figures/' +'{:0>1d}'.format(self.stage) + '{:0>2d}'.format(iternum) +'.png', dpi = 200)
+        fig.savefig(self.cwd + '/figures/' + '{:0>2d}'.format(iternum) +'.png', dpi = 200)
+        # ax.cla()
+        plt.show()
         # fig.clf()
         
         # fig.clear()

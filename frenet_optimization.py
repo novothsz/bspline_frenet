@@ -59,18 +59,19 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     obstacles = []
     # Obstacle 1
     corners = ([0.0, -0.3], [0.5,-0.3], [0.5, 0.3], [0.0, 0.3])
-    delta = 0.15
+    delta = 0.25
     corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
-    obstacles += [Obstacle(ID = 0, corners = corners)]
+    # obstacles += [Obstacle(ID = 0, corners = corners)]
     # Obstacle 1 NEW
     corners = ([0.0, -0.3], [0.5,-0.3], [0.5, 0.3], [0.0, 0.3])
     delta = 0.15
     corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
     corners = ([0.15, -0.15], [0.5, 0.053], [0.25, 0.38], [-0.145, 0.145])
-    # obstacles += [Obstacle(ID = 0, corners = corners)]
+    corners = ([0.2, -0.25], [0.52, -0.02  ], [0.15, 0.5], [-0.2, 0.23])
+    obstacles += [Obstacle(ID = 0, corners = corners)]
     
     # Obstacle 2
-    dx = 0.4
+    dx = 0.3
     dy = 0.3
     tmp_obs = ([-2.4674-dx, -1-dy],
              [-2.4674+dx, -1-dy],
@@ -87,15 +88,15 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     # Obstacle 4
     tmp_obs = ([2.474-dx, 1-dy],
-             [2.474+dx, 1-dy],
-             [2.474+dx, -6],
-             [2.474-dx, -6])
+              [2.474+dx, 1-dy],
+              [2.474+dx, -6],
+              [2.474-dx, -6])
     obstacles += [Obstacle(ID = 3, corners = tmp_obs)]
     # Obstacle 5
     tmp_obs = ([2.474-dx, 1+dy],
-             [2.474+dx, 1+dy],
-             [2.474+dx, 6],
-             [2.474-dx, 6])
+              [2.474+dx, 1+dy],
+              [2.474+dx, 6],
+              [2.474-dx, 6])
     obstacles += [Obstacle(ID = 4, corners = tmp_obs)]
     
     
@@ -127,14 +128,25 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     #     group.frenet_plotter(iternum = i, seed = seed)
         
     # Simulation steps
-    group.set_simulation(simulation=True)
+    # group.set_simulation(simulation=True)
+    
     n_intermediate_ADMM = 1
+    n_steps = math.floor(1 / group.vehicles[0].t_step)
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
-    for i in range(0, 26):
+    for i in range(0, n_steps):
+        
+        group.set_var({'stage': i})
         for j in range(n_intermediate_ADMM):
             group.solve()
+            # group.frenet_plotter(iternum = j, seed = seed)
+            
+            # iteration_times += [time.time() - t_iter]
+            # print(str(i) + "th iteration time: " + str(time.time() - t_iter) + " seconds")
+            # t_iter = time.time()
+        
             group.set_simulation(False)
         
+        # group.save_trajectory_to_csv(t_desired = 3, t_hover = 0)
         
         # Time-related things
         iteration_times += [time.time() - t_iter]
@@ -144,7 +156,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         if i == 12:
             kappa = True
         group.intermediate_position_generator()
-        group.frenet_plotter(iternum = i, seed = seed)
+        # group.frenet_plotter(iternum = i, seed = seed)
         group.simulation_step()
             
 
@@ -152,9 +164,9 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     # writing_parameters_to_file(iteration_times)
     
-    return group
+    return n_steps, group
     
-    
+# """    
 group_stages = []
 corners_list = []
 min_iterations = 2
@@ -165,6 +177,12 @@ max_iterations = 2
 stage = 0
 start_position = [0.0, 0.0, 0.0]
 goal_position = [0.0, 0.0, 0.0]
-group = run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage)
-group.plot_moovie_frames(iternum=0, seed=0)
+n_steps, group = run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage)
+group.plot_moovie_frames(n_steps, iternum=0, seed=0)
 # group.plot_moovie_frames_old(iternum=0, seed=0)
+
+# """
+# group.vehicles[0].calculate_formation_error()
+# group.calculate_formation_error()
+"This is not good like this! We need to save the final plots for the various n_intermediate_ADMM values and run the code multiple times"
+"Only then can we assemble and compare the results."
