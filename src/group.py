@@ -285,7 +285,7 @@ class Group(Environment):
                 for i, vehicle in enumerate(self.vehicles):
                     # initialPosition = [positions[i][j].tolist() for j in range(len(positions[i]))] + [targetHeight]
                     initialPosition = [float(pos) for pos in positions[i]]
-                    initialPosition = initialPosition + [float(targetHeight)]
+                    initialPosition = initialPosition[:2] + [float(targetHeight)]
                     yaml_dict['crazyflies'] += [{'id' : i, 'channel' : 100,
                                                  'initialPosition' : initialPosition,
                                                  'type' : 'default'
@@ -314,7 +314,7 @@ class Group(Environment):
                 for i, vehicle in enumerate(self.vehicles):
                     # initialPosition = [positions[i][j].tolist() for j in range(len(positions[i]))] + [targetHeight]
                     initialPosition = [float(pos) for pos in positions[i]]
-                    initialPosition = initialPosition + [float(targetHeight)]
+                    initialPosition = initialPosition[:2] + [float(targetHeight)]
                     yaml_dict['crazyflies'] += [{'id' : i, 'channel' : 100,
                                                  'finalPosition' : initialPosition,
                                                  'type' : 'default'
@@ -854,14 +854,14 @@ class Group(Environment):
             horizon_num += 1
 
             # Axis related stuff
-            ax.set_title("Trajectories of the vehicles after iteration {} with seed {}".format(iternum, seed))
+            # ax.set_title("Trajectories of the vehicles after iteration {} with seed {}".format(iternum, seed))
             # Or setting the ax limits 
             ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
             ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
-            # ax.set_xlim(self.vehicles[0].fp.fx_spline(t_start)[0][0] - 2, self.vehicles[0].fp.fx_spline(t_start)[0][0] + 2*2)
-            # ax.set_ylim(self.vehicles[0].fp.fy_spline(t_start)[0][0] - 2, self.vehicles[0].fp.fy_spline(t_start)[0][0] + 2)
-            ax.set_xlabel("x axis")
-            ax.set_ylabel("y axis")
+            ax.set_xlim(self.vehicles[0].fp.fx_spline(t_start)[0][0] - 2, self.vehicles[0].fp.fx_spline(t_start)[0][0] + 2*2)
+            ax.set_ylim(self.vehicles[0].fp.fy_spline(t_start)[0][0] - 2, self.vehicles[0].fp.fy_spline(t_start)[0][0] + 2)
+            # ax.set_xlabel("x axis")
+            # ax.set_ylabel("y axis")
             ax.set_aspect('equal', adjustable='box')
             # Saving figure to folder
             # fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
@@ -894,8 +894,8 @@ class Group(Environment):
 
             # Axis related stuff
             ax.set_title("Trajectories of the vehicles after iteration {} with seed {}".format(iternum, seed))
-            # ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
-            # ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
+            ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
+            ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
             # Or setting the ax limits 
             ax.set_xlim(self.vehicles[0].fp.fx_spline(t)[0][0] - 2*2, self.vehicles[0].fp.fx_spline(t)[0][0] + 2*2)
             ax.set_ylim(self.vehicles[0].fp.fy_spline(t)[0][0] - 1*2, self.vehicles[0].fp.fy_spline(t)[0][0] + 1*2)
@@ -909,9 +909,15 @@ class Group(Environment):
 
         return self
 
-    def save_trajectory_to_csv(self, t_desired = 5, t_hover = 2):
+    def save_trajectory_to_csv(self, n_steps, t_desired = 1, t_hover = 0.1):
+        # for horizon_num in range(n_steps):
+        #         # self.vehicles[0].save_trajectory_to_csv(horizon_num, t_desired = t_desired, t_hover = t_hover)
+        #     for i in range(len(self.vehicles)):
+        #         self.vehicles[i].save_trajectory_to_csv(horizon_num, t_desired = t_desired, t_hover = t_hover)
+                
+                
         for i in range(len(self.vehicles)):
-            self.vehicles[i].save_trajectory_to_csv(t_desired = t_desired, t_hover = t_hover)
+            self.vehicles[i].save_trajectory_to_csv_SINGLE(n_steps, t_desired = t_desired, t_hover = t_hover)
         return self
 
     def frenet_plotter(self, iternum : int = 0, seed = ''):
@@ -949,8 +955,8 @@ class Group(Environment):
         # Saving figure to folder
         # fig.savefig(self.cwd + '/figures/' +'{:0>1d}'.format(self.stage) + '{:0>2d}'.format(iternum) +'.png', dpi = 200)
         fig.savefig(self.cwd + '/figures/' + '{:0>2d}'.format(iternum) +'.png', dpi = 200)
-        # ax.cla()
-        plt.show()
+        ax.cla()
+        # plt.show()
         # fig.clf()
         
         # fig.clear()

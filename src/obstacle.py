@@ -89,6 +89,7 @@ class Obstacle(Environment):
         polygon = Polygon(corners, closed=True, fill=True, fc=(0,0,0,0.1), ec=(0,0,0,1), lw=1, zorder = 1)
         ax.add_patch(polygon)
         
+        """
         # Plotting spline obstacle
         t = np.linspace(0, 1, 100)
         x, y = [], []
@@ -99,6 +100,7 @@ class Obstacle(Environment):
                 x += [x_]
                 y += [y_]
             ax.plot(x, y, 'y.')
+            """
             # p = np.array([corner[0](t_)[0] for t_ in t]).reshape(-1)
             # q = np.array([corner[1](t_)[0] for t_ in t]).reshape(-1)
             # xy = [self.fp.frenet_to_inertial(p_, q_, t_) for p_, q_, t_ in zip(p, q, t)]

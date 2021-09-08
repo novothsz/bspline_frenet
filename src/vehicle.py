@@ -872,7 +872,7 @@ class Vehicle(VehicleBasis):
     
     def plot_moovie_frames_mooving_horizon(self, ax, horizon_num):
         
-        t_steps = 10     
+        t_steps = 100     
         horizon_num_original = int(horizon_num)    
         horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
         # Creating the splines
@@ -910,7 +910,7 @@ class Vehicle(VehicleBasis):
         ax.plot(x_t[0:idx], y_t[0:idx], c = 'k',lw=0.8,alpha = 1, zorder = 5)
         # ax.plot(x_t[idx], y_t[idx], c = 'r', marker = 'o', markersize = 1, lxw=1,alpha = 1, zorder = 6)
         ax.plot(x_t[idx:], y_t[idx:], c = 'cornflowerblue',lw=0.8,alpha = 0.5, zorder = 3)
-        
+        # horizon_num_original = horizon_num
         if self.vehicle_positions_new['vehicle_positions_new'][horizon_num_original] != []:
             # ax.plot(x_t[-1], y_t[-1], 'go', markersize = 1, zorder = 3)
             # print(horizon_num_original)
@@ -920,16 +920,19 @@ class Vehicle(VehicleBasis):
                                                 t_end)
             ax.plot(x_,
                     y_,
-                    'ro', markersize = 1, zorder = 3)
+                    'ro', markersize = 2, zorder = 3)
         else:
             # ax.plot(x_t[-1], y_t[-1], 'ro', markersize = 1, zorder = 3)
             # ax.plot(self.xf[0], self.xf[1], 'go', markersize = 1, zorder = 3)
-            x_, y_ = self.fp.frenet_to_inertial(self.variable_history['xf'][horizon_num_original][0], 
-                                                self.variable_history['xf'][horizon_num_original][1],
+            # x_, y_ = self.fp.frenet_to_inertial(self.variable_history['xf'][horizon_num_original][0], 
+            #                                     self.variable_history['xf'][horizon_num_original][1],
+            #                                     t_end)
+            x_, y_ = self.fp.frenet_to_inertial(self.variable_history['xf'][horizon_num][0], 
+                                                self.variable_history['xf'][horizon_num][1],
                                                 t_end)
             ax.plot(x_,
                     y_
-                    , 'go', markersize = 1, zorder = 3)
+                    , 'go', markersize = 2, zorder = 3)
         
         
         x0, y0 = self.fp.frenet_to_inertial(p_solution(0)[0], q_solution(0)[0], t_start)

@@ -827,30 +827,104 @@ class VehicleBasis(Environment):
     ###########################################################################
     ###########################################################################
     
+    def save_trajectory_to_csv_SINGLE(self, n_steps, t_desired = 1, t_hover = 0.1):
+        flatten = lambda t: [item for sublist in t for item in sublist]
+        t_steps = 100     
+        hist = self.variable_history
+        basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
+        x_t_saved = []
+        y_t_saved = []
+        for horizon_num in range(n_steps):
+            horizon_num_original = int(horizon_num)    
+            horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
+            coeffs1 = hist["y"][horizon_num][:len(basis)]
+            coeffs2 = hist["y"][horizon_num][len(basis):len(basis)*2]
+            coeffs3 = hist["y"][horizon_num][len(basis)*2:len(basis)*3]
+            x = BSpline(basis, coeffs1)
+            y = BSpline(basis, coeffs2)
+            phi = BSpline(basis, coeffs3)
     
-    def save_trajectory_to_csv(self, t_desired = 5, t_hover = 2):
+            # Sampling
+            t = np.linspace(0, self.t_step/self.t_window_size, 100)
+            # t = np.linspace(0, 1, 100)
+            x_t = [x(t_) for t_ in t]
+            y_t = [y(t_) for t_ in t]
+            phi_t = [phi(t_) for t_ in t]
+    
+            x_t = flatten(x_t)
+            y_t = flatten(y_t)
+            
+            x_t_saved += x_t
+            y_t_saved += y_t
+            
+        t_desired = 10
+        t = np.linspace(0, t_desired, n_steps * 100)
+        poly7_x = np.poly1d(np.polyfit(t, x_t_saved, deg=7))
+        poly7_y = np.poly1d(np.polyfit(t, y_t_saved, deg=7))
+        
+        # plt.figure()
+        # t = np.linspace(0, t_desired)
+        # plt.plot(poly7_x(t), poly7_y(t))
+        # plt.show()
+        # assert 0
+        
+        # The path !!! now with correct arrangement of the coefficients !!!
+        # Storing the coefficients in the format, that crazyswarm requires
+        # (x^0, x^1, x^2, ...)
+        poly7_x = poly7_x.coeffs.tolist()
+        poly7_x.reverse()
+        poly7_y = poly7_y.coeffs.tolist()
+        poly7_y.reverse()
+
+        # Combining the polinomials into a list
+        T_list = [[t_desired]]
+        poly7_x_list = [poly7_x]
+        poly7_y_list = [poly7_y]
+        self.stage = 0
+        # Writing the list to file
+        self.write_csv(T_list, poly7_x_list, poly7_y_list)
+        # print('kappa')
+        
+    
+    def save_trajectory_to_csv(self, horizon_num, t_desired = 1, t_hover = 0.1):
         """ This function is pretty much doing the same as plot_vehicle_trajectories() + write_csv()
         """
         flatten = lambda t: [item for sublist in t for item in sublist]
 
+        horizon_num_original = int(horizon_num)    
+        horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
+        
+        
         hist = self.variable_history
 
         # Creating the splines
         basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
 
-        coeffs1 = hist["y"][-1][:len(basis)]
-        coeffs2 = hist["y"][-1][len(basis):len(basis)*2]
+        coeffs1 = hist["y"][horizon_num][:len(basis)]
+        coeffs2 = hist["y"][horizon_num][len(basis):len(basis)*2]
+        coeffs3 = hist["y"][horizon_num][len(basis)*2:len(basis)*3]
         x = BSpline(basis, coeffs1)
         y = BSpline(basis, coeffs2)
+        phi = BSpline(basis, coeffs3)
 
         # Sampling
         t = np.linspace(0, self.t_step/self.t_window_size, 100)
+        # t = np.linspace(0, 1, 100)
         x_t = [x(t_) for t_ in t]
         y_t = [y(t_) for t_ in t]
+        phi_t = [phi(t_) for t_ in t]
 
         x_t = flatten(x_t)
         y_t = flatten(y_t)
-
+        
+        # plt.figure()
+        # # plt.plot(phi_t)
+        # plt.plot(x_t, y_t)
+        # plt.plot(x_t, y_t, '*')
+        # plt.show()
+        # print(horizon_num)
+        self.stage = horizon_num
+        t = np.linspace(0, 1, 100)
         # Fitting a polynome of degree 7 onto the spline
         poly7_x = np.poly1d(np.polyfit(t, x_t, deg=7))
         poly7_y = np.poly1d(np.polyfit(t, y_t, deg=7))

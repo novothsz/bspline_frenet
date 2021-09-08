@@ -178,11 +178,12 @@ stage = 0
 start_position = [0.0, 0.0, 0.0]
 goal_position = [0.0, 0.0, 0.0]
 n_steps, group = run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage)
-group.plot_moovie_frames(n_steps, iternum=0, seed=0)
+# group.plot_moovie_frames(n_steps, iternum=0, seed=0)
 # group.plot_moovie_frames_old(iternum=0, seed=0)
 
 # """
 # group.vehicles[0].calculate_formation_error()
 # group.calculate_formation_error()
+group.save_trajectory_to_csv(n_steps)
 "This is not good like this! We need to save the final plots for the various n_intermediate_ADMM values and run the code multiple times"
 "Only then can we assemble and compare the results."
