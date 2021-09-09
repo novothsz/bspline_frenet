@@ -130,7 +130,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     # Simulation steps
     # group.set_simulation(simulation=True)
     
-    n_intermediate_ADMM = 1
+    n_intermediate_ADMM = 10
     n_steps = math.floor(1 / group.vehicles[0].t_step)
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
     for i in range(0, n_steps):

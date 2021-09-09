@@ -898,10 +898,10 @@ class FrenetPath(object):
         
         
         # plotting
-        fig, ax = plt.subplots(2)
+        # fig, ax = plt.subplots(2)
         
-        ax[0].plot(vx_min_sol_)
-        ax[1].plot(vy_min_sol_)
+        # ax[0].plot(vx_min_sol_)
+        # ax[1].plot(vy_min_sol_)
         
         "MAXIMISE - part of ..?.. equation"
         self.J = 0
@@ -948,13 +948,13 @@ class FrenetPath(object):
         ay_max_sol_ = np.array([ay_max_sol(t_)[0] for t_ in t]).reshape(-1).tolist()
         
         # plotting
-        ax[0].plot(vx_max_sol_)
-        ax[1].plot(vy_max_sol_)
+        # ax[0].plot(vx_max_sol_)
+        # ax[1].plot(vy_max_sol_)
         # ax[0].plot(ax_max_sol_)
         # ax[1].plot(ay_max_sol_)
         
-        ax[0].set_title('vx to minimese (blue) and to  maximise(orange)')
-        ax[1].set_title('vy to minimese (blue) and to  maximise(orange)')
+        # ax[0].set_title('vx to minimese (blue) and to  maximise(orange)')
+        # ax[1].set_title('vy to minimese (blue) and to  maximise(orange)')
         
         
         "Plotting the equation min/max"
@@ -975,11 +975,11 @@ class FrenetPath(object):
         equation_max_ = np.array([equation_max(t_)[0] for t_ in t]).reshape(-1).tolist()
         
         # plotting
-        fig, ax = plt.subplots()
-        ax.plot(equation_min_)
-        ax.plot(equation_max_)
-        ax.set_title('blue: minimum of the equation, orange: maximum of the equation')
-        ax.grid()
+        # fig, ax = plt.subplots()
+        # ax.plot(equation_min_)
+        # ax.plot(equation_max_)
+        # ax.set_title('blue: minimum of the equation, orange: maximum of the equation')
+        # ax.grid()
         
         # But we have a problem... equation_min and equation_max are splines with
         # a large number of coefficients. We need to reduce this, otherwise we will
@@ -1012,8 +1012,8 @@ class FrenetPath(object):
         # sampling
         equation_min_fitted_ = np.array([equation_min_fitted(t_)[0] for t_ in t]).reshape(-1).tolist()
         equation_max_fitted_ = np.array([equation_max_fitted(t_)[0] for t_ in t]).reshape(-1).tolist()
-        ax.plot(equation_min_fitted_, '*')
-        ax.plot(equation_max_fitted_, '*')
+        # ax.plot(equation_min_fitted_, '*')
+        # ax.plot(equation_max_fitted_, '*')
         
         return [equation_min_fitted, equation_max_fitted]
     

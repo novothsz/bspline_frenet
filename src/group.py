@@ -26,6 +26,11 @@ class Group(Environment):
         fig, ax = plt.subplots()
         self.figures["videos"] = [fig, ax]
         
+        self.rotation_angle = 0
+        self.scaling_factor = 1
+        self.og_final_positions = []
+        
+        
     
     ###########################################################################
     ###########################################################################
@@ -36,6 +41,7 @@ class Group(Environment):
     ###########################################################################
         
     def intermediate_position_generator(self):
+        # Dynamic formation manipulator (DFM)
         # get current final time
         # get obstacle positions at final time
         # get position of vehicles at the final time of the previously calculated horizon
@@ -49,7 +55,8 @@ class Group(Environment):
         # Step 2: get obstacle positions at final time
         obstacle_corners = []
         for obstacle in self.vehicles[0].obstacles:
-            corners = [ [corner[0](t_end).tolist()[0][0], corner[1](t_end).tolist()[0][0]] for corner in obstacle.corners_spline]
+            # corners = [ [corner[0](t_end).tolist()[0][0], corner[1](t_end).tolist()[0][0]] for corner in obstacle.corners_spline]
+            corners = [ [corner[0](t_end).tolist()[0][0], corner[1](t_end).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
             obstacle_corners += [corners]
         # Step 3: get position of vehicles at the final time of the previously calculated horizon
         # t_previous = self.vehicles[0].t_end - self.vehicles[0].t_step
@@ -67,8 +74,7 @@ class Group(Environment):
                 
         # Step 4: check for collision
         all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions, obstacle_corners)   
-        if collision == True:
-            kappa = True
+        
             
         # Step 5: rotating & scaling
         rotation_angle_new = 0
@@ -78,6 +84,7 @@ class Group(Environment):
         vehicle_positions_new_saved = []
         rotation_angle_new_saved = []
         scaling_factor_new_saved = []
+        obstacle_corners_zizz = []
         if collision == True:
             degree_step = 10
             radian_step = degree_step/360*2 * math.pi
@@ -95,25 +102,6 @@ class Group(Environment):
             scaling_factors = np.array(scaling_factors).reshape(-1).tolist()
             
             
-            # Version 1: take the first non-colliding result
-            
-            # for scaling_factor in scaling_factors:
-            #     vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
-            #     for rotation_angle in rotation_angles:
-            #         vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
-            #         all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, obstacle_corners)
-            #         if collision == False:
-            #             vehicle_positions_new = vehicle_positions_scaled_rotated
-            #             rotation_angle_new = rotation_angle
-            #             break
-            #     if collision == False:
-            #         scaling_factor_new = scaling_factor
-            #         break
-            
-            # if collision == True:
-            #     import warnings
-            #     warnings.warn("Warning...........Collision is still happening :/ Nothing we can do... Formation dissolve!")
-            
             # Version 2: give costs and choose the least-cost formation change
             
             for scaling_factor in scaling_factors:
@@ -126,12 +114,12 @@ class Group(Environment):
                     else:
                         cost = self.formation_change_cost_calculator(vehicle_positions, vehicle_positions_scaled_rotated, rotation_angle, scaling_factor)
                         # check collision for previous and future steps too!
-                        obstacle_corners_zizz = []
+                        
                         # for t_zizz in np.linspace(t_end - self.vehicles[0].t_step / 10 * 10 , t_end + self.vehicles[0].t_step / 10 * 10, 6):
                         for t_zizz in np.linspace(t_end - self.vehicles[0].t_window_size / 10 * 2 , t_end + self.vehicles[0].t_window_size / 10 * 2, 10):
                         
                             for obstacle in self.vehicles[0].obstacles:
-                                corners = [ [corner[0](t_zizz).tolist()[0][0], corner[1](t_zizz).tolist()[0][0]] for corner in obstacle.corners_spline]
+                                corners = [ [corner[0](t_zizz).tolist()[0][0], corner[1](t_zizz).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
                                 obstacle_corners_zizz += [corners]
             
                         all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, obstacle_corners_zizz)   
@@ -150,8 +138,33 @@ class Group(Environment):
             rotation_angle_new = rotation_angle_new_saved[cost_min_idx]
             scaling_factor_new = scaling_factor_new_saved[cost_min_idx]
             
+        
+        elif collision == False:
+            deviance = abs(1 - 1 / self.scaling_factor)
+            deviance *= 0.2
+            if self.scaling_factor >= 1:
+                scaling_factor = 1 - deviance
+            else:
+                scaling_factor = 1 + deviance
             
+            rotation_angle = -1 * 0.2 * self.rotation_angle
             
+            vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
+            vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
+            for t_zizz in np.linspace(t_end - self.vehicles[0].t_window_size / 10 * 2 , t_end + self.vehicles[0].t_window_size / 10 * 2, 10):
+            
+                for obstacle in self.vehicles[0].obstacles:
+                    corners = [ [corner[0](t_zizz).tolist()[0][0], corner[1](t_zizz).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
+                    obstacle_corners_zizz += [corners]
+            
+            all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, obstacle_corners_zizz)   
+            if collision == False:
+                rotation_angle_new = rotation_angle
+                scaling_factor_new = scaling_factor
+                vehicle_positions_new = vehicle_positions_scaled_rotated
+            elif collision == True:
+                pass
+                
         # Step 6: setting new positions
         self.vehicle_positions_new = vehicle_positions_new
         self.set_var({'new_positions': {'stage' : self.stage, 'vehicle_positions_new' : vehicle_positions_new}})
@@ -168,7 +181,8 @@ class Group(Environment):
             print("scaling_factor_new = " + str(scaling_factor_new))
         # else:
         #     print("scaling factor stayed : " + str(scaling_factor_new))
-                
+        self.rotation_angle += rotation_angle_new
+        self.scaling_factor *= scaling_factor_new
         return self
             
           
@@ -189,16 +203,32 @@ class Group(Environment):
         alpha_scaling_down = 1
         for original, new in zip(vehicle_positions_original, vehicle_positions_new):
             cost += alpha_distance * (original[0] - new[0])**2 + (original[1] - new[1])**2
-            cost += alpha_rotation * abs(rotation_angle)
-            # cost += alpha_scaling * abs(1-scaling_factor)
-            if scaling_factor > 1:
-                cost += alpha_scaling_up * abs(1-scaling_factor)
-            if scaling_factor < 1:
-                cost += alpha_scaling_down * abs(1-scaling_factor)
+            
+            
+        cost += alpha_rotation * abs(rotation_angle)
+        # cost += alpha_scaling * abs(1-scaling_factor)
+        if scaling_factor > 1:
+            cost += alpha_scaling_up * abs(1-scaling_factor)
+        if scaling_factor < 1:
+            cost += alpha_scaling_down * abs(1-scaling_factor)
                 
             # cost += alpha_scaling_up * scaling_factor * abs(1-scaling_factor)
             
-        return cost
+            
+        # # Dereasing the cost, if we are forming back to the original formation
+        # for original, new in zip(self.og_final_positions, vehicle_positions_new):
+        #     cost += alpha_distance * (original[0] - new[0])**2 + (original[1] - new[1])**2
+            
+            
+        # sign = (1 - scaling_factor) * (1 - self.scaling_factor)
+        # if sign < 0:
+        #     cost -= np.mean([alpha_scaling_down, alpha_scaling_up]) * abs(scaling_factor - self.scaling_factor)
+            
+        # sign = (rotation_angle * self.rotation_angle)#  / abs(rotation_angle * self.rotation_angle)
+        # if sign < 0:
+        #     cost -= alpha_rotation * abs(rotation_angle - self.rotation_angle)
+            
+        return cost 
     
     def rotate_formation(self, vehicle_positions, angle):
         vehicle_positions_new = []
@@ -308,7 +338,7 @@ class Group(Environment):
             positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 6)
             positions = self.ellipse_generator(centerpoint = position, n_positions = len(self.vehicles), a = self.vehicles[0].radious * 6, b = self.vehicles[0].radious * 3,
                                                ellipse_rotation = math.pi / 2 + math.pi / 4)
-
+            self.og_final_positions = positions
             if self.stage == 0:
                 yaml_dict = {'crazyflies' : []}
                 for i, vehicle in enumerate(self.vehicles):

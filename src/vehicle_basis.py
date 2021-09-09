@@ -74,18 +74,20 @@ class VehicleBasis(Environment):
         # Hyperparams
         self.rho = 50# /5 # /50
         # self.rho_formation = 100# /5 # /50
-        self.rho_input = 0.1 * 10 * 2 * 1
+        self.rho_input = 0.1 * 10 * 2 * 100
         self.rho_final_value = 0.1 * 10 * 100# * 1000
         
-        self.epsilon = 0.001 # try to keep minimum epsilon distance from the obstacle
+        self.epsilon = 0.05 # try to keep minimum epsilon distance from the obstacle
         # self.epsilon = self.radious # try to keep minimum epsilon distance from the obstacle
-        self.safety_weight = 1 # cost parameter for epsilon
+        self.safety_weight = 100000 # cost parameter for epsilon
+        "TODO: something is wrong when shifting, we get too close to the obstacles and confusion..."
+        "Safety weight needn't be this high"
         self.knot_intervals = 5 # number of knots for the output (position) spline of the vehicle
         # self.t_resolution_length = 30
         self.t_resolution_length = self.knot_intervals + 1
         
         self.obstacle_avoidance_multiplier = 1.5
-        self.vehicle_avoidnce_multiplier = 2.0
+        self.vehicle_avoidnce_multiplier = 1.2
         
         # Constraints on decision variables
         # self.y_min = [self.border_x[0], self.border_y[0]]

@@ -158,7 +158,7 @@ class Vehicle(VehicleBasis):
                             + (z_i[1] - z_ij[1])**2
             dist_we_want = (xf[0] - xf_j[0])**2 \
                             + (xf[1] - xf_j[1])**2
-            dist_difference = (dist_we_have * 1 - dist_we_want * 0.25) * 1  # 0.5 means we can shrink to the quarter of the size
+            dist_difference = (dist_we_have * 1 - dist_we_want * 0.10) * 1  # 0.5 means we can shrink to the quarter of the size
 
             ""
             for t in np.linspace(0, 1, self.t_resolution_length):
@@ -170,7 +170,7 @@ class Vehicle(VehicleBasis):
 
                 # We can add collision avoidance here too :)
                 self.define_constraint([dist_we_have(t)],
-                                        [(self.radious * 2 * self.vehicle_avoidnce_multiplier)**2],
+                                        [(self.radious * self.vehicle_avoidnce_multiplier)**2],
                                         [math.inf],
                                         constraint_type='time',
                                         name=["formation_vehicle_" + str(i)] * self.n_dimensions_old)
@@ -327,12 +327,13 @@ class Vehicle(VehicleBasis):
         # self.J += self.rho_final_value * ((q.coeffs[-1] - self.xf[1])**2)
         # self.J += self.rho_final_value * ((phi.coeffs[-1] - self.xf[2])**2)
         
+        # """
         lambda_ = np.power(np.linspace(1, 0, p.coeffs.shape[0]), 1)
         for i in range(p.coeffs.shape[0]):
             self.J += self.rho_final_value * ((p.coeffs[i] -      (lambda_[i] * x0[0] + (1 - lambda_[i]) * xf[0])     )**2)
             self.J += self.rho_final_value * ((q.coeffs[i] -      (lambda_[i] * x0[1] + (1 - lambda_[i]) * xf[1])     )**2)
             self.J += self.rho_final_value * ((phi.coeffs[i] -      (lambda_[i] * x0[2] + (1 - lambda_[i]) * xf[2])     )**2)
-            
+        # """    
             
         # "initial_param"    
         # lambda_ = np.power(np.linspace(0, 1, p.coeffs.shape[0]), 8)
