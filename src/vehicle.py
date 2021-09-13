@@ -21,7 +21,7 @@ class Vehicle(VehicleBasis):
         super().__init__()
         
         self.t_start = 0.0
-        self.t_step = 0.01 # 0.04 # Changed in simulation_step() upon first call
+        self.t_step = 0.04 # 0.04 # Changed in simulation_step() upon first call
         # self.t_step = 1 # 0.04 # Changed in simulation_step() upon first call
         # self.t_step = 0.5 # 0.04 # Changed in simulation_step() upon first call
         self.t_window_size = 0.2
@@ -135,14 +135,23 @@ class Vehicle(VehicleBasis):
                                         name=["formation_vehicle_" + str(i)] * self.n_dimensions_old)
             # But the dot product should be > 0, to avoid the vehicles switching place and still
             # fulfilling the formation requirements (at least for those two vehicles)
-
+            """
             for t in np.linspace(0, 1, self.t_resolution_length):
                 self.define_constraint([dot_product(vec1, vector_rotation(vec2, z_i[2], t))(t)],
                                         [0],
                                         [math.inf],
                                         constraint_type='time',
                                         name=["formation_dot_vehicle_" + str(i)] * self.n_dimensions_old)
-
+                
+            """
+            
+            "Phi constraint"
+            self.define_constraint([z_i[2] - z_ij[2]],
+                                    [0],
+                                    [0],
+                                    constraint_type='overall',
+                                    name=["phi"])
+            "Phi constraint"
             # TODO: I think this is not really needed anymore, but need to check
             # for j in range(len(y)):
             #     self.J += self.rho_formation * definite_integral( ((vec1[j] - vec2[j])**2), 0, 1)
@@ -150,6 +159,7 @@ class Vehicle(VehicleBasis):
 
             """Special distance-constraint"""
             """Special distance-constraint"""
+            """
             # frenet_zero = MX((0, 0))
             xf = np.array(self.xf[:self.n_dimensions_old])
             xf_j = np.array(self.neighbours[i].xf[:self.n_dimensions_old])
@@ -158,7 +168,7 @@ class Vehicle(VehicleBasis):
                             + (z_i[1] - z_ij[1])**2
             dist_we_want = (xf[0] - xf_j[0])**2 \
                             + (xf[1] - xf_j[1])**2
-            dist_difference = (dist_we_have * 1 - dist_we_want * 0.10) * 1  # 0.5 means we can shrink to the quarter of the size
+            dist_difference = (dist_we_have * 1 - dist_we_want * 0.2) * 1  # 0.5 means we can shrink to the quarter of the size
 
             ""
             for t in np.linspace(0, 1, self.t_resolution_length):
@@ -170,10 +180,11 @@ class Vehicle(VehicleBasis):
 
                 # We can add collision avoidance here too :)
                 self.define_constraint([dist_we_have(t)],
-                                        [(self.radious * self.vehicle_avoidnce_multiplier)**2],
+                                        [(self.radious * self.vehicle_avoidance_multiplier)**2],
                                         [math.inf],
                                         constraint_type='time',
                                         name=["formation_vehicle_" + str(i)] * self.n_dimensions_old)
+            """
             """Special distance-constraint"""
             """Special distance-constraint"""
 
@@ -322,17 +333,102 @@ class Vehicle(VehicleBasis):
         #                                 + (q.coeffs[-1] - self.xf[1])**2 \
         #                                 + (q.derivative().coeffs[-1] - self.xf[3])**2)
         
+        "state suggestion"
+        if self.t_intermediate_list != []:
+            n_intermediate = 10
+            rho_intermediate = 10
+            for i, t_intermediate in enumerate(self.t_intermediate_list):
+                idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
+                
+                # x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += np.array(self.x_intermediate_list)[idx].tolist()
+                # t_intermediate = MX.sym('x_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += [self.t_intermediate_list[i]]
+                # self.J += rho_intermediate * (p(t_intermediate) -      x_intermediate[0]     )**2
+                # self.J += rho_intermediate * (q(t_intermediate) -      x_intermediate[1]     )**2
+                # self.J += rho_intermediate * (phi(t_intermediate) -      x_intermediate[2]     )**2
+                
+                x_intermediate = np.array(self.x_intermediate_list)[idx].tolist()
+                
+                # self.J += rho_intermediate * (p(t_intermediate) -      x_intermediate[0]     )**2
+                # self.J += rho_intermediate * (q(t_intermediate) -      x_intermediate[1]     )**2
+                # self.J += 1000 * rho_intermediate * (phi(t_intermediate) -      x_intermediate[2]     )**2
+                
+                # self.define_constraint([p(t_intermediate) - x_intermediate[0]],
+                #                         [0.0 - 0.1],
+                #                         [0.0 + 0.1],
+                #                         constraint_type='time',
+                #                         name=["guidence" + str(i)] * 1)
+                # self.define_constraint([q(t_intermediate) - x_intermediate[1]],
+                #                         [0.0 - 0.1],
+                #                         [0.0 + 0.1],
+                #                         constraint_type='time',
+                #                         name=["guidence" + str(i)] * 1)
+                # self.define_constraint([phi(t_intermediate) - x_intermediate[2]],
+                #                         [0.0 - 0.1],
+                #                         [0.0 + 0.1],
+                #                         constraint_type='time',
+                #                         name=["guidence" + str(i)] * 1)
+                
+                
+                # self.define_constraint([p(t_intermediate) - x_intermediate[0],
+                #                         q(t_intermediate) - x_intermediate[1],
+                #                         phi(t_intermediate) - x_intermediate[2]],
+                #                         [0.0 - self.slack, 0.0 - self.slack, 0.0 - self.slack],
+                #                         [0.0 + self.slack, 0.0 + self.slack, 0.0 + self.slack],
+                #                         constraint_type='time',
+                #                         name=["guidence" + str(i)] * 1)
+                self.define_constraint([p(t_intermediate) - x_intermediate[0],
+                                        q(t_intermediate) - x_intermediate[1],
+                                        phi(t_intermediate) - x_intermediate[2]],
+                                        [0.0 - 0.1, 0.0 - 0.1, 0.0 - self.slack],
+                                        [0.0 + 0.1, 0.0 + 0.1, 0.0 + self.slack],
+                                        constraint_type='time',
+                                        name=["guidence" + str(i)] * 1)
+                if t_intermediate == 1:
+                    self.define_constraint([p(t_intermediate) - x_intermediate[0],
+                                            q(t_intermediate) - x_intermediate[1],
+                                            phi(t_intermediate) - x_intermediate[2]],
+                                            [0.0 - self.slack, 0.0 - self.slack, 0.0 - self.slack],
+                                            [0.0 + self.slack, 0.0 + self.slack, 0.0 + self.slack],
+                                            constraint_type='time',
+                                            name=["guidence" + str(i)] * 1)
+                    
+        else:
+            
+                    
+            lambda_ = np.power(np.linspace(1, 0, p.coeffs.shape[0]), 1)
+            for i in range(p.coeffs.shape[0]):
+                self.J += self.rho_final_value * ((p.coeffs[i] -      (lambda_[i] * x0[0] + (1 - lambda_[i]) * xf[0])     )**2)
+                self.J += self.rho_final_value * ((q.coeffs[i] -      (lambda_[i] * x0[1] + (1 - lambda_[i]) * xf[1])     )**2)
+                self.J += self.rho_final_value * ((phi.coeffs[i] -      (lambda_[i] * x0[2] + (1 - lambda_[i]) * xf[2])     )**2)
+    
+            self.define_constraint([phi],
+                                    xf[self.n_dimensions] - [5 / 360 * math.pi * 2], # self.slack, # 
+                                    xf[self.n_dimensions] + [5 / 360 * math.pi * 2], # self.slack, # 
+                                    constraint_type='final_param',
+                                    name=["phif"] * self.n_dimensions)
+                                            
+            # Version 1
+            # Final position constraint on y
+            self.define_constraint([p, q],
+                                    xf[:self.n_dimensions_old] - [self.radious*1, self.radious*1],
+                                    xf[:self.n_dimensions_old] + [self.radious*1, self.radious*1],
+                                    constraint_type='final_param',
+                                    name=["yf"] * self.n_dimensions)
+                
+        
+        
+        
         "final_param"
         # self.J += self.rho_final_value * ((p.coeffs[-1] - self.xf[0])**2)
         # self.J += self.rho_final_value * ((q.coeffs[-1] - self.xf[1])**2)
         # self.J += self.rho_final_value * ((phi.coeffs[-1] - self.xf[2])**2)
         
         # """
-        lambda_ = np.power(np.linspace(1, 0, p.coeffs.shape[0]), 1)
-        for i in range(p.coeffs.shape[0]):
-            self.J += self.rho_final_value * ((p.coeffs[i] -      (lambda_[i] * x0[0] + (1 - lambda_[i]) * xf[0])     )**2)
-            self.J += self.rho_final_value * ((q.coeffs[i] -      (lambda_[i] * x0[1] + (1 - lambda_[i]) * xf[1])     )**2)
-            self.J += self.rho_final_value * ((phi.coeffs[i] -      (lambda_[i] * x0[2] + (1 - lambda_[i]) * xf[2])     )**2)
+        # lambda_ = np.power(np.linspace(1, 0, p.coeffs.shape[0]), 1)
+        # for i in range(p.coeffs.shape[0]):
+        #     self.J += self.rho_final_value * ((p.coeffs[i] -      (lambda_[i] * x0[0] + (1 - lambda_[i]) * xf[0])     )**2)
+        #     self.J += self.rho_final_value * ((q.coeffs[i] -      (lambda_[i] * x0[1] + (1 - lambda_[i]) * xf[1])     )**2)
+        #     self.J += self.rho_final_value * ((phi.coeffs[i] -      (lambda_[i] * x0[2] + (1 - lambda_[i]) * xf[2])     )**2)
         # """    
             
         # "initial_param"    
@@ -351,6 +447,7 @@ class Vehicle(VehicleBasis):
         # self.J += self.rho_final_value * (a**2 + b**2)**2
         # self.J += self.rho_final_value * ((phi.coeffs[-1] - self.xf[2])**2)
         
+        """
         self.define_constraint([phi],
                                 xf[self.n_dimensions] - [5 / 360 * math.pi * 2],
                                 xf[self.n_dimensions] + [5 / 360 * math.pi * 2],
@@ -364,7 +461,7 @@ class Vehicle(VehicleBasis):
                                 xf[:self.n_dimensions_old] + [self.radious*1, self.radious*1],
                                 constraint_type='final_param',
                                 name=["yf"] * self.n_dimensions)
-        
+        """
         
         # self.define_constraint([p, q],
         #                         vertcat(xf[0] - self.radious*1, xf[1] - self.radious*1),
@@ -552,6 +649,13 @@ class Vehicle(VehicleBasis):
             for j in range(len(y)):
                 self.J += definite_integral(lambda_ji[j] * (y[j] - z_ji[j]), 0, 1)
                 self.J += definite_integral(self.rho * (y[j] - z_ji[j])**2, 0, 1)
+                
+            
+            # self.define_constraint([phi - z_ji[2]],
+            #                         [0],
+            #                         [0],
+            #                         constraint_type='overall',
+            #                         name=["phi"])
 
             # # Inter-vehicle collision avoidance
             # for i, neighbour in enumerate(self.neighbours):
@@ -912,28 +1016,29 @@ class Vehicle(VehicleBasis):
         # ax.plot(x_t[idx], y_t[idx], c = 'r', marker = 'o', markersize = 1, lxw=1,alpha = 1, zorder = 6)
         ax.plot(x_t[idx:], y_t[idx:], c = 'cornflowerblue',lw=0.8,alpha = 0.5, zorder = 3)
         # horizon_num_original = horizon_num
-        if self.vehicle_positions_new['vehicle_positions_new'][horizon_num_original] != []:
-            # ax.plot(x_t[-1], y_t[-1], 'go', markersize = 1, zorder = 3)
-            # print(horizon_num_original)
-            
-            x_, y_ = self.fp.frenet_to_inertial(self.vehicle_positions_new['vehicle_positions_new'][horizon_num_original][0], 
-                                                self.vehicle_positions_new['vehicle_positions_new'][horizon_num_original][1],
-                                                t_end)
-            ax.plot(x_,
-                    y_,
-                    'ro', markersize = 2, zorder = 3)
-        else:
-            # ax.plot(x_t[-1], y_t[-1], 'ro', markersize = 1, zorder = 3)
-            # ax.plot(self.xf[0], self.xf[1], 'go', markersize = 1, zorder = 3)
-            # x_, y_ = self.fp.frenet_to_inertial(self.variable_history['xf'][horizon_num_original][0], 
-            #                                     self.variable_history['xf'][horizon_num_original][1],
-            #                                     t_end)
-            x_, y_ = self.fp.frenet_to_inertial(self.variable_history['xf'][horizon_num][0], 
-                                                self.variable_history['xf'][horizon_num][1],
-                                                t_end)
-            ax.plot(x_,
-                    y_
-                    , 'go', markersize = 2, zorder = 3)
+        if self.vehicle_positions_new['vehicle_positions_new'] != []:
+            if self.vehicle_positions_new['vehicle_positions_new'][horizon_num_original] != []:
+                # ax.plot(x_t[-1], y_t[-1], 'go', markersize = 1, zorder = 3)
+                # print(horizon_num_original)
+                
+                x_, y_ = self.fp.frenet_to_inertial(self.vehicle_positions_new['vehicle_positions_new'][horizon_num_original][0], 
+                                                    self.vehicle_positions_new['vehicle_positions_new'][horizon_num_original][1],
+                                                    t_end)
+                ax.plot(x_,
+                        y_,
+                        'ro', markersize = 2, zorder = 3)
+            else:
+                # ax.plot(x_t[-1], y_t[-1], 'ro', markersize = 1, zorder = 3)
+                # ax.plot(self.xf[0], self.xf[1], 'go', markersize = 1, zorder = 3)
+                # x_, y_ = self.fp.frenet_to_inertial(self.variable_history['xf'][horizon_num_original][0], 
+                #                                     self.variable_history['xf'][horizon_num_original][1],
+                #                                     t_end)
+                x_, y_ = self.fp.frenet_to_inertial(self.variable_history['xf'][horizon_num][0], 
+                                                    self.variable_history['xf'][horizon_num][1],
+                                                    t_end)
+                ax.plot(x_,
+                        y_
+                        , 'go', markersize = 2, zorder = 3)
         
         
         x0, y0 = self.fp.frenet_to_inertial(p_solution(0)[0], q_solution(0)[0], t_start)
@@ -961,7 +1066,7 @@ class Vehicle(VehicleBasis):
         
         # Draw body
         radious = 0.05
-        radious = self.radious * 0.5 * 0.9
+        radious = self.radious * 0.5 #* 0.9
         height = radious
         width = radious
 
@@ -1013,14 +1118,14 @@ class Vehicle(VehicleBasis):
         ax.add_line(line4)
 
         # Circles
-        circle1 = plt.Circle((x1, y1), r_rotor, color='k', alpha=0.5, zorder = 10)
-        circle2 = plt.Circle((x2, y2), r_rotor, color='k', alpha=0.5, zorder = 10)
-        circle3 = plt.Circle((x3, y3), r_rotor, color='k', alpha=0.5, zorder = 10)
-        circle4 = plt.Circle((x4, y4), r_rotor, color='k', alpha=0.5, zorder = 10)
-        ax.add_patch(circle1)
-        ax.add_patch(circle2)
-        ax.add_patch(circle3)
-        ax.add_patch(circle4)
+        # circle1 = plt.Circle((x1, y1), r_rotor, color='k', alpha=0.5, zorder = 10)
+        # circle2 = plt.Circle((x2, y2), r_rotor, color='k', alpha=0.5, zorder = 10)
+        # circle3 = plt.Circle((x3, y3), r_rotor, color='k', alpha=0.5, zorder = 10)
+        # circle4 = plt.Circle((x4, y4), r_rotor, color='k', alpha=0.5, zorder = 10)
+        # ax.add_patch(circle1)
+        # ax.add_patch(circle2)
+        # ax.add_patch(circle3)
+        # ax.add_patch(circle4)
 
 
 
@@ -1042,7 +1147,7 @@ class Vehicle(VehicleBasis):
         flatten = lambda t: [item for sublist in t for item in sublist]
 
         # Plotting the environment
-        ax = self.plot_environment(ax)
+        ax = self.plot_environment(ax, 0)
 
         # Plotting of obstacle
         for obstacle in self.obstacles:
@@ -1076,6 +1181,18 @@ class Vehicle(VehicleBasis):
         
         # Sampling
         # t = np.linspace(0, 1, 100)
+        "---------"
+        x_t, y_t = [], []
+        for i, t_ in enumerate(self.t_intermediate_list):
+            idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
+            p_solution_, q_solution_ = np.array(self.x_intermediate_list)[idx][0], np.array(self.x_intermediate_list)[idx][1]
+            x_, y_ = self.fp.frenet_to_inertial(p_solution_, q_solution_, t_)
+            x_t += [x_]
+            y_t += [y_]
+            
+        ax.plot(x_t, y_t, 'ro')   
+        
+        "---------"
         
         x_t, y_t = [], []
         for t_ in np.linspace(0, t):
@@ -1092,7 +1209,7 @@ class Vehicle(VehicleBasis):
 
         # Draw body
         radious = 0.05
-        radious = self.radious * 0.5 * 0.9
+        radious = self.radious * 0.5 #* 0.9
         height = radious
         width = radious
 
@@ -1120,10 +1237,10 @@ class Vehicle(VehicleBasis):
         rot_x, rot_y = self.plot_rotation(l, 0, theta_c + np.pi/4*5)
         x3 = x0 + rot_x
         y3 = y0 + rot_y
-
         rot_x, rot_y = self.plot_rotation(l, 0, theta_c + np.pi/4*7)
         x4 = x0 + rot_x
         y4 = y0 + rot_y
+
 
 
         # Rotors
@@ -1144,14 +1261,14 @@ class Vehicle(VehicleBasis):
         ax.add_line(line4)
 
         # Circles
-        circle1 = plt.Circle((x1, y1), r_rotor, color='k', alpha=0.5, zorder = 10)
-        circle2 = plt.Circle((x2, y2), r_rotor, color='k', alpha=0.5, zorder = 10)
-        circle3 = plt.Circle((x3, y3), r_rotor, color='k', alpha=0.5, zorder = 10)
-        circle4 = plt.Circle((x4, y4), r_rotor, color='k', alpha=0.5, zorder = 10)
-        ax.add_patch(circle1)
-        ax.add_patch(circle2)
-        ax.add_patch(circle3)
-        ax.add_patch(circle4)
+        # circle1 = plt.Circle((x1, y1), r_rotor, color='k', alpha=0.5, zorder = 10)
+        # circle2 = plt.Circle((x2, y2), r_rotor, color='k', alpha=0.5, zorder = 10)
+        # circle3 = plt.Circle((x3, y3), r_rotor, color='k', alpha=0.5, zorder = 10)
+        # circle4 = plt.Circle((x4, y4), r_rotor, color='k', alpha=0.5, zorder = 10)
+        # ax.add_patch(circle1)
+        # ax.add_patch(circle2)
+        # ax.add_patch(circle3)
+        # ax.add_patch(circle4)
 
 
 

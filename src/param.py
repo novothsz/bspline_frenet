@@ -6,6 +6,8 @@ class ParamValX():
         self.T = []
         self.x0 = []
         self.xf = []
+        self.x_intermediate = []
+        self.t_intermediate = []
         # For the mooving Frenet-frame
         self.v_s = []
         self.curvature = []
@@ -44,6 +46,8 @@ class ParamValX():
         idx_T = list(locate(assemble_list, lambda a: a == 'T'))
         idx_x0 = list(locate(assemble_list, lambda a: a == 'x0'))
         idx_xf = list(locate(assemble_list, lambda a: a == 'xf'))
+        idx_x_intermediate = list(locate(assemble_list, lambda a: a == 'x_intermediate'))
+        idx_t_intermediate = list(locate(assemble_list, lambda a: a == 't_intermediate'))
         # For the mooving Frenet-frame
         idx_v_s = list(locate(assemble_list, lambda a: a == 'v_s'))
         idx_curvature = list(locate(assemble_list, lambda a: a == 'curvature'))
@@ -71,6 +75,12 @@ class ParamValX():
                 
             for i, idx in enumerate(idx_xf):
                 P0_assemble[idx] = self.xf[i]
+                
+            for i, idx in enumerate(idx_x_intermediate):
+                P0_assemble[idx] = self.x_intermediate[i]
+                
+            for i, idx in enumerate(idx_t_intermediate):
+                P0_assemble[idx] = self.t_intermediate[i]
                 
             # For the mooving Frenet-frame
             for i, idx in enumerate(idx_v_s):
@@ -111,6 +121,8 @@ class ParamValX():
             self.T = np.zeros((1, len(idx_T))).tolist()[0]
             self.x0 = np.zeros((1, len(idx_x0))).tolist()[0]
             self.xf = np.zeros((1, len(idx_xf))).tolist()[0]
+            self.x_intermediate = np.zeros((1, len(idx_x_intermediate))).tolist()[0]
+            self.t_intermediate = np.zeros((1, len(idx_t_intermediate))).tolist()[0]
             
             # For the mooving Frenet-frame
             self.v_s = np.zeros((1, len(idx_v_s))).tolist()[0]

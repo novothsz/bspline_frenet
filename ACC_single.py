@@ -110,40 +110,49 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     group.add_obstacles(obstacles)
     group.organise_neighbours()
     
+    
+    
+    n_intermediate_ADMM = 1
+    "n_steps = math.floor(1 / group.vehicles[0].t_step)"
+    n_steps = 10
+    group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
+    group.set_var({'t_step': 0})
+    group.set_var({'t_window_size': 1})
+    group.set_var({'t_end': 1})
+    group.set_var({'knot_intervals': 30})
+    group.set_var({'t_resolution_length': 100})
+    group.set_var({'rho': 50})
+    group.set_var({'rho_input': 100})
+    
+    "Changing default rotation for initial position"
+    positions = group.ellipse_generator(centerpoint = start_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 6, b = group.vehicles[0].radious * 3,
+                                               ellipse_rotation = math.pi / 2)
+    for i in range(len(group.vehicles)):
+            group.vehicles[i].set_position(position = positions[i], position_type = 'initial')
+            
+            
+    "Changing default rotation for final position"
+    positions = group.ellipse_generator(centerpoint = goal_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 6, b = group.vehicles[0].radious * 3,
+                                               ellipse_rotation = math.pi / 2)
+    for i in range(len(group.vehicles)):
+            group.vehicles[i].set_position(position = positions[i], position_type = 'final')
+    
+    
+    group.intermediate_position_generator_SINGLE_RUN()
     group.prepare()
     
     import time
     t_iter = time.time()
     iteration_times = []
     
-    # # Optimization
-    # for i in range(3):
-    #     group.solve()
-        
-    #     # Time-related things
-    #     iteration_times += [time.time() - t_iter]
-    #     print(str(i) + "th iteration time: " + str(time.time() - t_iter) + " seconds")
-    #     t_iter = time.time()
-        
-    #     group.frenet_plotter(iternum = i, seed = seed)
-        
-    # Simulation steps
-    # group.set_simulation(simulation=True)
     
-    n_intermediate_ADMM = 1
-    n_steps = math.floor(1 / group.vehicles[0].t_step)
-    group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
+    
     for i in range(0, n_steps):
         
         group.set_var({'stage': i})
         for j in range(n_intermediate_ADMM):
             group.solve()
             # group.frenet_plotter(iternum = j, seed = seed)
-            
-            # iteration_times += [time.time() - t_iter]
-            # print(str(i) + "th iteration time: " + str(time.time() - t_iter) + " seconds")
-            # t_iter = time.time()
-        
             group.set_simulation(False)
         
         # group.save_trajectory_to_csv(t_desired = 3, t_hover = 0)
@@ -153,11 +162,9 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         print(str(i) + "th iteration time: " + str(time.time() - t_iter) + " seconds")
         t_iter = time.time()
         
-        if i == 12:
-            kappa = True
-        group.intermediate_position_generator()
-        # group.frenet_plotter(iternum = i, seed = seed)
-        group.simulation_step()
+        # group.intermediate_position_generator()
+        group.frenet_plotter(iternum = i, seed = seed)
+        # group.simulation_step()
             
 
     # group.plot_moovie_frames(iternum=i, seed=seed)
@@ -179,7 +186,7 @@ start_position = [0.0, 0.0, 0.0]
 goal_position = [0.0, 0.0, 0.0]
 n_steps, group = run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage)
 # group.plot_moovie_frames(n_steps, iternum=0, seed=0)
-# group.plot_moovie_frames_old(iternum=0, seed=0)
+group.plot_moovie_frames_old(iternum=0, seed=0)
 
 # """
 # group.vehicles[0].calculate_formation_error()

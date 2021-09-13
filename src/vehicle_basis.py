@@ -26,6 +26,9 @@ class VehicleBasis(Environment):
     def __init__(self):
         super().__init__()
         
+        self.x_intermediate_list = []
+        self.t_intermediate_list = []
+        
         self.stage = []
         self.n_dimensions = 3 # this is considering a third state, the phi rotation angle
         self.state_len = 6 
@@ -77,9 +80,9 @@ class VehicleBasis(Environment):
         self.rho_input = 0.1 * 10 * 2 * 100
         self.rho_final_value = 0.1 * 10 * 100# * 1000
         
-        self.epsilon = 0.05 # try to keep minimum epsilon distance from the obstacle
+        self.epsilon = 0.03 # try to keep minimum epsilon distance from the obstacle
         # self.epsilon = self.radious # try to keep minimum epsilon distance from the obstacle
-        self.safety_weight = 100000 # cost parameter for epsilon
+        self.safety_weight = 1000000 # cost parameter for epsilon
         "TODO: something is wrong when shifting, we get too close to the obstacles and confusion..."
         "Safety weight needn't be this high"
         self.knot_intervals = 5 # number of knots for the output (position) spline of the vehicle
@@ -87,7 +90,7 @@ class VehicleBasis(Environment):
         self.t_resolution_length = self.knot_intervals + 1
         
         self.obstacle_avoidance_multiplier = 1.5
-        self.vehicle_avoidnce_multiplier = 1.2
+        self.vehicle_avoidance_multiplier = 1.5
         
         # Constraints on decision variables
         # self.y_min = [self.border_x[0], self.border_y[0]]
@@ -95,11 +98,14 @@ class VehicleBasis(Environment):
         self.y_min = [-1, -1, -math.pi]
         self.y_max = [1, 1, math.pi]
         
-        
+        u__ = 10e-5
+        u__ = 1
         self.u_min = [-50, -50]
         self.u_max = [50, 50]
         self.u_min = [-250, -250]
         self.u_max = [250, 250]
+        self.u_min = [-u__, -u__]
+        self.u_max = [u__, u__]
         
         # self.options = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 15, 'max_cpu_time': 100}}
         # self.options_z = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 50, 'max_cpu_time': 100}}
@@ -1102,16 +1108,19 @@ class VehicleBasis(Environment):
         # self.obstacles = []
         tmp_neighbours = self.neighbours
         self.neighbours = []
-        tmp_t_resolution_length = self.t_resolution_length
-        self.t_resolution_length = 30
+        # tmp_t_resolution_length = self.t_resolution_length
+        # self.t_resolution_length = 30
+        rho = self.rho
+        self.rho = 0
         self.setup_x_update()
         self.setup_z_update()
+        self.rho = rho
         self.x_update()
         self.initial_values["w0_initial"] = self.solution['x']# .full().reshape(1, -1).tolist()[0]
         self.initial_values["DvX"] = self.DvX
         # self.obstacles = tmp_obstacles
         self.neighbours = tmp_neighbours
-        self.t_resolution_length = tmp_t_resolution_length
+        # self.t_resolution_length = tmp_t_resolution_length
         print("Should be working, but please implement this method properly")
         # raise NotImplementedError('Please implement this method!')
 
