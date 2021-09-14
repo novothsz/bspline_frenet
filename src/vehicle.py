@@ -403,8 +403,9 @@ class Vehicle(VehicleBasis):
             for i, t_intermediate in enumerate(self.t_intermediate_list):
                 idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
                 # Define the parameter
-                x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += self.x_intermediate_list[idx]; assert len(self.x_intermediate_list) == n  # [0] * int(self.state_len/2)
-                t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += self.t_intermediate_list[i]
+                x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += np.array(self.x_intermediate_list)[idx].tolist(); assert len(self.x_intermediate_list)/(self.state_len/2) == n  # [0] * int(self.state_len/2)
+                # We cannot do this, we cannot evaluate the BSpline at a 'parameter' time
+                # t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += self.t_intermediate_list[i]
                 
                 # Let's try a new method. Let's play with the slack, instead of creating a cost function with variable weights.
                 slack = np.linspace(0.0001, 0.1, n)[i]
@@ -412,8 +413,8 @@ class Vehicle(VehicleBasis):
                 self.define_constraint([p(t_intermediate) - x_intermediate[0],
                                         q(t_intermediate) - x_intermediate[1],
                                         phi(t_intermediate) - x_intermediate[2]],
-                                        [0.0 - 0.1, 0.0 - 0.1, 0.0 - self.slack],
-                                        [0.0 + 0.1, 0.0 + 0.1, 0.0 + self.slack],
+                                        [0.0 - slack, 0.0 - slack, 0.0 - slack],
+                                        [0.0 + slack, 0.0 + slack, 0.0 + slack],
                                         constraint_type='time',
                                         name=["guidence" + str(i)] * 1)
                 
@@ -1065,6 +1066,26 @@ class Vehicle(VehicleBasis):
                 ax.plot(x_,
                         y_
                         , 'go', markersize = 2, zorder = 3)
+        
+        
+        t_intermediate_real = np.linspace(t_start + self.t_step, t_end, self.n_of_saved_waypoints)
+        for i, t in enumerate(t_intermediate_real):
+            idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
+            point_x = self.variable_history['x_intermediate_list'][horizon_num][0]
+            point_y = self.variable_history['x_intermediate_list'][horizon_num][1]
+            
+            x_, y_ = self.fp.frenet_to_inertial(point_x, 
+                                                    point_y,
+                                                    t)
+            if self.ID == 0:
+                ax.plot(x_,
+                            y_
+                            , 'ro', markersize = 2, zorder = 3)
+            else:
+                ax.plot(x_,
+                            y_
+                            , 'go', markersize = 2, zorder = 3)
+            
         
         
         x0, y0 = self.fp.frenet_to_inertial(p_solution(0)[0], q_solution(0)[0], t_start)

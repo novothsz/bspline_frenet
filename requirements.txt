@@ -1,0 +1,7 @@
+casadi
+matplotlib
+autograd
+pyyaml
+scipy
+pandas
+gurobipy

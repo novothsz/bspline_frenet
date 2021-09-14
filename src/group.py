@@ -63,7 +63,7 @@ class Group(Environment):
     
     # def intermediate_
     
-    def intermediate_position_generator_PENI_next(self):
+    def intermediate_position_generator_PENI_MPC(self):
         # 
         # Step 1: Set x0 as starting position
         vehicle_positions = []
@@ -74,14 +74,18 @@ class Group(Environment):
         # This means we have to call intermediate_position_generator_PENI_full for the t_window_size
         if self.vehicles[0].t_intermediate_list == []:
             
-            DFM_values = [np.linspace(self.vehicle[0].t_step, self.vehicle[0].t_window_size, self.vehicle[0].n_of_saved_waypoints),
-                          self.vehicle[0].t_window_size * 0.1, # lookback
-                          self.vehicle[0].t_window_size * 0.1] # lookahead
+            DFM_values = [np.linspace(self.vehicles[0].t_step, self.vehicles[0].t_window_size, self.vehicles[0].n_of_saved_waypoints),
+                          self.vehicles[0].t_window_size * 0.1, # lookback
+                          self.vehicles[0].t_window_size * 0.1] # lookahead
             self.intermediate_position_generator_PENI_full(DFM_values = DFM_values)
             # In this case, we are done :)
+            # No, we are not done. The vehicles have their local time... ;)
+            for vehicle in self.vehicles:
+                vehicle.t_intermediate_list = np.linspace(self.vehicles[0].t_step, 1, self.vehicles[0].n_of_saved_waypoints).tolist()
+            
             return self
             
-        # Step 2: get the current final time
+        # Step 2: get the current final time, rotation and scaling
         t_end = self.vehicles[0].t_end + self.vehicles[0].t_step #... well, maybe  - self.vehicles[0].t_step? Depends on when we call this method
         
         cum_rotation = self.cum_rotation
@@ -101,17 +105,14 @@ class Group(Environment):
         self.cum_rotation = cum_rotation
         self.cum_scaling = cum_scaling
         
+        # Step 6: update x_intermediate_list & t_intermediate_list
         for i, vehicle in enumerate(self.vehicles):
-            # if this is the first time accessing this list, then fill it up with n_of_saved_waypoints number of values
-            # this is because the optimizer nedds this many values, less is not enough
+            # otherwise, delete first elemnt, attach new element to the end
+            vehicle.x_intermediate_list = vehicle.x_intermediate_list[1:] + [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation] 
+            vehicle.variable_history['x_intermediate_list'] += [vehicle.x_intermediate_list[1:] + [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]] 
             
-            if vehicle.x_intermediate_list == []:
-                vehicle.x_intermediate_list = [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation] * vehicle.n_of_saved_waypoints
-                vehicle.t_intermediate_list = [t] * vehicle.n_of_saved_waypoints
-            else:
-                # otherwise, delete first elemnt, attach new element to the end
-                vehicle.x_intermediate_list = vehicle.x_intermediate_list[1:] + [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation] 
-                vehicle.t_intermediate_list = vehicle.t_intermediate_list[1:] + [t]
+            # We are not allowed to update the t_intermediate_list, because the vehicle has its "local" time
+            # vehicle.t_intermediate_list = vehicle.t_intermediate_list[1:] + [t]
                 
         return self
         
@@ -160,6 +161,7 @@ class Group(Environment):
         for vehicle_positions, cum_rotation, t_ in zip(vehicle_positions_saved, cum_rotation_saved, t_waypoints):
             for i, vehicle in enumerate(self.vehicles):
                 vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
+                vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
                 vehicle.t_intermediate_list += [t_]
         
         return self

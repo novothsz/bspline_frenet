@@ -119,7 +119,9 @@ class VehicleBasis(Environment):
                                   'y_j' : [],       # data_exchange_x_receive
                                   't_start' : [],
                                   't_end' : [],
-                                  'xf': []
+                                  'xf': [],
+                                  'x_intermediate_list' : [],
+                                  't_intermediate_list' : []
                 }
         self.n_intermediate_ADMM = 1
         self.vehicle_positions_new = {'stage' : [], 'vehicle_positions_new' : []}
@@ -209,7 +211,8 @@ class VehicleBasis(Environment):
             for t_ in t_evaluation:
                 for corner in obstacle.corners_spline:
                     self.PvX.obst += [corner[0](t_).tolist()[0][0], corner[1](t_).tolist()[0][0]]
-            
+        self.PvX.x_intermediate = self.x_intermediate_list
+        self.PvX.t_intermediate = self.t_intermediate_list
         try:
             self.PvX.z_ji = self.message_in['z_ji']
             self.PvX.lambda_ji = self.message_in['lambda_ji']
@@ -1112,8 +1115,10 @@ class VehicleBasis(Environment):
                                   'y_j' : [],       # data_exchange_x_receive
                                   't_start' : [],
                                   't_end' : [],
-                                  'xf': []
-        }
+                                  'xf': [],
+                                  'x_intermediate_list' : [],
+                                  't_intermediate_list' : []
+                }
         
     def initialize_x(self):
         # tmp_obstacles = self.obstacles

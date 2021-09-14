@@ -126,7 +126,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
     # n_steps = 10
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
-    group.set_var({'t_step': 0.01 * 1})
+    group.set_var({'t_step': 0.04 * 1})
     group.set_var({'t_window_size': 0.2})
     group.set_var({'t_end': 0 + 0.2})
     group.set_var({'knot_intervals': 5})
@@ -139,7 +139,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     group.DFM_lookahead = group.vehicles[0].t_window_size * 0.2
     group.DFM_lookback = group.vehicles[0].t_window_size * 0.6
     
-    group.set_var({'MPC_version': False})
+    group.set_var({'MPC_version': True})
     
     
     
@@ -157,7 +157,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
             group.vehicles[i].set_position(position = positions[i], position_type = 'final')
     
     
-    # group.intermediate_position_generator_SINGLE_RUN()
+    group.intermediate_position_generator_PENI_MPC()
     group.prepare()
     
     import time
@@ -181,7 +181,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         print(str(i) + "th iteration time: " + str(time.time() - t_iter) + " seconds")
         t_iter = time.time()
         
-        group.intermediate_position_generator()
+        group.intermediate_position_generator_PENI_MPC()
         group.frenet_plotter(iternum = i, seed = seed)
         group.simulation_step()
             
@@ -210,6 +210,6 @@ group.plot_moovie_frames(n_steps, iternum=0, seed=0)
 # """
 # group.vehicles[0].calculate_formation_error()
 # group.calculate_formation_error()
-group.save_trajectory_to_csv(n_steps)
+# group.save_trajectory_to_csv(n_steps)
 "This is not good like this! We need to save the final plots for the various n_intermediate_ADMM values and run the code multiple times"
 "Only then can we assemble and compare the results."
