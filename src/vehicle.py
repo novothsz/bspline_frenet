@@ -31,6 +31,10 @@ class Vehicle(VehicleBasis):
         self.simulation = False
         self.shift_enabled = False
         
+        self.n_of_saved_waypoints = math.floor(self.t_window_size / self.t_step)
+        self.waypoints = []
+        self.waypoint_timestamps = []
+        
     
 
 
@@ -334,9 +338,10 @@ class Vehicle(VehicleBasis):
         #                                 + (q.derivative().coeffs[-1] - self.xf[3])**2)
         
         "state suggestion"
-        if self.t_intermediate_list != []:
-            n_intermediate = 10
-            rho_intermediate = 10
+        # if self.t_intermediate_list != []:
+        if self.MPC_version == False:
+            # n_intermediate = 10
+            # rho_intermediate = 10
             for i, t_intermediate in enumerate(self.t_intermediate_list):
                 idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
                 
@@ -392,30 +397,51 @@ class Vehicle(VehicleBasis):
                                             constraint_type='time',
                                             name=["guidence" + str(i)] * 1)
                     
-        else:
-            
-                    
-            lambda_ = np.power(np.linspace(1, 0, p.coeffs.shape[0]), 1)
-            for i in range(p.coeffs.shape[0]):
-                self.J += self.rho_final_value * ((p.coeffs[i] -      (lambda_[i] * x0[0] + (1 - lambda_[i]) * xf[0])     )**2)
-                self.J += self.rho_final_value * ((q.coeffs[i] -      (lambda_[i] * x0[1] + (1 - lambda_[i]) * xf[1])     )**2)
-                self.J += self.rho_final_value * ((phi.coeffs[i] -      (lambda_[i] * x0[2] + (1 - lambda_[i]) * xf[2])     )**2)
-    
-            self.define_constraint([phi],
-                                    xf[self.n_dimensions] - [5 / 360 * math.pi * 2], # self.slack, # 
-                                    xf[self.n_dimensions] + [5 / 360 * math.pi * 2], # self.slack, # 
-                                    constraint_type='final_param',
-                                    name=["phif"] * self.n_dimensions)
-                                            
-            # Version 1
-            # Final position constraint on y
-            self.define_constraint([p, q],
-                                    xf[:self.n_dimensions_old] - [self.radious*1, self.radious*1],
-                                    xf[:self.n_dimensions_old] + [self.radious*1, self.radious*1],
-                                    constraint_type='final_param',
-                                    name=["yf"] * self.n_dimensions)
+        elif self.MPC_version == True:
+            n = self.n_of_saved_waypoints
+            assert n == len(self.t_intermediate_list) # Please generate the intermediate points first :)
+            for i, t_intermediate in enumerate(self.t_intermediate_list):
+                idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
+                # Define the parameter
+                x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += self.x_intermediate_list[idx]; assert len(self.x_intermediate_list) == n  # [0] * int(self.state_len/2)
+                t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += self.t_intermediate_list[i]
                 
-        
+                # Let's try a new method. Let's play with the slack, instead of creating a cost function with variable weights.
+                slack = np.linspace(0.0001, 0.1, n)[i]
+                
+                self.define_constraint([p(t_intermediate) - x_intermediate[0],
+                                        q(t_intermediate) - x_intermediate[1],
+                                        phi(t_intermediate) - x_intermediate[2]],
+                                        [0.0 - 0.1, 0.0 - 0.1, 0.0 - self.slack],
+                                        [0.0 + 0.1, 0.0 + 0.1, 0.0 + self.slack],
+                                        constraint_type='time',
+                                        name=["guidence" + str(i)] * 1)
+                
+                
+                
+                
+            # lambda_ = np.power(np.linspace(1, 0, p.coeffs.shape[0]), 1)
+            # for i in range(p.coeffs.shape[0]):
+            #     self.J += self.rho_final_value * ((p.coeffs[i] -      (lambda_[i] * x0[0] + (1 - lambda_[i]) * xf[0])     )**2)
+            #     self.J += self.rho_final_value * ((q.coeffs[i] -      (lambda_[i] * x0[1] + (1 - lambda_[i]) * xf[1])     )**2)
+            #     self.J += self.rho_final_value * ((phi.coeffs[i] -      (lambda_[i] * x0[2] + (1 - lambda_[i]) * xf[2])     )**2)
+    
+            # self.define_constraint([phi],
+            #                         xf[self.n_dimensions] - [5 / 360 * math.pi * 2], # self.slack, # 
+            #                         xf[self.n_dimensions] + [5 / 360 * math.pi * 2], # self.slack, # 
+            #                         constraint_type='final_param',
+            #                         name=["phif"] * self.n_dimensions)
+                                            
+            # # Version 1
+            # # Final position constraint on y
+            # self.define_constraint([p, q],
+            #                         xf[:self.n_dimensions_old] - [self.radious*1, self.radious*1],
+            #                         xf[:self.n_dimensions_old] + [self.radious*1, self.radious*1],
+            #                         constraint_type='final_param',
+            #                         name=["yf"] * self.n_dimensions)
+                
+        else:
+            raise NotImplementedError()
         
         
         "final_param"

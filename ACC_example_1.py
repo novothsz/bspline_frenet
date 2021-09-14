@@ -138,6 +138,13 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     group.DFM_division = 7
     group.DFM_lookback = 1 / group.DFM_division / 2
     group.DFM_lookahead = 1 / group.DFM_division / 2
+    
+    
+    group.set_var({'MPC_version': False})
+    
+    
+    
+    
     # group.DFM_division = 4
     # group.DFM_lookback = 0.1
     # group.DFM_lookahead = 0.1

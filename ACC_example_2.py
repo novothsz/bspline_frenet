@@ -139,6 +139,10 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     group.DFM_lookahead = group.vehicles[0].t_window_size * 0.2
     group.DFM_lookback = group.vehicles[0].t_window_size * 0.6
     
+    group.set_var({'MPC_version': False})
+    
+    
+    
     "Changing default rotation for initial position"
     positions = group.ellipse_generator(centerpoint = start_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 6, b = group.vehicles[0].radious * 3,
                                                ellipse_rotation = math.pi / 2)

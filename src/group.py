@@ -35,6 +35,12 @@ class Group(Environment):
         self.DFM_division = 12
         self.DFM_lookback = 1 / self.DFM_division / 2
         self.DFM_lookahead = 1 / self.DFM_division / 2
+        self.MPC_version = []
+        
+        
+        self.cum_rotation = 0
+        self.cum_scaling = 1
+        
         
         
     
@@ -55,7 +61,62 @@ class Group(Environment):
             corners += [corners_tmp]
         return corners
     
-    def intermediate_position_generator_PENI_full(self):
+    # def intermediate_
+    
+    def intermediate_position_generator_PENI_next(self):
+        # 
+        # Step 1: Set x0 as starting position
+        vehicle_positions = []
+        for vehicle in self.vehicles:
+            vehicle_positions += [vehicle.x0[:2]]
+            
+        # Step X: if the list "t_intermediate_list" hasn't reached its full length, then we are at the beginning, and need to fill it up.
+        # This means we have to call intermediate_position_generator_PENI_full for the t_window_size
+        if self.vehicles[0].t_intermediate_list == []:
+            
+            DFM_values = [np.linspace(self.vehicle[0].t_step, self.vehicle[0].t_window_size, self.vehicle[0].n_of_saved_waypoints),
+                          self.vehicle[0].t_window_size * 0.1, # lookback
+                          self.vehicle[0].t_window_size * 0.1] # lookahead
+            self.intermediate_position_generator_PENI_full(DFM_values = DFM_values)
+            # In this case, we are done :)
+            return self
+            
+        # Step 2: get the current final time
+        t_end = self.vehicles[0].t_end + self.vehicles[0].t_step #... well, maybe  - self.vehicles[0].t_step? Depends on when we call this method
+        
+        cum_rotation = self.cum_rotation
+        cum_scaling = self.cum_scaling
+        
+        # Step 3: zizzentsük be
+        t = t_end
+        lookback = self.vehicles[0].t_window_size * 0.2
+        lookahead = self.vehicles[0].t_window_size * 0.2
+        t_zizz = np.linspace( (t-lookback >= 0) * (t-lookback) + (t-lookback > 0) * 0,
+                                  (t+lookahead <= 1) * (t+lookahead) + (t+lookahead > 1) * 1,
+                                  5)
+        # Step 4: Get the least cost formation
+        vehicle_positions, cum_rotation, cum_scaling = self.intermediate_position_generator_PENI(vehicle_positions, cum_rotation, cum_scaling, t_zizz)
+        
+        # Step 5: Save stuff
+        self.cum_rotation = cum_rotation
+        self.cum_scaling = cum_scaling
+        
+        for i, vehicle in enumerate(self.vehicles):
+            # if this is the first time accessing this list, then fill it up with n_of_saved_waypoints number of values
+            # this is because the optimizer nedds this many values, less is not enough
+            
+            if vehicle.x_intermediate_list == []:
+                vehicle.x_intermediate_list = [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation] * vehicle.n_of_saved_waypoints
+                vehicle.t_intermediate_list = [t] * vehicle.n_of_saved_waypoints
+            else:
+                # otherwise, delete first elemnt, attach new element to the end
+                vehicle.x_intermediate_list = vehicle.x_intermediate_list[1:] + [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation] 
+                vehicle.t_intermediate_list = vehicle.t_intermediate_list[1:] + [t]
+                
+        return self
+        
+        
+    def intermediate_position_generator_PENI_full(self, DFM_values = []):
         import time
         t_iter = time.time()
         # Set x0 as starting position
@@ -66,16 +127,24 @@ class Group(Environment):
         vehicle_positions_saved = []
         cum_rotation_saved = []
         cum_scaling_saved = []
-        cum_rotation = 0
-        cum_scaling = 1
+        cum_rotation = self.cum_rotation
+        cum_scaling = self.cum_scaling
         # we start from 0, the first item in vehicle_positions_saved will be the original
         # vehicle_positions, because at timepoint 0 there will be no collision, hence no
         # rotation or scaling will occure
-        # plt.figure()
-        for t in np.linspace(0, 1, self.DFM_division):
+        if DFM_values == []:
+            t_waypoints = np.linspace(0, 1, self.DFM_division)
+            lookback = self.DFM_lookback
+            lookahead = self.DFM_lookahead
+        else:
+            t_waypoints = DFM_values[0]
+            lookback = DFM_values[1]
+            lookahead = DFM_values[2]
             
-            t_zizz = np.linspace( (t-self.DFM_lookback >= 0) * (t-self.DFM_lookback) + (t-self.DFM_lookback > 0) * 0,
-                                  (t+self.DFM_lookahead <= 1) * (t+self.DFM_lookahead) + (t+self.DFM_lookahead > 1) * 1,
+        for t in t_waypoints: # if you change this line, make sure you also change the appropriate for loop at the end of the function if necessary
+            
+            t_zizz = np.linspace( (t-lookback >= 0) * (t-lookback) + (t-lookback > 0) * 0,
+                                  (t+lookahead <= 1) * (t+lookahead) + (t+lookahead > 1) * 1,
                                   10)
             
             vehicle_positions, cum_rotation, cum_scaling = self.intermediate_position_generator_PENI(vehicle_positions, cum_rotation, cum_scaling, t_zizz)
@@ -84,39 +153,18 @@ class Group(Environment):
             cum_rotation_saved += [cum_rotation]
             cum_scaling_saved += [cum_scaling]
             
-        # plt.figure()
-        # plt.plot(cum_rotation_saved)
-        # plt.show()
         print('peni full runtime: ' + str(time.time() - t_iter))
         for vehicle in self.vehicles:
             vehicle.x_intermediate_list = []
             vehicle.t_intermediate_list = []
-        for vehicle_positions, cum_rotation, t_ in zip(vehicle_positions_saved, cum_rotation_saved, np.linspace(0, 1, self.DFM_division)):
+        for vehicle_positions, cum_rotation, t_ in zip(vehicle_positions_saved, cum_rotation_saved, t_waypoints):
             for i, vehicle in enumerate(self.vehicles):
-                vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1],cum_rotation]
+                vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
                 vehicle.t_intermediate_list += [t_]
-        return cum_rotation_saved, cum_scaling_saved, vehicle_positions_saved
+        
+        return self
+        # return cum_rotation_saved, cum_scaling_saved, vehicle_positions_saved
     
-    """
-    
-        plt.figure()
-        t = np.linspace(0, 1, 12)
-        # for t, vehicle_positions in zip(t[::10], vehicle_positions_saved[::10]):
-        for t, vehicle_positions in zip(t, vehicle_positions_saved):
-            x_saved = []
-            y_saved = []
-            for c, position in enumerate(vehicle_positions):
-                x, y = group.fp.frenet_to_inertial(position[0], position[1], t)
-                x_saved += [x]
-                y_saved += [y]
-                # plt.plot(x, y, c = ['r', 'g', 'b', 'k'][c], marker = '.')
-                # plt.plot(position[0] + t,position[1], c = ['r', 'g', 'b', 'k'][c], marker = '.')
-                
-            plt.plot(x_saved, y_saved, c = ['r', 'g', 'b', 'k'][c], marker = '.')
-        plt.show()
-            """
-        # plt.show() 
-            
     
     def intermediate_position_generator_PENI(self, vehicle_positions, cum_rotation, cum_scaling, t):
         """The goal of this function is to receive a set of vehicle positions and calculate a rotated-scaled frame, that does not collide with 
@@ -140,20 +188,7 @@ class Group(Environment):
         vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
         collision_saved = []
         for t_ in t:
-            # print(self.get_obstacle_corners(t_))
-            # assert 0
             all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, self.get_obstacle_corners(t_))
-            # print(collision)
-            # print("")
-            # print(vehicle_positions_scaled_rotated)
-            # print("")
-            # print(self.get_obstacle_corners(t_))
-            # assert 0
-            # for corners in self.get_obstacle_corners(t_):
-            #     for i, corner in enumerate(corners):
-            #         plt.plot(corner[0],corner[1], c = ['r', 'g', 'b', 'k'][i], marker = '.')
-            # for i, vehicle_position in enumerate(vehicle_positions_scaled_rotated):
-            #     plt.plot(vehicle_position[0],vehicle_position[1], c = ['pink', 'orange', 'purple', 'cyan'][i], marker = '*')
            
             collision_saved += [False]
             if collision == True:
@@ -163,8 +198,6 @@ class Group(Environment):
         if all(collision is False for collision in collision_saved):
             print('-, -')
             return vehicle_positions_scaled_rotated, cum_rotation + rotation_angle, cum_scaling * scaling_factor
-        # print("Step 0 done")
-        
         # Otherwise, if we cannot rotate&scale back, find something else:
         
         # Step 1: generate possible rotation angles & scaling factors
@@ -177,8 +210,6 @@ class Group(Environment):
         scaling_factors_shrink = [  1 / (scaling_step ** i)  for i in range(0, math.floor(abs(math.log(0.25) / math.log(scaling_step))))  ]
         scaling_factors_expand = [  1 * scaling_step ** i  for i in range(0, math.floor(abs(math.log(0.25) / math.log(scaling_step))))  ]
         scaling_factors = scaling_factors_shrink + scaling_factors_expand
-        
-        
         
         
         # Step 2: We iterate through all possible rotation & scaling possibilities
@@ -1019,6 +1050,10 @@ class Group(Environment):
                 self.vehicles[i].rho_input = var['rho_input']
             if 'rho_final_value' in var:
                 self.vehicles[i].rho_final_value = var['rho_final_value']
+                
+            if 'MPC_version' in var:
+                self.vehicles[i].MPC_version = var['MPC_version']
+                
                 
     def set_simulation(self, simulation = False):
         for i in range(len(self.vehicles)):
