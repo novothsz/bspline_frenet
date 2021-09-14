@@ -45,7 +45,209 @@ class Group(Environment):
     ###########################################################################
     ###########################################################################
     ###########################################################################
+    
+    # import functools
+    # @functools.lru_cache(maxsize=None)
+    def get_obstacle_corners(self, t):
+        corners = []
+        for obstacle in self.vehicles[0].obstacles:
+            corners_tmp = [ [corner[0](t).tolist()[0][0], corner[1](t).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
+            corners += [corners_tmp]
+        return corners
+    
+    def intermediate_position_generator_PENI_full(self):
+        import time
+        t_iter = time.time()
+        # Set x0 as starting position
+        vehicle_positions = []
+        for vehicle in self.vehicles:
+            vehicle_positions += [vehicle.x0[:2]]
+            
+        vehicle_positions_saved = []
+        cum_rotation_saved = []
+        cum_scaling_saved = []
+        cum_rotation = 0
+        cum_scaling = 1
+        # we start from 0, the first item in vehicle_positions_saved will be the original
+        # vehicle_positions, because at timepoint 0 there will be no collision, hence no
+        # rotation or scaling will occure
+        # plt.figure()
+        for t in np.linspace(0, 1, self.DFM_division):
+            
+            t_zizz = np.linspace( (t-self.DFM_lookback >= 0) * (t-self.DFM_lookback) + (t-self.DFM_lookback > 0) * 0,
+                                  (t+self.DFM_lookahead <= 1) * (t+self.DFM_lookahead) + (t+self.DFM_lookahead > 1) * 1,
+                                  10)
+            
+            vehicle_positions, cum_rotation, cum_scaling = self.intermediate_position_generator_PENI(vehicle_positions, cum_rotation, cum_scaling, t_zizz)
+            
+            vehicle_positions_saved += [vehicle_positions]
+            cum_rotation_saved += [cum_rotation]
+            cum_scaling_saved += [cum_scaling]
+            
+        # plt.figure()
+        # plt.plot(cum_rotation_saved)
+        # plt.show()
+        print('peni full runtime: ' + str(time.time() - t_iter))
+        for vehicle in self.vehicles:
+            vehicle.x_intermediate_list = []
+            vehicle.t_intermediate_list = []
+        for vehicle_positions, cum_rotation, t_ in zip(vehicle_positions_saved, cum_rotation_saved, np.linspace(0, 1, self.DFM_division)):
+            for i, vehicle in enumerate(self.vehicles):
+                vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1],cum_rotation]
+                vehicle.t_intermediate_list += [t_]
+        return cum_rotation_saved, cum_scaling_saved, vehicle_positions_saved
+    
+    """
+    
+        plt.figure()
+        t = np.linspace(0, 1, 12)
+        # for t, vehicle_positions in zip(t[::10], vehicle_positions_saved[::10]):
+        for t, vehicle_positions in zip(t, vehicle_positions_saved):
+            x_saved = []
+            y_saved = []
+            for c, position in enumerate(vehicle_positions):
+                x, y = group.fp.frenet_to_inertial(position[0], position[1], t)
+                x_saved += [x]
+                y_saved += [y]
+                # plt.plot(x, y, c = ['r', 'g', 'b', 'k'][c], marker = '.')
+                # plt.plot(position[0] + t,position[1], c = ['r', 'g', 'b', 'k'][c], marker = '.')
+                
+            plt.plot(x_saved, y_saved, c = ['r', 'g', 'b', 'k'][c], marker = '.')
+        plt.show()
+            """
+        # plt.show() 
+            
+    
+    def intermediate_position_generator_PENI(self, vehicle_positions, cum_rotation, cum_scaling, t):
+        """The goal of this function is to receive a set of vehicle positions and calculate a rotated-scaled frame, that does not collide with 
+        obstaacles at the given time-point.
+        If t is a list of time values, then each of these time values will be checked for collision"""
+        
+        
+        # Step 0: first always try to turn&scale it back... :)
+        #Backturning
+        rotation_angle = -1 * self.back_rotation_factor * cum_rotation
+        
+        # Backscaling
+        deviance = abs(1 - 1 / cum_scaling)
+        deviance *= self.back_scaling_factor
+        if cum_scaling >= 1:
+            scaling_factor = 1 - deviance
+        else:
+            scaling_factor = 1 + deviance
+        
+        vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
+        vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
+        collision_saved = []
+        for t_ in t:
+            # print(self.get_obstacle_corners(t_))
+            # assert 0
+            all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, self.get_obstacle_corners(t_))
+            # print(collision)
+            # print("")
+            # print(vehicle_positions_scaled_rotated)
+            # print("")
+            # print(self.get_obstacle_corners(t_))
+            # assert 0
+            # for corners in self.get_obstacle_corners(t_):
+            #     for i, corner in enumerate(corners):
+            #         plt.plot(corner[0],corner[1], c = ['r', 'g', 'b', 'k'][i], marker = '.')
+            # for i, vehicle_position in enumerate(vehicle_positions_scaled_rotated):
+            #     plt.plot(vehicle_position[0],vehicle_position[1], c = ['pink', 'orange', 'purple', 'cyan'][i], marker = '*')
+           
+            collision_saved += [False]
+            if collision == True:
+                collision_saved[-1] = True
+                break
+        
+        if all(collision is False for collision in collision_saved):
+            print('-, -')
+            return vehicle_positions_scaled_rotated, cum_rotation + rotation_angle, cum_scaling * scaling_factor
+        # print("Step 0 done")
+        
+        # Otherwise, if we cannot rotate&scale back, find something else:
+        
+        # Step 1: generate possible rotation angles & scaling factors
+        degree_step = 5
+        radian_step = degree_step/360*2 * math.pi
+        rotation_angles = [[0 + radian_step * i, 0 - radian_step * i] for i in range(1, int(math.pi/2/radian_step))]
+        rotation_angles = np.array(rotation_angles).reshape(-1).tolist()
+        
+        scaling_step = 1.5
+        scaling_factors_shrink = [  1 / (scaling_step ** i)  for i in range(0, math.floor(abs(math.log(0.25) / math.log(scaling_step))))  ]
+        scaling_factors_expand = [  1 * scaling_step ** i  for i in range(0, math.floor(abs(math.log(0.25) / math.log(scaling_step))))  ]
+        scaling_factors = scaling_factors_shrink + scaling_factors_expand
+        
+        
+        
+        
+        # Step 2: We iterate through all possible rotation & scaling possibilities
+        # Then, in b) we check, if that specific rotation & sacling results in collision between [t0, tf] or not.
+        costs = []
+        vehicle_positions_new_saved = []
+        rotation_angle_new_saved = []
+        scaling_factor_new_saved = []
+        collision_saved = []
+        for scaling_factor in scaling_factors:
+            vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
+            for rotation_angle in rotation_angles:
+                
+                vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
+                # Step 2b) check for each t_ in t if collision happens. If yes, do not check further, 
+                # the given scaling factor & rotation angle is not good.
+                
+                # First let's save these :)
+                vehicle_positions_new_saved += [vehicle_positions_scaled_rotated]
+                rotation_angle_new_saved += [rotation_angle]
+                scaling_factor_new_saved += [scaling_factor]
+                collision_saved += [False]
+                
+                collision_saved_tmp = []
+                for t_ in t:
+                    all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, self.get_obstacle_corners(t_))
+                    collision_saved_tmp += [collision]
+                    if collision == True:
+                        collision_saved[-1] = True
+                        costs += [math.inf]
+                        break
+                # if for any t_ we did not break and put inf cost into costs, then calculate a proper cost   
+                if all(collision is False for collision in collision_saved_tmp):
+                    # Step 2c) if no collision happens, calculate a cost for the given rotation & scaling combo
+                    cost = self.formation_change_cost_calculator(vehicle_positions, vehicle_positions_scaled_rotated, rotation_angle, scaling_factor)
+                    # print(scaling_factor, rotation_angle, cost)
+                    costs += [cost]
+        
+        # if we cannot find good solution, do nothing
+        if all(collision_saved):
+            vehicle_positions_new = vehicle_positions
+            cum_rotation = 0
+            cum_scaling = 1
+            print(0, 1)
+        else: 
+            # Now we have the costs and everything in order.
+            # Let's find the least cost value.
+            cost_min = min(costs)
+            cost_min_idx = costs.index(cost_min)
+            # And the ideal position, rotation angle & scaling factor is:
+            vehicle_positions_new = vehicle_positions_new_saved[cost_min_idx]
+            rotation_angle_new = rotation_angle_new_saved[cost_min_idx]
+            scaling_factor_new = scaling_factor_new_saved[cost_min_idx]
+            
+            cum_rotation += rotation_angle_new
+            cum_scaling *= scaling_factor_new
+            
+            print(rotation_angle_new, scaling_factor_new)
+        
+        
+        return vehicle_positions_new, cum_rotation, cum_scaling
+        
+        
+        
     def intermediate_position_generator_SINGLE_RUN(self):
+        
+        import time
+        t_iter = time.time()
+        
         
         # Step 1: get the current final time
         print('start ...')
@@ -54,8 +256,8 @@ class Group(Environment):
         # Step 3: get position of vehicles at the final time of the previously calculated horizon
         vehicle_positions = []
         "Changing default rotation for initial position"
-        positions = self.ellipse_generator(centerpoint = [0, 0, 0], n_positions = len(self.vehicles), a = self.vehicles[0].radious * 6, b = self.vehicles[0].radious * 3,
-                                                   ellipse_rotation = math.pi / 2)
+        # positions = self.ellipse_generator(centerpoint = [0, 0, 0], n_positions = len(self.vehicles), a = self.vehicles[0].radious * 6, b = self.vehicles[0].radious * 3,
+        #                                            ellipse_rotation = math.pi / 2)
         for vehicle in self.vehicles:
             vehicle_positions += [vehicle.x0[:2]]
                 
@@ -94,6 +296,7 @@ class Group(Environment):
             scaling_factor_new_saved = []
             obstacle_corners_zizz = []
             if collision == True:
+                # t_iter = time.time()
             # if True:
                 degree_step = 5
                 radian_step = degree_step/360*2 * math.pi
@@ -152,6 +355,7 @@ class Group(Environment):
                 vehicle_positions = vehicle_positions_new
                 rotation_angle_new = rotation_angle_new_saved[cost_min_idx]
                 scaling_factor_new = scaling_factor_new_saved[cost_min_idx]
+                
                 
             elif collision == False:
                 deviance = abs(1 - 1 / self.scaling_factor)
@@ -212,6 +416,8 @@ class Group(Environment):
         plt.show()
         # print(self.vehicles[0].x_intermediate_list
         # assert 0
+        
+        print('single run time: ' + str(time.time() - t_iter))
         print('done :)')
         
         
@@ -219,6 +425,7 @@ class Group(Environment):
         self.scaling_factor = 1
         self.og_final_positions = []
         
+        # print(time.time() - t_iter)
         return self
     
     ###########################################################################
@@ -393,11 +600,27 @@ class Group(Environment):
     ###########################################################################
     ###########################################################################
     ###########################################################################
+    # def formation_change_cost_calculator_PENI(self, vehicle_positions_original, vehicle_positions_new, rotation_angle = 0, scaling_factor = 1, cum_rotation, cum_scaling):
+    #     cost = 0
+    #     alpha_distance = 0.1 * 100
+    #     alpha_rotation = 0.001
+    #     alpha_scaling_up = 1000
+    #     alpha_scaling_down = 100
+    #     for original, new in zip(vehicle_positions_original, vehicle_positions_new):
+    #         cost += alpha_distance * ((original[0] - new[0])**2 + (original[1] - new[1])**2)
+            
+            
+    #     cost += alpha_rotation * abs(rotation_angle)
+    #     if scaling_factor > 1:
+    #         cost += alpha_scaling_up * abs(1-scaling_factor)
+    #     if scaling_factor < 1:
+    #         cost += alpha_scaling_down * abs(1-scaling_factor)
+        
     
     def formation_change_cost_calculator(self, vehicle_positions_original, vehicle_positions_new, rotation_angle = 0, scaling_factor = 1):
         cost = 0
         alpha_distance = 0.1 * 100
-        alpha_rotation = 0.001
+        alpha_rotation = 0.1
         alpha_scaling_up = 1000
         alpha_scaling_down = 100
         for original, new in zip(vehicle_positions_original, vehicle_positions_new):
@@ -578,6 +801,8 @@ class Group(Environment):
         return positions
     
     # def ellipse_generator(self,
+    # import functools
+    # @functools.lru_cache(maxsize=None)
     def ellipse_generator(self, centerpoint : list, n_positions : int, a : float, b : float, 
                           ellipse_rotation : float = 0, vehicles_rotation : float = math.pi / 4,
                           ellipse_scale_x : float = 1, ellipse_scale_y : float = 1):

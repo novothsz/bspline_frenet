@@ -124,7 +124,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     n_intermediate_ADMM = 1
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
-    n_steps = 9
+    n_steps = 1
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
     group.set_var({'t_step': 0})
     group.set_var({'t_window_size': 1})
@@ -158,7 +158,9 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
             group.vehicles[i].set_position(position = positions[i], position_type = 'final')
     
     
-    group.intermediate_position_generator_SINGLE_RUN()
+    group.intermediate_position_generator_PENI_full()
+    # group.intermediate_position_generator_SINGLE_RUN()
+    # assert 0
     group.prepare()
     
     import time

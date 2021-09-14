@@ -852,9 +852,10 @@ class VehicleBasis(Environment):
             y = BSpline(basis, coeffs2)
             phi = BSpline(basis, coeffs3)
     
-            # Sampling
-            t = np.linspace(0, self.t_step/self.t_window_size, 100)
-            # t = np.linspace(0, 1, 100)
+            # Sampling (self.t_step == 0) && (self.t_window_size == 1) && (self.t_end == 1)
+            # t = np.linspace(0, self.t_step/self.t_window_size, 100)
+            if (self.t_step == 0) and (self.t_window_size == 1) and (self.t_end == 1):
+                t = np.linspace(0, 1, 100)
             x_t = [x(t_) for t_ in t]
             y_t = [y(t_) for t_ in t]
             phi_t = [phi(t_) for t_ in t]
@@ -864,17 +865,28 @@ class VehicleBasis(Environment):
             
             x_t_saved += x_t
             y_t_saved += y_t
+        
             
         t_desired = 10
+        # print(x_t_saved)
         t = np.linspace(0, t_desired, n_steps * 100)
         poly7_x = np.poly1d(np.polyfit(t, x_t_saved, deg=7))
         poly7_y = np.poly1d(np.polyfit(t, y_t_saved, deg=7))
         
-        # plt.figure()
-        # t = np.linspace(0, t_desired)
-        # plt.plot(poly7_x(t), poly7_y(t))
-        # plt.show()
+        # plt.close('all')
+        plt.figure()
+        t = np.linspace(0, t_desired)
+        plt.plot(poly7_x(t), poly7_y(t))
+        
+        plt.show()
         # assert 0
+        
+        
+        # Adding an extra 7 degree polynomial for hoowering at the end
+        final_x = poly7_x(t_desired)
+        final_y = poly7_y(t_desired)
+        however_x = [final_x] + [0] * 7
+        however_y = [final_y] + [0] * 7
         
         # The path !!! now with correct arrangement of the coefficients !!!
         # Storing the coefficients in the format, that crazyswarm requires
@@ -885,9 +897,9 @@ class VehicleBasis(Environment):
         poly7_y.reverse()
 
         # Combining the polinomials into a list
-        T_list = [[t_desired]]
-        poly7_x_list = [poly7_x]
-        poly7_y_list = [poly7_y]
+        T_list = [[t_desired], [2]]
+        poly7_x_list = [poly7_x, however_x]
+        poly7_y_list = [poly7_y, however_y]
         self.stage = 0
         # Writing the list to file
         self.write_csv(T_list, poly7_x_list, poly7_y_list)

@@ -121,7 +121,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     group.organise_neighbours()
     
     
-    1
+    
     n_intermediate_ADMM = 1
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
     n_steps = 5
