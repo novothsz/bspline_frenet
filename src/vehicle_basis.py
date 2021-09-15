@@ -125,6 +125,7 @@ class VehicleBasis(Environment):
                 }
         self.n_intermediate_ADMM = 1
         self.vehicle_positions_new = {'stage' : [], 'vehicle_positions_new' : []}
+        self.MPC_version = []
         # message
         self.message_in = {}
         self.message_out = {}

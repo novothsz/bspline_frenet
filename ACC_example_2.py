@@ -68,7 +68,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
     corners = ([0.15, -0.15], [0.5, 0.053], [0.25, 0.38], [-0.145, 0.145])
     corners = ([0.2, -0.25], [0.52, -0.02  ], [0.15, 0.5], [-0.2, 0.23])
-    # obstacles += [Obstacle(ID = 0, corners = corners)]
+    obstacles += [Obstacle(ID = 0, corners = corners)]
     
     # Obstacle 2
     dx = 0.3
@@ -91,13 +91,13 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
               [2.474+dx, 1-dy],
               [2.474+dx, -6],
               [2.474-dx, -6])
-    # obstacles += [Obstacle(ID = 3, corners = tmp_obs)]
+    obstacles += [Obstacle(ID = 3, corners = tmp_obs)]
     # Obstacle 5
     tmp_obs = ([2.474-dx, 1+dy],
               [2.474+dx, 1+dy],
               [2.474+dx, 6],
               [2.474-dx, 6])
-    # obstacles += [Obstacle(ID = 4, corners = tmp_obs)]
+    obstacles += [Obstacle(ID = 4, corners = tmp_obs)]
     
     
     dx = 0.3
@@ -107,7 +107,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
               [2.474+dx, 1+dy],
               [2.474-dx, 1+dy])
     
-    obstacles += [Obstacle(ID = 5, corners = tmp_obs)]
+    # obstacles += [Obstacle(ID = 5, corners = tmp_obs)]
     
     
             
@@ -140,6 +140,11 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     group.DFM_lookback = group.vehicles[0].t_window_size * 0.6
     
     group.set_var({'MPC_version': True})
+    group.set_var({'n_of_saved_waypoints': int(group.vehicles[0].t_window_size / group.vehicles[0].t_step) + 1}) 
+    # print(group.vehicles[0].n_of_saved_waypoints)
+    
+    
+    
     
     
     
@@ -159,12 +164,15 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     group.intermediate_position_generator_PENI_MPC()
     group.prepare()
+    group.intermediate_position_generator_PENI_MPC()
+       
+       
     
     import time
     t_iter = time.time()
     iteration_times = []
     
-    
+    # group.intermediate_position_generator()
     n_steps = math.floor(1 / group.vehicles[0].t_step)
     for i in range(0, n_steps):
         
@@ -182,6 +190,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         t_iter = time.time()
         
         group.intermediate_position_generator_PENI_MPC()
+        # group.intermediate_position_generator()
         group.frenet_plotter(iternum = i, seed = seed)
         group.simulation_step()
             

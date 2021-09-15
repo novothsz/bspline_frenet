@@ -66,15 +66,24 @@ class Group(Environment):
     def intermediate_position_generator_PENI_MPC(self):
         # 
         # Step 1: Set x0 as starting position
-        vehicle_positions = []
-        for vehicle in self.vehicles:
-            vehicle_positions += [vehicle.x0[:2]]
+        if self.vehicles[0].t_intermediate_list == []:
+            vehicle_positions = []
+            for vehicle in self.vehicles:
+                vehicle_positions += [vehicle.x0[:2]]
+        else:
+            vehicle_positions = []
+            for vehicle in self.vehicles:
+                final_waypoints = vehicle.x_intermediate_list[-3:-1]
+                vehicle_positions += [final_waypoints]
             
         # Step X: if the list "t_intermediate_list" hasn't reached its full length, then we are at the beginning, and need to fill it up.
         # This means we have to call intermediate_position_generator_PENI_full for the t_window_size
+        
         if self.vehicles[0].t_intermediate_list == []:
             
-            DFM_values = [np.linspace(self.vehicles[0].t_step, self.vehicles[0].t_window_size, self.vehicles[0].n_of_saved_waypoints),
+            epsilon = 10e-10; assert ( self.vehicles[0].t_window_size / (self.vehicles[0].n_of_saved_waypoints - 1)) % self.vehicles[0].t_step > -epsilon and \
+                                     ( self.vehicles[0].t_window_size / (self.vehicles[0].n_of_saved_waypoints - 1)) % self.vehicles[0].t_step < epsilon
+            DFM_values = [np.linspace(0, self.vehicles[0].t_window_size, self.vehicles[0].n_of_saved_waypoints),
                           self.vehicles[0].t_window_size * 0.1, # lookback
                           self.vehicles[0].t_window_size * 0.1] # lookahead
             self.intermediate_position_generator_PENI_full(DFM_values = DFM_values)
@@ -82,6 +91,12 @@ class Group(Environment):
             # No, we are not done. The vehicles have their local time... ;)
             for vehicle in self.vehicles:
                 vehicle.t_intermediate_list = np.linspace(self.vehicles[0].t_step, 1, self.vehicles[0].n_of_saved_waypoints).tolist()
+                # print(vehicle.x_intermediate_list)
+                
+                vehicle.variable_history['x_intermediate_list'] += [vehicle.x_intermediate_list] 
+                
+                # print(vehicle.variable_history['x_intermediate_list'][-1])
+                # assert 0
             
             return self
             
@@ -95,6 +110,8 @@ class Group(Environment):
         t = t_end
         lookback = self.vehicles[0].t_window_size * 0.2
         lookahead = self.vehicles[0].t_window_size * 0.2
+        lookback = self.DFM_lookback
+        lookahead = self.DFM_lookahead
         t_zizz = np.linspace( (t-lookback >= 0) * (t-lookback) + (t-lookback > 0) * 0,
                                   (t+lookahead <= 1) * (t+lookahead) + (t+lookahead > 1) * 1,
                                   5)
@@ -106,15 +123,61 @@ class Group(Environment):
         self.cum_scaling = cum_scaling
         
         # Step 6: update x_intermediate_list & t_intermediate_list
+        
         for i, vehicle in enumerate(self.vehicles):
-            # otherwise, delete first elemnt, attach new element to the end
-            vehicle.x_intermediate_list = vehicle.x_intermediate_list[1:] + [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation] 
-            vehicle.variable_history['x_intermediate_list'] += [vehicle.x_intermediate_list[1:] + [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]] 
+            # delete first elemnt, attach new element to the end
+            vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation] 
+            vehicle.variable_history['x_intermediate_list'] += [vehicle.x_intermediate_list]
+            vehicle.xf = vehicle.x_intermediate_list[-3:] + vehicle.xf[3:]
+            
+        vehicle_positions_new = []
+        for i, vehicle in enumerate(self.vehicles):
+            vehicle_positions_new += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
+        self.set_var({'new_positions': {'stage' : self.stage, 'vehicle_positions_new' : vehicle_positions_new}})
             
             # We are not allowed to update the t_intermediate_list, because the vehicle has its "local" time
             # vehicle.t_intermediate_list = vehicle.t_intermediate_list[1:] + [t]
                 
         return self
+    
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111)
+    # for position in vehicle_positions:
+    #     ax.plot(position[0], position[1], 'ro')
+    # ax.set_aspect('equal', adjustable='box')
+    # plt.show()
+    
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111)
+    # for vehicle in group.vehicles:
+    #     # for x_intermediate_list in vehicle.variable_history['x_intermediate_list'][-1]:
+    #     x_intermediate_list = vehicle.variable_history['x_intermediate_list'][4]
+    #     print(x_intermediate_list)
+    #     for i in [4]:
+    #         idx = np.arange(int(vehicle.state_len/2)*i,int(vehicle.state_len/2)*i+int(vehicle.state_len/2))
+    #         print(idx)
+    #         position = np.array(x_intermediate_list)[idx].tolist()
+    #         ax.plot(position[0], position[1], 'ro')
+            
+    # ax.set_aspect('equal', adjustable='box')
+    # plt.show()
+    
+    
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111)
+    # for vehicle in group.vehicles:
+    #     # for x_intermediate_list in vehicle.variable_history['x_intermediate_list'][-1]:
+    #     x_intermediate_list = vehicle.variable_history['x_intermediate_list'][9]
+    #     print(x_intermediate_list)
+    #     for i in [4]:
+    #         idx = np.arange(int(vehicle.state_len/2)*i,int(vehicle.state_len/2)*i+int(vehicle.state_len/2))
+    #         print(idx)
+    #         position = np.array(x_intermediate_list)[idx].tolist()
+    #         ax.plot(position[0], position[1], 'ro')
+            
+    # ax.set_aspect('equal', adjustable='box')
+    # plt.show()
+    
         
         
     def intermediate_position_generator_PENI_full(self, DFM_values = []):
@@ -612,8 +675,8 @@ class Group(Environment):
         if vehicle_positions_new != []:
             for i, position in enumerate(vehicle_positions_new):
                 self.vehicles[i].xf = [position[0], position[1]] + [self.vehicles[i].xf[2] + rotation_angle_new] + self.vehicles[i].xf[3:]
-                self.vehicles[i].t_intermediate_list += [t_end]
-                self.vehicles[i].x_intermediate_list += [position[0], position[1] ,self.vehicles[i].xf[2] + rotation_angle_new]
+                # self.vehicles[i].t_intermediate_list += [t_end]
+                # self.vehicles[i].x_intermediate_list += [position[0], position[1] ,self.vehicles[i].xf[2] + rotation_angle_new]
                 # self.vehicles[i].variable_history['xf'] += [self.vehicles[i].xf]
         
         # if rotation_angle_new != 0:        
@@ -1055,6 +1118,11 @@ class Group(Environment):
                 
             if 'MPC_version' in var:
                 self.vehicles[i].MPC_version = var['MPC_version']
+            if 'n_of_saved_waypoints' in var:
+                self.vehicles[i].n_of_saved_waypoints = var['n_of_saved_waypoints']
+                
+                
+                
                 
                 
     def set_simulation(self, simulation = False):
