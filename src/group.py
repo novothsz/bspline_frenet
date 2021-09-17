@@ -114,7 +114,7 @@ class Group(Environment):
         lookahead = self.DFM_lookahead
         t_zizz = np.linspace( (t-lookback >= 0) * (t-lookback) + (t-lookback > 0) * 0,
                                   (t+lookahead <= 1) * (t+lookahead) + (t+lookahead > 1) * 1,
-                                  5)
+                                  10)
         # Step 4: Get the least cost formation
         vehicle_positions, cum_rotation, cum_scaling = self.intermediate_position_generator_PENI(vehicle_positions, cum_rotation, cum_scaling, t_zizz)
         
@@ -261,7 +261,7 @@ class Group(Environment):
                 break
         
         if all(collision is False for collision in collision_saved):
-            print('-, -')
+            # print('-, -')
             return vehicle_positions_scaled_rotated, cum_rotation + rotation_angle, cum_scaling * scaling_factor
         # Otherwise, if we cannot rotate&scale back, find something else:
         
@@ -318,7 +318,7 @@ class Group(Environment):
             vehicle_positions_new = vehicle_positions
             cum_rotation = 0
             cum_scaling = 1
-            print(0, 1)
+            # print(0, 1)
         else: 
             # Now we have the costs and everything in order.
             # Let's find the least cost value.
@@ -332,7 +332,7 @@ class Group(Environment):
             cum_rotation += rotation_angle_new
             cum_scaling *= scaling_factor_new
             
-            print(rotation_angle_new, scaling_factor_new)
+            # print(rotation_angle_new, scaling_factor_new)
         
         
         return vehicle_positions_new, cum_rotation, cum_scaling
@@ -687,7 +687,16 @@ class Group(Environment):
         self.scaling_factor *= scaling_factor_new
         return self
             
-          
+        # for i, vehicle in enumerate(self.vehicles):
+        #     # delete first elemnt, attach new element to the end
+        #     vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation] 
+        #     vehicle.variable_history['x_intermediate_list'] += [vehicle.x_intermediate_list]
+        #     vehicle.xf = vehicle.x_intermediate_list[-3:] + vehicle.xf[3:]
+            
+        # vehicle_positions_new = []
+        # for i, vehicle in enumerate(self.vehicles):
+        #     vehicle_positions_new += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
+        # self.set_var({'new_positions': {'stage' : self.stage, 'vehicle_positions_new' : vehicle_positions_new}})
      
     ###########################################################################
     ###########################################################################
@@ -715,7 +724,7 @@ class Group(Environment):
     
     def formation_change_cost_calculator(self, vehicle_positions_original, vehicle_positions_new, rotation_angle = 0, scaling_factor = 1):
         cost = 0
-        alpha_distance = 0.1 * 100
+        alpha_distance = 0.1 * 10
         alpha_rotation = 0.1
         alpha_scaling_up = 1000
         alpha_scaling_down = 100
@@ -1446,6 +1455,7 @@ class Group(Environment):
             fig.savefig(self.cwd + '/video/' + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
             ax.clear()
             frame_num += 1
+            # print('t_start, fx(t_start)' + str(t_start) + ',' + str(self.vehicles[0].fp.fx_spline(t_start)[0][0]))
 
         return self
     

@@ -138,6 +138,10 @@ class Vehicle(VehicleBasis):
                                         [self.slack * 1],
                                         constraint_type='time',
                                         name=["formation_vehicle_" + str(i)] * self.n_dimensions_old)
+                
+                # self.J += 10*(vec1[0](t) - vec2[0])**2 + (vec1[1](t) - vec2[1])**2
+            self.J += 10*definite_integral((vec1[0] - vec2[0])**2, 0, 1)
+            self.J += 10*definite_integral((vec1[1] - vec2[1])**2, 0, 1)
             # But the dot product should be > 0, to avoid the vehicles switching place and still
             # fulfilling the formation requirements (at least for those two vehicles)
             """
@@ -402,34 +406,40 @@ class Vehicle(VehicleBasis):
             
             "Non-forgetting version. Currently not working"
             
-            # n = self.n_of_saved_waypoints
-            # assert n == len(self.t_intermediate_list) # Please generate the intermediate points first :)
-            # for i, t_intermediate in enumerate(self.t_intermediate_list):
-            #     idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-            #     # Define the parameter
-            #     x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += np.array(self.x_intermediate_list)[idx].tolist(); assert len(self.x_intermediate_list)/(self.state_len/2) == n  # [0] * int(self.state_len/2)
-            #     # We cannot do this, we cannot evaluate the BSpline at a 'parameter' time
-            #     # t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += self.t_intermediate_list[i]
+            n = self.n_of_saved_waypoints
+            assert n == len(self.t_intermediate_list) # Please generate the intermediate points first :)
+            for i, t_intermediate in enumerate(self.t_intermediate_list):
+                idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
+                # Define the parameter
+                x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += np.array(self.x_intermediate_list)[idx].tolist(); assert len(self.x_intermediate_list)/(self.state_len/2) == n  # [0] * int(self.state_len/2)
+                # We cannot do this, we cannot evaluate the BSpline at a 'parameter' time
+                # t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += self.t_intermediate_list[i]
                 
-            #     # Let's try a new method. Let's play with the slack, instead of creating a cost function with variable weights.
-            #     slack = np.linspace(0.0001, 0.1, n)[i]
+                # Let's try a new method. Let's play with the slack, instead of creating a cost function with variable weights.
+                # slack = np.linspace(0.0001, 0.1, n)[i]
                 
-            #     self.define_constraint([p(t_intermediate) - x_intermediate[0],
-            #                             q(t_intermediate) - x_intermediate[1],
-            #                             phi(t_intermediate) - x_intermediate[2]],
-            #                             [0.0 - slack, 0.0 - slack, 0.0 - slack],
-            #                             [0.0 + slack, 0.0 + slack, 0.0 + slack],
-            #                             constraint_type='time',
-            #                             name=["guidence" + str(i)] * 1)
+                # self.define_constraint([p(t_intermediate) - x_intermediate[0],
+                #                         q(t_intermediate) - x_intermediate[1],
+                #                         phi(t_intermediate) - x_intermediate[2]],
+                #                         [0.0 - slack, 0.0 - slack, 0.0 - slack],
+                #                         [0.0 + slack, 0.0 + slack, 0.0 + slack],
+                #                         constraint_type='time',
+                #                         name=["guidence" + str(i)] * 1)
+                
+                lambda_ = np.power(np.linspace(1, 0, n), 1)
+                # for i in range(p.coeffs.shape[0]):
+                self.J += 1/100 * self.rho_final_value * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
+                self.J += 1/100 * self.rho_final_value * lambda_[i] *(q(t_intermediate) - x_intermediate[1])**2
+                self.J += 1/100 * self.rho_final_value * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
                 
             "Non-forgetting version END"    
                 
             "End-point waypoint tracking"    
-            lambda_ = np.power(np.linspace(1, 0, p.coeffs.shape[0]), 1)
-            for i in range(p.coeffs.shape[0]):
-                self.J += self.rho_final_value * ((p.coeffs[i] -      (lambda_[i] * x0[0] + (1 - lambda_[i]) * xf[0])     )**2)
-                self.J += self.rho_final_value * ((q.coeffs[i] -      (lambda_[i] * x0[1] + (1 - lambda_[i]) * xf[1])     )**2)
-                self.J += self.rho_final_value * ((phi.coeffs[i] -      (lambda_[i] * x0[2] + (1 - lambda_[i]) * xf[2])     )**2)
+            # lambda_ = np.power(np.linspace(1, 0, p.coeffs.shape[0]), 1)
+            # for i in range(p.coeffs.shape[0]):
+            #     self.J += self.rho_final_value * ((p.coeffs[i] -      (lambda_[i] * x0[0] + (1 - lambda_[i]) * xf[0])     )**2)
+            #     self.J += self.rho_final_value * ((q.coeffs[i] -      (lambda_[i] * x0[1] + (1 - lambda_[i]) * xf[1])     )**2)
+            #     self.J += self.rho_final_value * ((phi.coeffs[i] -      (lambda_[i] * x0[2] + (1 - lambda_[i]) * xf[2])     )**2)
     
             self.define_constraint([phi],
                                     xf[self.n_dimensions] - [5 / 360 * math.pi * 2], # self.slack, # 
@@ -557,6 +567,7 @@ class Vehicle(VehicleBasis):
         for i, obstacle in enumerate(self.obstacles):
             obst_corners = []
             for j, t in enumerate(np.linspace(0, 1, self.t_resolution_length)):
+            # for j, t in enumerate(np.logspace(0, 3, self.t_resolution_length)/1e3-0.001):
                 corner1 = MX.sym('obst_' + str(i) + '_corner1', 2); self.P += [corner1]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
                 corner2 = MX.sym('obst_' + str(i) + '_corner2', 2); self.P += [corner2]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
                 corner3 = MX.sym('obst_' + str(i) + '_corner3', 2); self.P += [corner3]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
@@ -1117,26 +1128,23 @@ class Vehicle(VehicleBasis):
                         , 'ko', markersize = 2, zorder = 3)"""
         
         
-        
-        for i, t in enumerate(t_intermediate_real):
-            # try:
-            idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-            # print(idx)
-            point_x = np.array(self.variable_history['x_intermediate_list'][horizon_num])[idx].tolist()[0]
-            # print(point_x)
-            point_y = np.array(self.variable_history['x_intermediate_list'][horizon_num])[idx].tolist()[1]
-            # x_, y_ = point_x, point_y
-            x_, y_ = self.fp.frenet_to_inertial(point_x, 
-                                                    point_y,
-                                                    t)
-            if self.ID == 0:
-                ax.plot(x_,
-                            y_
-                            , 'b*', markersize = 2, zorder = 3)
-            else:
-                ax.plot(x_,
-                            y_
-                            , 'ko', markersize = 2, zorder = 3)
+        "Plotting all the intermediate points"
+        # for i, t in enumerate(t_intermediate_real):
+        #     idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
+        #     point_x = np.array(self.variable_history['x_intermediate_list'][horizon_num_original])[idx].tolist()[0]
+        #     point_y = np.array(self.variable_history['x_intermediate_list'][horizon_num_original])[idx].tolist()[1]
+        #     x_, y_ = self.fp.frenet_to_inertial(point_x, 
+        #                                             point_y,
+        #                                             t)
+        #     if self.ID == 0:
+        #         ax.plot(x_,
+        #                     y_
+        #                     , 'b*', markersize = 2, zorder = 3)
+        #     else:
+        #         ax.plot(x_,
+        #                     y_
+        #                     , 'ko', markersize = 2, zorder = 3)
+        "Plotting all the intermediate points END"
             # except:
             #     pass
         # try:

@@ -11,9 +11,6 @@ import os
 class Environment():
     def __init__(self):
         
-        self.border_x = [-6, 6]
-        self.border_y = [-5, 2]
-        self.cwd = os.getcwd()
         
         # self.start_position = [-0.8, 0]
         # self.goal_position = [0.8, 0]
@@ -25,6 +22,15 @@ class Environment():
         self.fp = FrenetPath()
         self.fp = self.fp.fit_all()
         self.fitter = SplineFitter()
+        
+        
+        
+        self.border_x = [self.fp.tau_0, self.fp.tau_f]
+        self.border_y = [-2, 2]
+        self.cwd = os.getcwd()
+        
+        
+        
         # try:
             # self.fp = dill.load('use_dill')
             # pickle_in = open("dict.pickle", "rb")

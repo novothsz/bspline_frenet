@@ -1,5 +1,6 @@
 import numpy as np
 from numpy import interp
+from scipy.interpolate import interp1d
 import math
 
 from matplotlib.patches import Polygon
@@ -80,7 +81,7 @@ class VehicleBasis(Environment):
         self.rho_input = 0.1 * 10 * 2 * 100
         self.rho_final_value = 0.1 * 10 * 100# * 1000
         
-        self.epsilon = 0.03 # try to keep minimum epsilon distance from the obstacle
+        self.epsilon = 0.05 # try to keep minimum epsilon distance from the obstacle
         # self.epsilon = self.radious # try to keep minimum epsilon distance from the obstacle
         self.safety_weight = 1000000 # cost parameter for epsilon
         "TODO: something is wrong when shifting, we get too close to the obstacles and confusion..."
@@ -168,7 +169,6 @@ class VehicleBasis(Environment):
         return self
     
     
-        
     ###########################################################################
     ###########################################################################
     ###########################################################################
@@ -208,6 +208,11 @@ class VehicleBasis(Environment):
         self.PvX.equation_min_q = [self.fp.equation_min_q(t_).tolist()[0][0] for t_ in t_evaluation]
         self.PvX.equation_max_q = [self.fp.equation_max_q(t_).tolist()[0][0] for t_ in t_evaluation]
         self.PvX.obst = []
+        
+        # m = interp1d([0, 1], [self.t_start, self.t_start + self.t_window_size])
+        # t_evaluation = m(np.logspace(0, 3, self.t_resolution_length)/1e3-0.001)
+        # if (self.ID == 0):
+        #     print(t_evaluation)
         for obstacle in self.obstacles:
             for t_ in t_evaluation:
                 for corner in obstacle.corners_spline:
@@ -846,6 +851,7 @@ class VehicleBasis(Environment):
         basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
         x_t_saved = []
         y_t_saved = []
+        phi_t_saved = []
         for horizon_num in range(n_steps):
             horizon_num_original = int(horizon_num)    
             horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
@@ -857,7 +863,7 @@ class VehicleBasis(Environment):
             phi = BSpline(basis, coeffs3)
     
             # Sampling (self.t_step == 0) && (self.t_window_size == 1) && (self.t_end == 1)
-            # t = np.linspace(0, self.t_step/self.t_window_size, 100)
+            t = np.linspace(0, self.t_step/self.t_window_size, 100)
             if (self.t_step == 0) and (self.t_window_size == 1) and (self.t_end == 1):
                 t = np.linspace(0, 1, 100)
             x_t = [x(t_) for t_ in t]
@@ -866,11 +872,18 @@ class VehicleBasis(Environment):
     
             x_t = flatten(x_t)
             y_t = flatten(y_t)
+            phi_t = flatten(phi_t)
             
             x_t_saved += x_t
             y_t_saved += y_t
+            phi_t_saved += phi_t
         
-            
+        
+        plt.figure()
+        plt.plot(phi_t_saved)
+        plt.show()
+        print(len(phi_t_saved))
+        assert 0
         t_desired = 10
         # print(x_t_saved)
         t = np.linspace(0, t_desired, n_steps * 100)

@@ -72,7 +72,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     # Obstacle 2
     dx = 0.3
-    dy = 0.3
+    dy = 0.4
     tmp_obs = ([-2.4674-dx, -1-dy],
              [-2.4674+dx, -1-dy],
              [-2.4674+dx, -6],
@@ -124,7 +124,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     n_intermediate_ADMM = 1
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
-    n_steps = 1
+    n_steps = 5
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
     group.set_var({'t_step': 0})
     group.set_var({'t_window_size': 1})
@@ -135,7 +135,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     group.set_var({'rho_input': 100})
     group.back_scaling_factor = 0.4
     group.back_rotation_factor = 1 # 0.4
-    group.DFM_division = 7
+    group.DFM_division = 9
     group.DFM_lookback = 1 / group.DFM_division / 2
     group.DFM_lookahead = 1 / group.DFM_division / 2
     
@@ -152,14 +152,14 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     # group.back_rotation_factor = 1
     
     "Changing default rotation for initial position"
-    positions = group.ellipse_generator(centerpoint = start_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 6, b = group.vehicles[0].radious * 3,
+    positions = group.ellipse_generator(centerpoint = start_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 9, b = group.vehicles[0].radious * 5,
                                                ellipse_rotation = math.pi / 2)
     for i in range(len(group.vehicles)):
             group.vehicles[i].set_position(position = positions[i], position_type = 'initial')
             
             
     "Changing default rotation for final position"
-    positions = group.ellipse_generator(centerpoint = goal_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 6, b = group.vehicles[0].radious * 3,
+    positions = group.ellipse_generator(centerpoint = goal_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 9, b = group.vehicles[0].radious * 5,
                                                ellipse_rotation = math.pi / 2)
     for i in range(len(group.vehicles)):
             group.vehicles[i].set_position(position = positions[i], position_type = 'final')
