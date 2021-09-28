@@ -342,387 +342,7 @@ class Group(Environment):
         
         
         
-    def intermediate_position_generator_SINGLE_RUN(self):
-        
-        import time
-        t_iter = time.time()
-        
-        
-        # Step 1: get the current final time
-        print('start ...')
-        plt.figure()
-        
-        # Step 3: get position of vehicles at the final time of the previously calculated horizon
-        vehicle_positions = []
-        "Changing default rotation for initial position"
-        # positions = self.ellipse_generator(centerpoint = [0, 0, 0], n_positions = len(self.vehicles), a = self.vehicles[0].radious * 6, b = self.vehicles[0].radious * 3,
-        #                                            ellipse_rotation = math.pi / 2)
-        for vehicle in self.vehicles:
-            vehicle_positions += [vehicle.x0[:2]]
-                
-        # vehicle_positions_new = vehicle_positions  
-        for kappa_num, t_end in enumerate(np.linspace(0 + 0.1, 1, self.DFM_division)):
-            # Step 2: get obstacle positions at final time
-            obstacle_corners_zizz = []
-            if kappa_num == 7:
-                kappa = True
-            
-            # for t_zizz in np.linspace( (t_end-0.1 >= 0) * (t_end-0.1) + (t_end-0.1 > 0) * 0, (t_end+0.1 <= 1) * (t_end+0.1) + (t_end+0.1 > 1) * 1, 10): 
-            for t_zizz in np.linspace( (t_end-0.1 >= 0) * (t_end-0.1) + (t_end-0.1 > 0) * 0,
-                                      (t_end+self.DFM_lookahead <= 1) * (t_end+self.DFM_lookahead) + (t_end+self.DFM_lookahead > 1) * 1, 10): 
-                for obstacle in self.vehicles[0].obstacles:
-                    corners = [ [corner[0](t_zizz).tolist()[0][0], corner[1](t_zizz).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
-                    obstacle_corners_zizz += [corners]
-                                    
-            # for obstacle in self.vehicles[0].obstacles:
-            #     # corners = [ [corner[0](t_end).tolist()[0][0], corner[1](t_end).tolist()[0][0]] for corner in obstacle.corners_spline]
-            #     corners = [ [corner[0](t_end).tolist()[0][0], corner[1](t_end).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
-            #     obstacle_corners += [corners]
-                
-                
-            obstacle_corners = obstacle_corners_zizz    
-            # Step 4: check for collision
-            all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions, obstacle_corners)   
-            
-    
-            # Step 5: rotating & scaling
-            rotation_angle_new = 0
-            scaling_factor_new = 1
-            vehicle_positions_new = []
-            costs = []
-            vehicle_positions_new_saved = []
-            rotation_angle_new_saved = []
-            scaling_factor_new_saved = []
-            obstacle_corners_zizz = []
-            if collision == True:
-                # t_iter = time.time()
-            # if True:
-                degree_step = 5
-                radian_step = degree_step/360*2 * math.pi
-                rotation_angles = [[0 + radian_step * i, 0 - radian_step * i] for i in range(1, int(math.pi/2/radian_step))]
-                # rotation_angles = [[0 + radian_step * i] for i in range(0, int(math.pi/radian_step))]
-                rotation_angles = np.array(rotation_angles).reshape(-1).tolist()
-                
-                scaling_step = 1.1
-                # scaling_step = 2.0
-                scaling_step = 1.5
-                # scaling_factors = [  [1 * scaling_step ** i, 1 / (scaling_step ** i) ] for i in range(0, math.floor(abs(math.log(0.010) / math.log(scaling_step))))  ]
-                # scaling_factors = np.array(scaling_factors).reshape(-1).tolist()
-                scaling_factors_shrink = [  1 / (scaling_step ** i)  for i in range(0, math.floor(abs(math.log(0.25) / math.log(scaling_step))))  ]
-                scaling_factors_expand = [  1 * scaling_step ** i  for i in range(0, math.floor(abs(math.log(0.25) / math.log(scaling_step))))  ]
-                scaling_factors = scaling_factors_shrink + scaling_factors_expand
-                # scaling_factors = np.array(scaling_factors)[1:].reshape(-1).tolist()
-                
-                
-                # Version 2: give costs and choose the least-cost formation change
-                
-                for scaling_factor in scaling_factors:
-                    vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
-                    for rotation_angle in rotation_angles:
-                        vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
-                        all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, obstacle_corners)
-                        if collision == True:
-                            costs += [math.inf]
-                        else:
-                            cost = self.formation_change_cost_calculator(vehicle_positions, vehicle_positions_scaled_rotated, rotation_angle, scaling_factor)
-                            # check collision for previous and future steps too!
-                            
-                            # for t_zizz in np.linspace(t_end - self.vehicles[0].t_step / 10 * 10 , t_end + self.vehicles[0].t_step / 10 * 10, 6):
-                            # for t_zizz in np.linspace(t_end - 0.1, (t_end+0.1 <= 1) * (t_end+0.1) + (t_end+0.1 > 1) * 1, 10):
-                            # for t_zizz in np.linspace( (t_end-0.1 >= 0) * (t_end-0.1) + (t_end-0.1 > 0) * 0, (t_end+0.1 <= 1) * (t_end+0.1) + (t_end+0.1 > 1) * 1, 10): 
-                            for t_zizz in np.linspace(  (t_end-0.1 >= 0) * (t_end-0.1) + (t_end-0.1 > 0) * 0,
-                                                      (t_end+self.DFM_lookahead <= 1) * (t_end+self.DFM_lookahead) + (t_end+self.DFM_lookahead > 1) * 1, 10): 
-                            
-                                for obstacle in self.vehicles[0].obstacles:
-                                    corners = [ [corner[0](t_zizz).tolist()[0][0], corner[1](t_zizz).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
-                                    obstacle_corners_zizz += [corners]
-                
-                            all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, obstacle_corners_zizz)   
-                            if collision == True:
-                                cost = math.inf
-                
-                            costs += [cost]
-                        vehicle_positions_new_saved += [vehicle_positions_scaled_rotated]
-                        rotation_angle_new_saved += [rotation_angle]
-                        scaling_factor_new_saved += [scaling_factor]
-                        
-                # find the least-cost version
-                cost_min = min(costs)
-                cost_min_idx = costs.index(cost_min)
-                vehicle_positions_new = vehicle_positions_new_saved[cost_min_idx]
-                "!"
-                vehicle_positions = vehicle_positions_new
-                rotation_angle_new = rotation_angle_new_saved[cost_min_idx]
-                scaling_factor_new = scaling_factor_new_saved[cost_min_idx]
-                
-                
-            elif collision == False:
-                deviance = abs(1 - 1 / self.scaling_factor)
-                deviance *= self.back_scaling_factor
-                if self.scaling_factor >= 1:
-                    scaling_factor = 1 - deviance
-                else:
-                    scaling_factor = 1 + deviance
-                
-                rotation_angle = -1 * self.back_rotation_factor * self.rotation_angle
-                
-                vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
-                vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
-                # for t_zizz in np.linspace(t_end - 0.1 , (t_end+0.1 <= 1) * (t_end+0.1) + (t_end+0.1 > 1) * 1, 10):
-                # for t_zizz in np.linspace( (t_end-0.1 >= 0) * (t_end-0.1) + (t_end-0.1 > 0) * 0, (t_end+0.1 <= 1) * (t_end+0.1) + (t_end+0.1 > 1) * 1, 10): 
-                for t_zizz in np.linspace(  (t_end-0.1 >= 0) * (t_end-0.1) + (t_end-0.1 > 0) * 0,
-                                          (t_end+self.DFM_lookahead <= 1) * (t_end+self.DFM_lookahead) + (t_end+self.DFM_lookahead > 1) * 1, 10): 
-                
-                    for obstacle in self.vehicles[0].obstacles:
-                        corners = [ [corner[0](t_zizz).tolist()[0][0], corner[1](t_zizz).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
-                        obstacle_corners_zizz += [corners]
-                
-                all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, obstacle_corners_zizz)   
-                if collision == False:
-                    rotation_angle_new = rotation_angle
-                    scaling_factor_new = scaling_factor
-                    vehicle_positions_new = vehicle_positions_scaled_rotated
-                    "!"
-                    vehicle_positions = vehicle_positions_new
-                elif collision == True:
-                    pass
-            
-            
-                
-            # Step 6: setting new positions
-            if vehicle_positions_new != []:
-                for i, position in enumerate(vehicle_positions_new):
-                    plt.plot(position[0],position[1], c = ['r', 'g', 'b', 'k'][i], marker = 'o')
-                    # idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-                    self.vehicles[i].x_intermediate_list += [position[0], position[1], rotation_angle_new]
-                    self.vehicles[i].t_intermediate_list += [t_end]
-                    if t_end == 1:
-                        self.vehicles[i].xf[:3] = [position[0], position[1], rotation_angle_new]
-                        # self.vehicles[i].xf[:3] = self.og_final_positions[i][:3]
-                        # self.vehicles[i].x_intermediate_list[-3:] = self.og_final_positions[i][:3]
-                        
-            else:
-                for i, position in enumerate(vehicle_positions):
-                    plt.plot(position[0],position[1], c = ['r', 'g', 'b', 'k'][i], marker = '.')
-                    # idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-                    self.vehicles[i].x_intermediate_list += [position[0], position[1], rotation_angle_new]
-                    self.vehicles[i].t_intermediate_list += [t_end]
-        
-            self.rotation_angle += rotation_angle_new
-            self.scaling_factor *= scaling_factor_new
-        
-        
-        plt.show()
-        # print(self.vehicles[0].x_intermediate_list
-        # assert 0
-        
-        print('single run time: ' + str(time.time() - t_iter))
-        print('done :)')
-        
-        
-        self.rotation_angle = 0
-        self.scaling_factor = 1
-        self.og_final_positions = []
-        
-        # print(time.time() - t_iter)
-        return self
-    
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-        
-    def intermediate_position_generator(self):
-        # Dynamic formation manipulator (DFM)
-        # get current final time
-        # get obstacle positions at final time
-        # get position of vehicles at the final time of the previously calculated horizon
-        # rotate this formation with incremental +/- phi angles till no collision
-        # if not found, shrink/blow up till no collision
-        # if - found: set this as final position & phi for the vehicles
-        # if - not found: all hope is lost, we throw in the towel
-        
-        # Step 1: get the current final time
-        t_end = self.vehicles[0].t_end + self.vehicles[0].t_step #... well, maybe  - self.vehicles[0].t_step? Depends on when we call this method
-        # Step 2: get obstacle positions at final time
-        obstacle_corners = []
-        obstacle_corners_zizz = []
-        # for obstacle in self.vehicles[0].obstacles:
-        #     # corners = [ [corner[0](t_end).tolist()[0][0], corner[1](t_end).tolist()[0][0]] for corner in obstacle.corners_spline]
-        #     corners = [ [corner[0](t_end).tolist()[0][0], corner[1](t_end).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
-        #     obstacle_corners += [corners]
-            
-            
-            
-        # for t_zizz in np.linspace( (t_end-0.1 >= 0) * (t_end-0.1) + (t_end-0.1 > 0) * 0, (t_end+0.1 <= 1) * (t_end+0.1) + (t_end+0.1 > 1) * 1, 10): 
-        for t_zizz in np.linspace( t_end, (t_end+self.DFM_lookahead <= 1) * (t_end+self.DFM_lookahead) + (t_end+self.DFM_lookahead > 1) * 1, 10): 
-            for obstacle in self.vehicles[0].obstacles:
-                corners = [ [corner[0](t_zizz).tolist()[0][0], corner[1](t_zizz).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
-                obstacle_corners_zizz += [corners]
-                    
-                    
-        obstacle_corners = obstacle_corners_zizz       
-        # Step 3: get position of vehicles at the final time of the previously calculated horizon
-        # t_previous = self.vehicles[0].t_end - self.vehicles[0].t_step
-        vehicle_positions = []
-        for vehicle in self.vehicles:
-            idx_len = int(len(vehicle.DvX.y) / vehicle.n_dimensions)
-            # try:
-            #     vehicle_positions += [[vehicle.DvX.y[idx_len-1].full()[0][0], vehicle.DvX.y[idx_len*2 - 1].full()[0][0]]] # final predicted p and q positions
-            # except:
-            #     vehicle_positions += [[vehicle.DvX.y[idx_len-1], vehicle.DvX.y[idx_len*2 - 1]]] # final predicted p and q positions
-                
-                
-            vehicle_positions += [vehicle.xf[:2]]
-                
-                
-        # Step 4: check for collision
-        all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions, obstacle_corners)   
-        
-            
-        # Step 5: rotating & scaling
-        rotation_angle_new = 0
-        scaling_factor_new = 1
-        vehicle_positions_new = []
-        costs = []
-        vehicle_positions_new_saved = []
-        rotation_angle_new_saved = []
-        scaling_factor_new_saved = []
-        obstacle_corners_zizz = []
-        if collision == True:
-            degree_step = 10
-            radian_step = degree_step/360*2 * math.pi
-            rotation_angles = [[0 + radian_step * i, 0 - radian_step * i] for i in range(1, int(math.pi/radian_step))]
-            rotation_angles = np.array(rotation_angles).reshape(-1).tolist()
-            
-            scaling_step = 1.1
-            scaling_step = 1.5
-            # scaling_step = 1.5
-            # scaling_factors = [  [1 * scaling_step ** i, 1 / (scaling_step ** i) ] for i in range(0, math.floor(abs(math.log(0.010) / math.log(scaling_step))))  ]
-            # scaling_factors = np.array(scaling_factors).reshape(-1).tolist()
-            scaling_factors_shrink = [  1 / (scaling_step ** i)  for i in range(0, math.floor(abs(math.log(0.25) / math.log(scaling_step))))  ]
-            scaling_factors_expand = [  1 * scaling_step ** i  for i in range(0, math.floor(abs(math.log(0.1) / math.log(scaling_step))))  ]
-            scaling_factors = scaling_factors_shrink + scaling_factors_expand
-            scaling_factors = np.array(scaling_factors).reshape(-1).tolist()
-            
-            
-            # Version 2: give costs and choose the least-cost formation change
-            
-            for scaling_factor in scaling_factors:
-                vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
-                for rotation_angle in rotation_angles:
-                    vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
-                    all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, obstacle_corners)
-                    if collision == True:
-                        costs += [math.inf]
-                    else:
-                        cost = self.formation_change_cost_calculator(vehicle_positions, vehicle_positions_scaled_rotated, rotation_angle, scaling_factor)
-                        # check collision for previous and future steps too!
-                        
-                        # for t_zizz in np.linspace(t_end - self.vehicles[0].t_step / 10 * 10 , t_end + self.vehicles[0].t_step / 10 * 10, 6):
-                        for t_zizz in np.linspace(t_end - self.DFM_lookback , t_end + self.DFM_lookahead, 10):
-                        
-                            for obstacle in self.vehicles[0].obstacles:
-                                corners = [ [corner[0](t_zizz).tolist()[0][0], corner[1](t_zizz).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
-                                obstacle_corners_zizz += [corners]
-            
-                        all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, obstacle_corners_zizz)   
-                        if collision == True:
-                            cost = math.inf
-            
-                        costs += [cost]
-                    vehicle_positions_new_saved += [vehicle_positions_scaled_rotated]
-                    rotation_angle_new_saved += [rotation_angle]
-                    scaling_factor_new_saved += [scaling_factor]
-                    
-            # find the least-cost version
-            cost_min = min(costs)
-            cost_min_idx = costs.index(cost_min)
-            vehicle_positions_new = vehicle_positions_new_saved[cost_min_idx]
-            rotation_angle_new = rotation_angle_new_saved[cost_min_idx]
-            scaling_factor_new = scaling_factor_new_saved[cost_min_idx]
-            
-        
-        elif collision == False:
-            deviance = abs(1 - 1 / self.scaling_factor)
-            deviance *= self.back_scaling_factor
-            if self.scaling_factor >= 1:
-                scaling_factor = 1 - deviance
-            else:
-                scaling_factor = 1 + deviance
-            
-            rotation_angle = -1 * self.back_rotation_factor * self.rotation_angle
-            
-            vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
-            vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
-            for t_zizz in np.linspace(t_end - self.DFM_lookback , t_end + self.DFM_lookahead, 10):
-            
-                for obstacle in self.vehicles[0].obstacles:
-                    corners = [ [corner[0](t_zizz).tolist()[0][0], corner[1](t_zizz).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
-                    obstacle_corners_zizz += [corners]
-            
-            all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, obstacle_corners_zizz)   
-            if collision == False:
-                rotation_angle_new = rotation_angle
-                scaling_factor_new = scaling_factor
-                vehicle_positions_new = vehicle_positions_scaled_rotated
-            elif collision == True:
-                pass
-                
-        # Step 6: setting new positions
-        self.vehicle_positions_new = vehicle_positions_new
-        self.set_var({'new_positions': {'stage' : self.stage, 'vehicle_positions_new' : vehicle_positions_new}})
-        if vehicle_positions_new != []:
-            for i, position in enumerate(vehicle_positions_new):
-                self.vehicles[i].xf = [position[0], position[1]] + [self.vehicles[i].xf[2] + rotation_angle_new] + self.vehicles[i].xf[3:]
-                # self.vehicles[i].t_intermediate_list += [t_end]
-                # self.vehicles[i].x_intermediate_list += [position[0], position[1] ,self.vehicles[i].xf[2] + rotation_angle_new]
-                # self.vehicles[i].variable_history['xf'] += [self.vehicles[i].xf]
-        
-        # if rotation_angle_new != 0:        
-        #     print("rotation_angle_new = " + str(rotation_angle_new))
-        # if scaling_factor_new != 1:
-        #     print("scaling_factor_new = " + str(scaling_factor_new))
-        self.rotation_angle += rotation_angle_new
-        self.scaling_factor *= scaling_factor_new
-        return self
-            
-        # for i, vehicle in enumerate(self.vehicles):
-        #     # delete first elemnt, attach new element to the end
-        #     vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation] 
-        #     vehicle.variable_history['x_intermediate_list'] += [vehicle.x_intermediate_list]
-        #     vehicle.xf = vehicle.x_intermediate_list[-3:] + vehicle.xf[3:]
-            
-        # vehicle_positions_new = []
-        # for i, vehicle in enumerate(self.vehicles):
-        #     vehicle_positions_new += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
-        # self.set_var({'new_positions': {'stage' : self.stage, 'vehicle_positions_new' : vehicle_positions_new}})
-     
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    # def formation_change_cost_calculator_PENI(self, vehicle_positions_original, vehicle_positions_new, rotation_angle = 0, scaling_factor = 1, cum_rotation, cum_scaling):
-    #     cost = 0
-    #     alpha_distance = 0.1 * 100
-    #     alpha_rotation = 0.001
-    #     alpha_scaling_up = 1000
-    #     alpha_scaling_down = 100
-    #     for original, new in zip(vehicle_positions_original, vehicle_positions_new):
-    #         cost += alpha_distance * ((original[0] - new[0])**2 + (original[1] - new[1])**2)
-            
-            
-    #     cost += alpha_rotation * abs(rotation_angle)
-    #     if scaling_factor > 1:
-    #         cost += alpha_scaling_up * abs(1-scaling_factor)
-    #     if scaling_factor < 1:
-    #         cost += alpha_scaling_down * abs(1-scaling_factor)
+
         
     
     def formation_change_cost_calculator(self, vehicle_positions_original, vehicle_positions_new, rotation_angle = 0, scaling_factor = 1):
@@ -1519,43 +1139,43 @@ class Group(Environment):
             ax.clear()
             frame_num += 1
             
-        "Zoomed-out version #entire landscape"
-        fig, ax = self.figures["figures"]
+        # "Zoomed-out version #entire landscape"
+        # fig, ax = self.figures["figures"]
 
-        frame_num = 0
-        for t in np.linspace(0, 1, 100):
-            # fig.clear()
-            # fig, ax = plt.subplots()
+        # frame_num = 0
+        # for t in np.linspace(0, 1, 100):
+        #     # fig.clear()
+        #     # fig, ax = plt.subplots()
 
-            # First we plot the paths
-            # for i in range(len(self.vehicles)):
-                # ax = self.vehicles[i].plot_path_frames(ax, t)
+        #     # First we plot the paths
+        #     # for i in range(len(self.vehicles)):
+        #         # ax = self.vehicles[i].plot_path_frames(ax, t)
 
-            # Then we plot the vehicles
-            for i in range(len(self.vehicles)):
-                ax = self.vehicles[i].plot_moovie_frames(ax, t)
+        #     # Then we plot the vehicles
+        #     for i in range(len(self.vehicles)):
+        #         ax = self.vehicles[i].plot_moovie_frames(ax, t)
 
-            # Axis related stuff
-            # ax.set_title("Trajectories of the vehicles after iteration {} with seed {}".format(iternum, seed))
-            ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
-            ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
-            # Or setting the ax limits 
-            # ax.set_xlim(self.vehicles[0].fp.fx_spline(t)[0][0] - 2*2, self.vehicles[0].fp.fx_spline(t)[0][0] + 2*2)
-            # ax.set_ylim(self.vehicles[0].fp.fy_spline(t)[0][0] - 1*2, self.vehicles[0].fp.fy_spline(t)[0][0] + 1*2)
-            ax.set_xlabel("x axis")
-            ax.set_ylabel("y axis")
-            ax.set_aspect('equal', adjustable='box')
+        #     # Axis related stuff
+        #     # ax.set_title("Trajectories of the vehicles after iteration {} with seed {}".format(iternum, seed))
+        #     ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
+        #     ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
+        #     # Or setting the ax limits 
+        #     # ax.set_xlim(self.vehicles[0].fp.fx_spline(t)[0][0] - 2*2, self.vehicles[0].fp.fx_spline(t)[0][0] + 2*2)
+        #     # ax.set_ylim(self.vehicles[0].fp.fy_spline(t)[0][0] - 1*2, self.vehicles[0].fp.fy_spline(t)[0][0] + 1*2)
+        #     ax.set_xlabel("x axis")
+        #     ax.set_ylabel("y axis")
+        #     ax.set_aspect('equal', adjustable='box')
             
             
             
-            plt.axis('off')
-            ax.axes.xaxis.set_visible(False)
-            ax.axes.yaxis.set_visible(False)
+        #     plt.axis('off')
+        #     ax.axes.xaxis.set_visible(False)
+        #     ax.axes.yaxis.set_visible(False)
             
-            # Saving figure to folder
-            fig.savefig(self.cwd + '/video/' + 'entire_{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.pdf', dpi = 200)
-            ax.clear()
-            frame_num += 1
+        #     # Saving figure to folder
+        #     fig.savefig(self.cwd + '/video/' + 'entire_{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.pdf', dpi = 200)
+        #     ax.clear()
+        #     frame_num += 1
         
 
         return self
