@@ -129,8 +129,10 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     group.set_var({'t_step': 0})
     group.set_var({'t_window_size': 1})
     group.set_var({'t_end': 1})
-    group.set_var({'knot_intervals': 35})
-    group.set_var({'t_resolution_length': 120})
+    # group.set_var({'knot_intervals': 35})
+    group.set_var({'knot_intervals': 25})
+    # group.set_var({'t_resolution_length': 120})
+    group.set_var({'t_resolution_length': 50})
     group.set_var({'rho': 50})
     group.set_var({'rho_input': 100})
     group.back_scaling_factor = 0.4

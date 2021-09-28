@@ -888,7 +888,10 @@ class Vehicle(VehicleBasis):
     
     def calculate_formation_error(self, intermediate_ADMM_idx = []):
         horizon0 = 0
-        horizonf = int(1 / self.t_step)  
+        if self.t_step != 0:
+            horizonf = int(1 / self.t_step)  
+        else:
+            horizonf = 1
         # Containers
         x_t_saved = []
         y_t_saved = []
@@ -1248,14 +1251,14 @@ class Vehicle(VehicleBasis):
         ax.add_line(line4)
 
         # Circles
-        # circle1 = plt.Circle((x1, y1), r_rotor, color='k', alpha=0.5, zorder = 10)
-        # circle2 = plt.Circle((x2, y2), r_rotor, color='k', alpha=0.5, zorder = 10)
-        # circle3 = plt.Circle((x3, y3), r_rotor, color='k', alpha=0.5, zorder = 10)
-        # circle4 = plt.Circle((x4, y4), r_rotor, color='k', alpha=0.5, zorder = 10)
-        # ax.add_patch(circle1)
-        # ax.add_patch(circle2)
-        # ax.add_patch(circle3)
-        # ax.add_patch(circle4)
+        circle1 = plt.Circle((x1, y1), r_rotor, color='k', alpha=0.5, zorder = 10)
+        circle2 = plt.Circle((x2, y2), r_rotor, color='k', alpha=0.5, zorder = 10)
+        circle3 = plt.Circle((x3, y3), r_rotor, color='k', alpha=0.5, zorder = 10)
+        circle4 = plt.Circle((x4, y4), r_rotor, color='k', alpha=0.5, zorder = 10)
+        ax.add_patch(circle1)
+        ax.add_patch(circle2)
+        ax.add_patch(circle3)
+        ax.add_patch(circle4)
 
 
 
@@ -1320,7 +1323,7 @@ class Vehicle(VehicleBasis):
             x_t += [x_]
             y_t += [y_]
             
-        ax.plot(x_t, y_t, 'ro')   
+        ax.plot(x_t, y_t, 'ro', markersize = 2)   
         
         "---------"
         
@@ -1331,7 +1334,8 @@ class Vehicle(VehicleBasis):
             x_t += [x_]
             y_t += [y_]
             
-        ax.plot(x_t, y_t, 'k')    
+        # ax.plot(x_t, y_t, 'k', linewidth = 0.5)    
+        ax.plot(x_t, y_t, c = 'cornflowerblue',lw=1.0,alpha = 0.9, zorder = 7)
             
 
         theta_c = 0
@@ -1391,14 +1395,14 @@ class Vehicle(VehicleBasis):
         ax.add_line(line4)
 
         # Circles
-        # circle1 = plt.Circle((x1, y1), r_rotor, color='k', alpha=0.5, zorder = 10)
-        # circle2 = plt.Circle((x2, y2), r_rotor, color='k', alpha=0.5, zorder = 10)
-        # circle3 = plt.Circle((x3, y3), r_rotor, color='k', alpha=0.5, zorder = 10)
-        # circle4 = plt.Circle((x4, y4), r_rotor, color='k', alpha=0.5, zorder = 10)
-        # ax.add_patch(circle1)
-        # ax.add_patch(circle2)
-        # ax.add_patch(circle3)
-        # ax.add_patch(circle4)
+        circle1 = plt.Circle((x1, y1), r_rotor, color='k', alpha=0.5, zorder = 10)
+        circle2 = plt.Circle((x2, y2), r_rotor, color='k', alpha=0.5, zorder = 10)
+        circle3 = plt.Circle((x3, y3), r_rotor, color='k', alpha=0.5, zorder = 10)
+        circle4 = plt.Circle((x4, y4), r_rotor, color='k', alpha=0.5, zorder = 10)
+        ax.add_patch(circle1)
+        ax.add_patch(circle2)
+        ax.add_patch(circle3)
+        ax.add_patch(circle4)
 
 
 

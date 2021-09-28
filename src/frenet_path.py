@@ -652,7 +652,9 @@ class FrenetPath(object):
         fx_ = [self.fx(self.t_to_tau(t_)) for t_ in t]
         fy_ = [self.fy(self.t_to_tau(t_)) for t_ in t]
         
-        ax.plot(fx_, fy_, label='path', linestyle = ':', color = 'gray', zorder = 2)
+        # path_plot = 
+        ax.plot(fx_, fy_, label='Frenet path', linestyle = ':', color = 'gray', zorder = 2)
+        # path_plot[0].set_label("Frenet path")
 
         # Plotting current position of the frenet coordinate system
         # x_current, y_current = self.t_to_xy(t)

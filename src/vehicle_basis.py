@@ -683,12 +683,12 @@ class VehicleBasis(Environment):
         elif constraint_type == 'initial_param':
             for i in range(lower_bound.shape[0]):
                 self.g += [constraint[i].coeffs[0] - lower_bound[i]] # we restrict the first coefficient
-                self.g_list += [name[i]]
+                self.g_list += [name[i] + '_part1']
                 self.lbg += [0]
                 self.ubg += [math.inf]
             for i in range(upper_bound.shape[0]):
                 self.g += [constraint[i].coeffs[0] - upper_bound[i]] # we restrict the first coefficient
-                self.g_list += [name[i]]
+                self.g_list += [name[i] + '_part2']
                 self.lbg += [-math.inf]
                 self.ubg += [0]
             return self
@@ -701,12 +701,12 @@ class VehicleBasis(Environment):
             #     self.ubg += [0]
             for i in range(lower_bound.shape[0]):
                 self.g += [constraint[i].coeffs[-1] - lower_bound[i]] # we restrict the last coefficient
-                self.g_list += [name[i]]
+                self.g_list += [name[i] + '_part1']
                 self.lbg += [0]
                 self.ubg += [math.inf]
             for i in range(upper_bound.shape[0]):
                 self.g += [constraint[i].coeffs[-1] - upper_bound[i]] # we restrict the first coefficient
-                self.g_list += [name[i]]
+                self.g_list += [name[i] + '_part2']
                 self.lbg += [-math.inf]
                 self.ubg += [0]
             return self

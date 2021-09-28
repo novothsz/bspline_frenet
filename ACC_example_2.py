@@ -126,11 +126,11 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
     # n_steps = 10
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
-    group.set_var({'t_step': 0.01 * 1})
+    group.set_var({'t_step': 0.04})
     group.set_var({'t_window_size': 0.2})
     group.set_var({'t_end': 0 + 0.2})
     group.set_var({'knot_intervals': 5})
-    group.set_var({'t_resolution_length': 6})
+    group.set_var({'t_resolution_length': 10})
     group.set_var({'rho': 50})
     group.set_var({'rho_input': 200})
     group.set_var({'rho_final_value': 5000})
@@ -186,12 +186,17 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         
         # Time-related things
         iteration_times += [time.time() - t_iter]
-        print(str(i) + "th iteration time: " + str(time.time() - t_iter) + " seconds")
+        # print(str(i) + "th iteration time: " + str(time.time() - t_iter) + " seconds")
+        print(str(time.time() - t_iter) + " seconds")
+        # print(" ")
         t_iter = time.time()
-        
+              
+        # import time
+        # t_peni_mpc = time.time()
         group.intermediate_position_generator_PENI_MPC()
+        # print('peni intermediate time: ' + str(time.time() - t_peni_mpc))
         # group.intermediate_position_generator()
-        group.frenet_plotter(iternum = i, seed = seed)
+        # group.frenet_plotter(iternum = i, seed = seed)
         group.simulation_step()
             
 

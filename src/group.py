@@ -52,9 +52,12 @@ class Group(Environment):
     ###########################################################################
     ###########################################################################
     
-    # import functools
-    # @functools.lru_cache(maxsize=None)
+    import functools
+    @functools.lru_cache(maxsize=None)
     def get_obstacle_corners(self, t):
+        """ This function returns the corners for all the obstacles in a list.
+        (To loop through: 
+        """
         corners = []
         for obstacle in self.vehicles[0].obstacles:
             corners_tmp = [ [corner[0](t).tolist()[0][0], corner[1](t).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
@@ -63,7 +66,7 @@ class Group(Environment):
     
     # def intermediate_
     
-    def intermediate_position_generator_PENI_MPC(self):
+    def intermediate_position_generator_PENI_MPC(self):  
         # 
         # Step 1: Set x0 as starting position
         if self.vehicles[0].t_intermediate_list == []:
@@ -267,8 +270,8 @@ class Group(Environment):
         
         # Step 1: generate possible rotation angles & scaling factors
         degree_step = 5
-        radian_step = degree_step/360*2 * math.pi
-        rotation_angles = [[0 + radian_step * i, 0 - radian_step * i] for i in range(1, int(math.pi/2/radian_step))]
+        radian_step = degree_step/360 * 2 * math.pi
+        rotation_angles = [[0 + radian_step * i, 0 - radian_step * i] for i in range(1, int( (math.pi/2) / radian_step))]
         rotation_angles = np.array(rotation_angles).reshape(-1).tolist()
         
         scaling_step = 1.5
@@ -1218,12 +1221,23 @@ class Group(Environment):
         position"""
 
         fig, ax = plt.subplots()
-        self.vehicles[0].plot_environment(ax)
+        self.vehicles[0].plot_environment(ax, 0)
         for obstacle in self.vehicles[0].obstacles:
             obstacle.plot_obstacle(ax)
         for vehicle in self.vehicles:
-            ax.plot(vehicle.x0[0], vehicle.x0[1], 'ko')
-            ax.plot(vehicle.xf[0], vehicle.xf[1], 'go')
+            x, y = self.fp.frenet_to_inertial(vehicle.xf[0], vehicle.xf[1], 0)
+            x0_plot = ax.plot(x, y, 'ko', markersize = 3)
+            x, y = self.fp.frenet_to_inertial(vehicle.xf[0], vehicle.xf[1], 1)
+            xf_plot =  ax.plot(x, y, 'go', markersize = 3)
+        x0_plot[0].set_label("Starting positions")
+        xf_plot[0].set_label("Final positions")
+        # ax.legend([x0_plot[0], xf_plot[0]], ["Starting positions", "Final positions"])
+        ax.legend(fontsize = 'x-small')
+            
+        ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
+        ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
+        ax.set_aspect('equal', adjustable='box')
+        print("Kezemet, mert csalok!") # x0 helyett is xf
 
 
     def plot_initial_values(self):
@@ -1465,6 +1479,8 @@ class Group(Environment):
 
         # self.check_collision()
         # self.calculate_formation_error()
+        
+        "Zoomed-in version"
         fig, ax = self.figures["figures"]
 
         frame_num = 0
@@ -1481,7 +1497,7 @@ class Group(Environment):
                 ax = self.vehicles[i].plot_moovie_frames(ax, t)
 
             # Axis related stuff
-            ax.set_title("Trajectories of the vehicles after iteration {} with seed {}".format(iternum, seed))
+            # ax.set_title("Trajectories of the vehicles after iteration {} with seed {}".format(iternum, seed))
             ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
             ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
             # Or setting the ax limits 
@@ -1490,10 +1506,57 @@ class Group(Environment):
             ax.set_xlabel("x axis")
             ax.set_ylabel("y axis")
             ax.set_aspect('equal', adjustable='box')
+            
+            
+            
+            plt.axis('off')
+            ax.axes.xaxis.set_visible(False)
+            ax.axes.yaxis.set_visible(False)
+            
+            
             # Saving figure to folder
             fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
             ax.clear()
             frame_num += 1
+            
+        "Zoomed-out version #entire landscape"
+        fig, ax = self.figures["figures"]
+
+        frame_num = 0
+        for t in np.linspace(0, 1, 100):
+            # fig.clear()
+            # fig, ax = plt.subplots()
+
+            # First we plot the paths
+            # for i in range(len(self.vehicles)):
+                # ax = self.vehicles[i].plot_path_frames(ax, t)
+
+            # Then we plot the vehicles
+            for i in range(len(self.vehicles)):
+                ax = self.vehicles[i].plot_moovie_frames(ax, t)
+
+            # Axis related stuff
+            # ax.set_title("Trajectories of the vehicles after iteration {} with seed {}".format(iternum, seed))
+            ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
+            ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
+            # Or setting the ax limits 
+            # ax.set_xlim(self.vehicles[0].fp.fx_spline(t)[0][0] - 2*2, self.vehicles[0].fp.fx_spline(t)[0][0] + 2*2)
+            # ax.set_ylim(self.vehicles[0].fp.fy_spline(t)[0][0] - 1*2, self.vehicles[0].fp.fy_spline(t)[0][0] + 1*2)
+            ax.set_xlabel("x axis")
+            ax.set_ylabel("y axis")
+            ax.set_aspect('equal', adjustable='box')
+            
+            
+            
+            plt.axis('off')
+            ax.axes.xaxis.set_visible(False)
+            ax.axes.yaxis.set_visible(False)
+            
+            # Saving figure to folder
+            fig.savefig(self.cwd + '/video/' + 'entire_{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.pdf', dpi = 200)
+            ax.clear()
+            frame_num += 1
+        
 
         return self
 
