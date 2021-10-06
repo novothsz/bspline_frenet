@@ -217,6 +217,9 @@ class FrenetPath(object):
         """
         The frenet coodinate system mooves along the path at constant speed.
         """
+        # ??
+        # np.sqrt(definite_integral(group.fp.fx_spline.derivative()**2 + group.fp.fy_spline.derivative()**2,0, 1))
+        # np.sqrt(definite_integral(self.fx_spline.derivative()**2 + self.fy_spline.derivative()**2,0, 1))
         if t < 1 and t >= 0:
             return self.sf[axes] / T
         else:

@@ -140,8 +140,8 @@ class Vehicle(VehicleBasis):
                                         name=["formation_vehicle_" + str(i)] * self.n_dimensions_old)
                 
                 # self.J += 10*(vec1[0](t) - vec2[0])**2 + (vec1[1](t) - vec2[1])**2
-            self.J += 10*definite_integral((vec1[0] - vec2[0])**2, 0, 1)
-            self.J += 10*definite_integral((vec1[1] - vec2[1])**2, 0, 1)
+            # self.J += 10*definite_integral((vec1[0] - vec2[0])**2, 0, 1)
+            # self.J += 10*definite_integral((vec1[1] - vec2[1])**2, 0, 1)
             # But the dot product should be > 0, to avoid the vehicles switching place and still
             # fulfilling the formation requirements (at least for those two vehicles)
             """
@@ -159,7 +159,7 @@ class Vehicle(VehicleBasis):
                                     [0],
                                     [0],
                                     constraint_type='overall',
-                                    name=["phi"])
+                                    name=["phi_equality_constraint"])
             "Phi constraint"
             # TODO: I think this is not really needed anymore, but need to check
             # for j in range(len(y)):
@@ -358,9 +358,10 @@ class Vehicle(VehicleBasis):
                 
                 x_intermediate = np.array(self.x_intermediate_list)[idx].tolist()
                 
-                # self.J += rho_intermediate * (p(t_intermediate) -      x_intermediate[0]     )**2
-                # self.J += rho_intermediate * (q(t_intermediate) -      x_intermediate[1]     )**2
-                # self.J += 1000 * rho_intermediate * (phi(t_intermediate) -      x_intermediate[2]     )**2
+                "Cost-function version"
+                # self.J += self.rho_intermediate * (p(t_intermediate) -      x_intermediate[0]     )**2
+                # self.J += self.rho_intermediate * (q(t_intermediate) -      x_intermediate[1]     )**2
+                # self.J += self.rho_intermediate * (phi(t_intermediate) -      x_intermediate[2]     )**2
                 
                 # self.define_constraint([p(t_intermediate) - x_intermediate[0]],
                 #                         [0.0 - 0.1],
@@ -386,11 +387,20 @@ class Vehicle(VehicleBasis):
                 #                         [0.0 + self.slack, 0.0 + self.slack, 0.0 + self.slack],
                 #                         constraint_type='time',
                 #                         name=["guidence" + str(i)] * 1)
+                # self.define_constraint([p(t_intermediate) - x_intermediate[0],
+                #                         q(t_intermediate) - x_intermediate[1],
+                #                         phi(t_intermediate) - x_intermediate[2]],
+                #                         [0.0 - 0.1, 0.0 - 0.1, 0.0 - self.slack],
+                #                         [0.0 + 0.1, 0.0 + 0.1, 0.0 + self.slack],
+                #                         constraint_type='time',
+                #                         name=["guidence" + str(i)] * 1)
+                
+                "Hard-constraint version"
                 self.define_constraint([p(t_intermediate) - x_intermediate[0],
                                         q(t_intermediate) - x_intermediate[1],
                                         phi(t_intermediate) - x_intermediate[2]],
-                                        [0.0 - 0.1, 0.0 - 0.1, 0.0 - self.slack],
-                                        [0.0 + 0.1, 0.0 + 0.1, 0.0 + self.slack],
+                                        [0.0 - self.radious * 1, 0.0 - self.radious * 1, 0.0 - 0.1],
+                                        [0.0 + self.radious * 1, 0.0 + self.radious * 1, 0.0 + 0.1],
                                         constraint_type='time',
                                         name=["guidence" + str(i)] * 1)
                 if t_intermediate == 1:
@@ -404,7 +414,7 @@ class Vehicle(VehicleBasis):
                     
         elif self.MPC_version == True:
             
-            "Non-forgetting version. Currently not working"
+            "Non-forgetting version" # ". Currently not working"
             
             n = self.n_of_saved_waypoints
             assert n == len(self.t_intermediate_list) # Please generate the intermediate points first :)
@@ -428,9 +438,9 @@ class Vehicle(VehicleBasis):
                 
                 lambda_ = np.power(np.linspace(1, 0, n), 1)
                 # for i in range(p.coeffs.shape[0]):
-                self.J += 1/100 * self.rho_final_value * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
-                self.J += 1/100 * self.rho_final_value * lambda_[i] *(q(t_intermediate) - x_intermediate[1])**2
-                self.J += 1/100 * self.rho_final_value * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
+                self.J += 10/100 * self.rho_final_value * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
+                self.J += 10/100 * self.rho_final_value * lambda_[i] *(q(t_intermediate) - x_intermediate[1])**2
+                self.J += 10/100 * self.rho_final_value * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
                 
             "Non-forgetting version END"    
                 

@@ -80,6 +80,7 @@ class VehicleBasis(Environment):
         # self.rho_formation = 100# /5 # /50
         self.rho_input = 0.1 * 10 * 2 * 100
         self.rho_final_value = 0.1 * 10 * 100# * 1000
+        self.rho_intermediate = 1000
         
         self.epsilon = 0.05 # try to keep minimum epsilon distance from the obstacle
         # self.epsilon = self.radious # try to keep minimum epsilon distance from the obstacle

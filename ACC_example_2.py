@@ -68,11 +68,20 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
     corners = ([0.15, -0.15], [0.5, 0.053], [0.25, 0.38], [-0.145, 0.145])
     corners = ([0.2, -0.25], [0.52, -0.02  ], [0.15, 0.5], [-0.2, 0.23])
+    corners = ([-0.323, -0.2], [-0.18, -0.4  ], [0.5, 0.0], [0.323, 0.2]) # ACC
+    
+    delta_x = 0.03 * -1
+    delta_y = -0.1 * -1
+    corners = ([-0.132, -0.2], [0.182, -0.6  ], [0.495, -0.4], [0.185, 0.0]) # ACC
+    corners = ([-0.132 + delta_x, -0.2 + delta_y], [0.182 + delta_x, -0.6 + delta_y], [0.495 + delta_x, -0.4 + delta_y], [0.185 + delta_x, 0.0 + delta_y]) # ACC
+    
+    
+    
     obstacles += [Obstacle(ID = 0, corners = corners)]
     
     # Obstacle 2
     dx = 0.3
-    dy = 0.3
+    dy = 0.4
     tmp_obs = ([-2.4674-dx, -1-dy],
              [-2.4674+dx, -1-dy],
              [-2.4674+dx, -6],
@@ -93,11 +102,11 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
               [2.474-dx, -6])
     obstacles += [Obstacle(ID = 3, corners = tmp_obs)]
     # Obstacle 5
-    tmp_obs = ([2.474-dx, 1+dy],
-              [2.474+dx, 1+dy],
-              [2.474+dx, 6],
-              [2.474-dx, 6])
-    obstacles += [Obstacle(ID = 4, corners = tmp_obs)]
+    # tmp_obs = ([2.474-dx, 1+dy],
+    #           [2.474+dx, 1+dy],
+    #           [2.474+dx, 6],
+    #           [2.474-dx, 6])
+    # obstacles += [Obstacle(ID = 4, corners = tmp_obs)]
     
     
     dx = 0.3
@@ -163,8 +172,10 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     
     group.intermediate_position_generator_PENI_MPC()
+    # group.ACC_MPC()
     group.prepare()
     group.intermediate_position_generator_PENI_MPC()
+    # group.ACC_MPC()
        
        
     
@@ -194,6 +205,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         # import time
         # t_peni_mpc = time.time()
         group.intermediate_position_generator_PENI_MPC()
+        # group.ACC_MPC()
         # print('peni intermediate time: ' + str(time.time() - t_peni_mpc))
         # group.intermediate_position_generator()
         # group.frenet_plotter(iternum = i, seed = seed)

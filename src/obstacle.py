@@ -124,6 +124,12 @@ class Obstacle(Environment):
             q_ = np.array([corner[1](t_)[0] for t_ in t]).reshape(-1)
             ax.plot(p_, q_, 'ro')
             
+            
+            
+        # circle = plt.Circle((0, 0), 1, color='k', alpha=0.5, zorder = 10)
+        circle = plt.Circle((0, 0), 0.52, color='k', alpha=0.5, zorder = 10)
+        ax.add_patch(circle)
+        
         ax.set_aspect('equal', adjustable='box')
         plt.savefig('b_' + str(self.ID) + '.png')
         return self

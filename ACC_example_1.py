@@ -68,6 +68,17 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
     corners = ([0.15, -0.15], [0.5, 0.053], [0.25, 0.38], [-0.145, 0.145])
     corners = ([0.2, -0.25], [0.52, -0.02  ], [0.15, 0.5], [-0.2, 0.23])
+    corners = ([-0.323, -0.2], [-0.18, -0.4  ], [0.5, 0.0], [0.323, 0.2]) # ACC
+    corners = ([-0.323, -0.2], [0, -0.6  ], [0.658, -0.174], [0.323, 0.2]) # ACC
+    delta_x = 0.03
+    delta_y = -0.1
+    corners = ([-0.323 + delta_x, -0.2 + delta_y], [0 + delta_x, -0.6  + delta_y ], [0.658 + delta_x, -0.174 + delta_y], [0.323 + delta_x, 0.2 + delta_y]) # ACC
+    
+    
+    delta_x = 0.03 * -1
+    delta_y = -0.1 * -1
+    corners = ([-0.132, -0.2], [0.182, -0.6  ], [0.495, -0.4], [0.185, 0.0]) # ACC
+    corners = ([-0.132 + delta_x, -0.2 + delta_y], [0.182 + delta_x, -0.6 + delta_y], [0.495 + delta_x, -0.4 + delta_y], [0.185 + delta_x, 0.0 + delta_y]) # ACC
     obstacles += [Obstacle(ID = 0, corners = corners)]
     
     # Obstacle 2
@@ -93,11 +104,11 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
               [2.474-dx, -6])
     obstacles += [Obstacle(ID = 3, corners = tmp_obs)]
     # Obstacle 5
-    tmp_obs = ([2.474-dx, 1+dy],
-              [2.474+dx, 1+dy],
-              [2.474+dx, 6],
-              [2.474-dx, 6])
-    obstacles += [Obstacle(ID = 4, corners = tmp_obs)]
+    # tmp_obs = ([2.474-dx, 1+dy],
+    #           [2.474+dx, 1+dy],
+    #           [2.474+dx, 6],
+    #           [2.474-dx, 6])
+    # obstacles += [Obstacle(ID = 4, corners = tmp_obs)]
     
     
     dx = 0.3
@@ -124,20 +135,20 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     n_intermediate_ADMM = 1
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
-    n_steps = 5
+    n_steps = 1
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
     group.set_var({'t_step': 0})
     group.set_var({'t_window_size': 1})
     group.set_var({'t_end': 1})
     # group.set_var({'knot_intervals': 35})
-    group.set_var({'knot_intervals': 25})
+    group.set_var({'knot_intervals': 25 * 2})
     # group.set_var({'t_resolution_length': 120})
     group.set_var({'t_resolution_length': 50})
-    group.set_var({'rho': 50})
+    group.set_var({'rho': 500})
     group.set_var({'rho_input': 100})
     group.back_scaling_factor = 0.4
     group.back_rotation_factor = 1 # 0.4
-    group.DFM_division = 9
+    group.DFM_division = 15
     group.DFM_lookback = 1 / group.DFM_division / 2
     group.DFM_lookahead = 1 / group.DFM_division / 2
     
@@ -166,8 +177,14 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     for i in range(len(group.vehicles)):
             group.vehicles[i].set_position(position = positions[i], position_type = 'final')
     
+    print("mosoly")
+    # group.intermediate_position_generator_PENI_full()
+    # group.intermediate_position_generator_SZILARD_sweep()
+    group.sweep_ACC()
     
-    group.intermediate_position_generator_PENI_full()
+    # return 0, group
+    
+    # group.intermediate_position_generator_PENI_full()
     # group.intermediate_position_generator_SINGLE_RUN()
     # assert 0
     group.prepare()
@@ -225,3 +242,12 @@ group.plot_moovie_frames_old(iternum=0, seed=0)
 group.save_trajectory_to_csv(n_steps)
 "This is not good like this! We need to save the final plots for the various n_intermediate_ADMM values and run the code multiple times"
 "Only then can we assemble and compare the results."
+
+fig, ax = plt.subplots()
+ax.set_aspect('equal', adjustable='box')
+group.plot_environment(ax, 0)
+group.vehicles[0].plot_moovie_frames(ax, 0)
+plt.show()
+
+
+group.vehicles[0].obstacles[0].plot_corners_spline()

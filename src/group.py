@@ -42,6 +42,10 @@ class Group(Environment):
         self.cum_scaling = 1
         
         
+        self.ACC_MPC_pos_queue = []
+        self.ACC_MPC_t_queue = []
+        
+        
         
     
     ###########################################################################
@@ -60,14 +64,715 @@ class Group(Environment):
         """
         corners = []
         for obstacle in self.vehicles[0].obstacles:
+            corners_tmp = [ [corner[0](t).tolist()[0][0], corner[1](t).tolist()[0][0]] for corner in obstacle.corners_spline]
+            corners += [corners_tmp]
+        return corners
+    
+    @functools.lru_cache(maxsize=None)
+    def get_scaled_obstacle_corners(self, t):
+        """ This function returns the corners for all the obstacles in a list.
+        (To loop through: 
+        """
+        corners = []
+        for obstacle in self.vehicles[0].obstacles:
             corners_tmp = [ [corner[0](t).tolist()[0][0], corner[1](t).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
             corners += [corners_tmp]
         return corners
     
-    # def intermediate_
+    
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    
+    
+    def ACC_MPC(self):
+        """This function is called at every iteration. If an obstacle enters the danger zone, it quickly looks at future times, and 
+        finds the time, when the obstacle leaves the danger zone.
+        
+        How does this function differ from the normal sweep_ACC function?
+            - t_end is not increased, but read from the vehicle member variable
+            - x_intermediate list is not neccesarely updated, because t_danger_middle might be outside of the horizon. It will be added, when the horizon reached the time
+            - t_danger cannot be an arbitrary value. It must be an integer multiply of t_step
+            
+        IMPORTANT:  - queue stores t values in frenet time
+                    - intermediate list stores t values in horizon time
+        """
+        # What we need to do:
+            # check for collision
+                # if collision, find t_danger_end
+                # find t_middle, which is an integer multiply of t_step
+                # find the optimal formation configuration at this time. Save it in a queue.
+                # check every time, if we should feed in something from the queue. Otherwise, we just feed in the 
+                #   the previous value again (because we always have to update the last value since the parameter count is 
+                #   predefined and always waits for a new update, no matter, what)
+                
+            # how do we avoid checking the same obstacle over and over?
+            #   why is this even necessary? --> because 1) we don't want to have duplicate value in the queue, 2) t_middle changes at
+            #   every step, so...
+            # Solution: we tell DFG not to do anything, until we pass t_danger_end
+            
+        # Step -2: check, if the queue contains a value, which is higher or equal, then the current t_end
+        # if yes, it means, that we have already dealt with that particular obstacle.
+        # obstacles are spaced out so we won't have to worry about other obstacles, while we haven't passed this one
+        # therefore,  if the answer is yes, then we can skip checking for collision.
+        # However, we still have to update the intermediate lists.
+        
+        "Check, if (t_end < then the values is the queue)"
+        # check, if we can feed something new to the intermediate lists. If no, let's just repeat the old values.
+        t_end = self.vehicles[0].t_end + self.vehicles[0].t_step
+        
+        # finding indices in the queue, which we should now extract
+        queue_indices = []
+        for i, t_ in enumerate(self.ACC_MPC_t_queue):
+            if t_ <= t_end:
+                queue_indices += [i]
+        
+        # if there exists such index, which we want to extract
+        if queue_indices != []:
+            length = len(queue_indices)
+            for i in range(length):
+                for j, vehicle in enumerate(self.vehicles):
+                    vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + self.ACC_MPC_pos_queue[i][j]
+                    vehicle.variable_history['x_intermediate_list'] = vehicle.x_intermediate_list
+                    vehicle.t_intermediate_list = vehicle.t_intermediate_list[1:] + [self.ACC_MPC_t_queue[i]]
+                    # We also need to delete this element from the queue
+                self.ACC_MPC_pos_queue = self.ACC_MPC_pos_queue[1:]
+                self.ACC_MPC_t_queue = self.ACC_MPC_t_queue[1:]
+            return self
+            
+        else:
+            pass # let's check for collision, etc.
+        
+        "Check, if we are in the first iteration, meaning the intermediate_lists are empty"
+        t_step = self.vehicles[0].t_step
+        
+            
+        # If the intermediate states are empty, set x0 as starting position
+        if self.vehicles[0].t_intermediate_list == []:
+            vehicle_positions = []
+            for vehicle in self.vehicles:
+                vehicle_positions += [vehicle.x0[:2]]
+            self.vehicle_positions_original = np.array(vehicle_positions).tolist()
+            
+            # We need to fill up the lists at the beginning
+            for i, vehicle in enumerate(self.vehicles):
+                vehicle.x_intermediate_list = np.array([vehicle.x0[:2] + [0]] * self.vehicles[0].n_of_saved_waypoints).reshape(-1).tolist()
+                vehicle.t_intermediate_list = np.linspace(self.vehicles[0].t_step, 1, self.vehicles[0].n_of_saved_waypoints).tolist()
+                # Make sure you have noticed, that in the above code we have the t range as: [t_step, 1]!
+            return self
+       
+        # If this is not the first iteration, then extract the vehicle positions from the intermediate lists
+        # TODO: We should actually take this position from the end of the queue... (if it is not an empty list)
+        else:
+            vehicle_positions = []
+            for vehicle in self.vehicles:
+                final_waypoints = vehicle.x_intermediate_list[-3:-1]
+                vehicle_positions += [final_waypoints]
+                
+        "Check, if we should even do anything..."
+        # If in the queue there are some values (but we didn't use any of them in the first step), then no... We shouldn't do anyithing
+        # Except: doing a step forward
+        # if self.ACC_MPC_t_queue[1:] != []:
+        if self.ACC_MPC_t_queue != []:
+            # Doing one step forward (shifting)
+            for i, vehicle in enumerate(self.vehicles):
+                vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + vehicle.x_intermediate_list[-3:]
+                vehicle.variable_history['x_intermediate_list'] = vehicle.x_intermediate_list
+            return self
+        
+        "Okay... so...:"
+        # nothing in the queue to add
+        # not the first iteration
+        # the queue is empty, so we can search for collision
+
+        "Walk the walk"        
+        # Step 0: Check if any obstacle is inside the danger zone.
+        # t_end = self.vehicles[0].t_end + self.vehicles[0].t_step #... well, maybe  - self.vehicles[0].t_step? Depends on when we call this method
+        all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, self.get_obstacle_corners(t_end))
+        
+        # Step 1: Which obstacle is inside the danger zone?
+        obstacle_idx = []
+        for i in range(len(all_collisions)):
+            if all_collisions[i] == True:
+                obstacle_idx += [i]
+                
+                
+        # Step 2: if collision has been found, find t_danger_end time
+        if obstacle_idx != []:
+            t_danger_start = t_end
+            t_danger_end = t_danger_start
+            t_danger_step = t_step / 10 # if collision is detected, we step this 'smoothly' until no danger is detected
+            while t_danger_end <= t_end + t_step:
+                t_danger_end += t_danger_step
+                # Check collision but only with obstacles, which are dangerous (we expect, that this doesn't change. Meaning:
+                # obstacles are spaced out well.)
+                all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, np.array(self.get_obstacle_corners(t_danger_end))[obstacle_idx].tolist())
+                if collision == False:
+                    break  # this is the t_danger_end we were looking for (no obstacles in the danger zone anymore :) 
+                    
+            # Okay... we have [t_danger_start, t_danger_end]
+            # Let's get the right formation configuration
+            t = (t_danger_start + t_danger_end) / 2
+            # !!! t must be an integer multiply of t_step !!!
+            # Actually, no...
+            # It is sufficient, if I only expand lookahead... 
+            lookback = (t_danger_end - t_danger_start) / 2
+            lookahead = (t_danger_end - t_danger_start) / 2
+            # lookahead = lookahead + (t_step - t_danger_end % t_step); print("Please check this in debug mode :)")
+            lookahead = lookahead + (t_danger_end % t_step); assert lookahead%t_step >= -1e5 and lookahead%t_step <= 1e5; print("Please check this in debug mode :)")
+            
+            
+            # Zizzentsük be :)
+            t_zizz = np.linspace( (t-lookback >= 0) * (t-lookback) + (t-lookback > 0) * 0,
+                                      (t+lookahead <= 1) * (t+lookahead) + (t+lookahead > 1) * 1,
+                                      10)
+            
+            # Step: Get the least cost formation & ACTION_TAKEN
+            cum_rotation = self.cum_rotation
+            cum_scaling = self.cum_scaling
+            
+            vehicle_positions, cum_rotation, cum_scaling, ACTION_TAKEN = self.intermediate_position_generator_SZILARD(vehicle_positions, cum_rotation, cum_scaling, t_zizz)
+        
+            self.cum_rotation = cum_rotation
+            self.cum_scaling = cum_scaling
+            
+            if ACTION_TAKEN == 'no_solution_found':
+                print("No solution has ben found. We need to halve the time. This should be implemented later :)")
+                assert 0
+                
+            # Create a t_intermediate & x_intermediate from this
+            if ACTION_TAKEN == "back_transformation" or ACTION_TAKEN == "yes":
+                
+                # Get the valid intermediate values between [t - lookback, t + lookahead]
+                # Okay, so we know, that the lower & upper bounds are on t_step values.
+                
+                # The values are valid for range_ number of steps
+                range_ = ((t + lookahead) - (t - lookback)) / t_step
+                range_ = range_ + 2 # +2, because it is valid for [t - lookback] AND [t + lookahead] as well
+                statement = range_%1 >= range_ -1e-5 and range_%1 <= range_ + 1e-5
+                if statement == False:
+                    kappa = True
+                range_ = int(range_)
+                t_queue_new = np.linspace(t - lookback, t + lookahead, range_).tolist()
+                
+                MPC_pos_new = [[position[0], position[1], cum_rotation] for position in vehicle_positions]
+                MPC_pos_new = [MPC_pos_new]  * range_
+                
+                assert self.ACC_MPC_pos_queue == [] and self.ACC_MPC_t_queue == [] # if we are here, these should be empty...
+                self.ACC_MPC_pos_queue += MPC_pos_new 
+                self.ACC_MPC_t_queue += t_queue_new
+                
+        else:
+            pass # no collision has happened
+                
+        # Step 3: check, if we can feed something new to the intermediate lists. If no, let's just shift the old values.
+        queue_indices = []
+        for i, t_ in enumerate(self.ACC_MPC_t_queue):
+            if t_ <= t_end:
+                queue_indices += [i] # we want to feed in these indices from the queue
+                
+        if queue_indices != []:
+            length = len(queue_indices)
+            for i in range(length):
+                for j, vehicle in enumerate(self.vehicles):
+                    vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + self.ACC_MPC_pos_queue[i][j]
+                    vehicle.variable_history['x_intermediate_list'] = vehicle.x_intermediate_list
+                    # vehicle.t_intermediate_list = [vehicle.t_intermediate_list[1:]] + [self.ACC_MPC_t_queue[i][j]]
+                    # We also need to delete this element from the queue
+                    
+                print('Only one')
+                self.set_var({'new_positions': {'stage' : self.stage, 'vehicle_positions_new' : self.ACC_MPC_pos_queue[i]}})
+        
+                self.ACC_MPC_pos_queue = self.ACC_MPC_pos_queue[1:]
+                self.ACC_MPC_t_queue = self.ACC_MPC_t_queue[1:]
+                
+                
+        
+            
+        else: # We don't want to feed in anything, but the list has to be shifted
+            for i, vehicle in enumerate(self.vehicles):
+                vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + vehicle.x_intermediate_list[-3:]
+                vehicle.variable_history['x_intermediate_list'] = vehicle.x_intermediate_list
+                # vehicle.t_intermediate_list = vehicle.t_intermediate_list[1:] + vehicle.t_intermediate_list[-1]
+        
+        
+        
+        
+            
+        
+        return self
+    
+    
+    
+    
+    
+    # Okay, this will be the version, where we look, whether the obstacle has entered the danger zone.
+    # How large is the danger zone?
+    # Well, the size of the maximum formation size.
+    
+    
+    def sweep_ACC(self):
+        import time
+        t_iter = time.time()
+        
+        t_step = 0.01
+        
+        vehicle_positions = []
+        for vehicle in self.vehicles:
+            vehicle_positions += [vehicle.x0[:2]]
+            
+        vehicle_positions_original = np.array(vehicle_positions).tolist()
+                
+                
+        # s_danger = 0.5
+        
+        t_end = 0
+        while t_end <= 1:
+            
+            # Check for collision
+            
+            # If no collision: step or rotate back
+            # If collision: step forward, until no collision.
+            #   save t_safe
+            # find the appropriate formation during this dangerous time.
+            
+            # necessary functions:
+                # - function checking collision at time t (done)
+                # - function, which upon detection of collision finds the safe time
+                # - function, which finds the formation configuration during the danger time
+                # time splitting if no solution has been found.
+                
+                # save the intermediate step
+                # increase the time to t_danger_end + t_step :)
+            
+            "Actually, let's check, if it is inside of the danger zone or not."
+            
+            
+            
+            # Step 1: check collision at time t
+            # all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions, self.get_obstacle_corners(t_end))
+            all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, self.get_obstacle_corners(t_end))
+            obstacle_idx = []
+            for i, obstacle in enumerate(self.vehicles[0].obstacles):
+                idx = np.arange(len(self.vehicles)*i,len(self.vehicles)*i+len(self.vehicles))
+                is_collision = any(np.array(all_collisions)[idx].tolist())
+                if is_collision:
+                    obstacle_idx += [i]
+            # Step 2: if collision has been found, find t_danger_end time
+            if obstacle_idx != []:
+                t_danger_start = t_end
+                t_danger_end = t_danger_start
+                t_danger_step = t_step / 10 # if collision is detected, we step this 'smoothly' until no danger is detected
+                while t_danger_end <= 1:
+                    t_danger_end += t_danger_step
+                    # Check collision but only with obstacles, which are dangerous (we expect, that this doesn't change. Meaning:
+                    # obstacles are spaced out well.)
+                    # all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions, np.array(self.get_obstacle_corners(t_danger_end))[obstacle_idx].tolist())
+                    all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, np.array(self.get_scaled_obstacle_corners(t_danger_end))[obstacle_idx].tolist())
+                    if collision == False:
+                        # this is the t_danger_end we were looking for
+                        break
+                # Okay... we have [t_danger_start, t_danger_end]
+                # Let's get the right formation configuration
+                
+                
+                t = (t_danger_start + t_danger_end) / 2
+                lookback = (t_danger_end - t_danger_start) / 2 * 1.0
+                lookahead = (t_danger_end - t_danger_start) / 2 * 1.5
+                t_zizz = np.linspace( (t-lookback >= 0) * (t-lookback) + (t-lookback > 0) * 0,
+                                          (t+lookahead <= 1) * (t+lookahead) + (t+lookahead > 1) * 1,
+                                          10)
+                
+                # Step: Get the least cost formation & ACTION_TAKEN
+                cum_rotation = self.cum_rotation
+                cum_scaling = self.cum_scaling
+                
+                vehicle_positions, cum_rotation, cum_scaling, ACTION_TAKEN = self.intermediate_position_generator_SZILARD(vehicle_positions, cum_rotation, cum_scaling, t_zizz)
+            
+                self.cum_rotation = cum_rotation
+                self.cum_scaling = cum_scaling
+                
+                if ACTION_TAKEN == 'no_solution_found':
+                    print("No solution has ben found. We need to halve the time. This should be implemented later :)")
+                    assert 0
+                    
+                # Create a t_intermediate & x_intermediate from this
+                if ACTION_TAKEN == "back_transformation" or ACTION_TAKEN == "yes":
+                    for i, vehicle in enumerate(self.vehicles):
+                        vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
+                        vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
+                        vehicle.t_intermediate_list += [t]
+                        
+                
+                t_end = t_danger_end + t_step
+                
+        
+            elif obstacle_idx == []:
+                t_end += t_step
+                
+                
+        print("ACC_sweep finished")
+        print('t_intermediate_list')
+        print(self.vehicles[0].t_intermediate_list)
+        print('x_intermediate_list')
+        print(self.vehicles[0].x_intermediate_list)
+        
+        # t_end = 1
+        for i, vehicle in enumerate(self.vehicles):
+            vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]
+            vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
+            vehicle.t_intermediate_list += [1]
+            
+        print('ACC_sweep full time: ' + str(time.time() - t_iter))
+        
+        return self
+        
+
+    
+        
+    
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    
+    
+    
+    """
+    Okay... so...
+    Assume, we are doing MPC.
+    Then, in the first run, we will have to create t_intermediate steps. Let it be self.n_of_saved_waypoints = int(self.t_window_size / self.t_step) assert 
+    # We already have this, actually...
+        
+        self.n_of_saved_waypoints = int(self.t_window_size / self.t_step) + 1; epsilon = 10e-10; assert self.t_window_size % self.t_step > -epsilon and \
+                                                                                                        self.t_window_size % self.t_step < epsilon# math.floor(self.t_window_size / self.t_step)
+                                                                                                        
+    s = np.sqrt(definite_integral(self.fp.fx_spline.derivative()**2 + self.fp.fy_spline.derivative()**2,0, 1))   
+    !!!!! VIGYÁZZ, ITT MÉG HOZZA KELL ADNI AZT, HOGY HALAD ALATTUNK AZ ÚT, TEHÁT AZ, AKI EGY IRÁNYBA 
+    AKAR MENNI A FRENET SEBESSÉGÉVEL, ANNAK MÉG GYORSABBAN KELL MENNIE!!!!!
+    
+    
+    T = 10
+    v_frenet = s / T
+    
+    s_max = self.vehicles[0].radious * 5 * 2
+    t_DFG = s_max / v_frenet
+    
+    
+    
+    
+    """
+    
+    def intermediate_position_generator_SZILARD_sweep(self):
+        from .spline_extra import definite_integral
+        s = np.sqrt(definite_integral(self.fp.fx_spline.derivative()**2 + self.fp.fy_spline.derivative()**2,0, 1))    
+        T = 10
+        v_frenet = s / T
+        
+        s_max = self.vehicles[0].radious * 5 * 2
+        s_max = 1.39
+        v_max = v_frenet * 5
+        t_DFG = s_max / (v_max - abs(v_frenet))
+        
+    
+        
+        t_step = t_DFG.reshape(-1).tolist()[0] # self.vehicles[0].t_step
+        
+        self.lookback = 0
+        self.lookahead = t_step
+        print('lookback&lookahead has benn changed')
+        
+        
+        # t_step = 0.02
+        t_end = 0
+        while t_end <= 1:
+            self.intermediate_position_generator_SZILARD_action(t_end)
+            t_end += t_step
+        
+        return self
+    
+    def intermediate_position_generator_SZILARD_action(self, t_end):
+        
+        "Some part are copied over from intermediate_position_generator_PENI_MPC"
+        # namely: setting x0
+        
+        """ This function is used, when generating new waypoints. 
+        """
+        # Step 1: Set x0 as starting position
+        if self.vehicles[0].t_intermediate_list == []:
+            vehicle_positions = []
+            for vehicle in self.vehicles:
+                vehicle_positions += [vehicle.x0[:2]]
+        else:
+            vehicle_positions = []
+            for vehicle in self.vehicles:
+                final_waypoints = vehicle.x_intermediate_list[-3:-1]
+                vehicle_positions += [final_waypoints]
+                
+            
+        # Step 2: get the current final time, rotation and scaling
+        # t_end = self.vehicles[0].t_end + self.vehicles[0].t_step #... well, maybe  - self.vehicles[0].t_step? Depends on when we call this method
+        
+        t_end = t_end # :))
+        
+        cum_rotation = self.cum_rotation
+        cum_scaling = self.cum_scaling
+                
+        # Step 3: zizzentsük be 
+        # TODO: ?Mennyi legyen a zizz?
+        t = t_end
+        # lookback = self.vehicles[0].t_window_size * 0.2
+        # lookahead = self.vehicles[0].t_window_size * 0.2
+        lookback = self.DFM_lookback
+        lookahead = self.DFM_lookahead
+        t_zizz = np.linspace( (t-lookback >= 0) * (t-lookback) + (t-lookback > 0) * 0,
+                                  (t+lookahead <= 1) * (t+lookahead) + (t+lookahead > 1) * 1,
+                                  10)
+        # Step 4: Get the least cost formation & ACTION_TAKEN
+        vehicle_positions, cum_rotation, cum_scaling, ACTION_TAKEN = self.intermediate_position_generator_SZILARD(vehicle_positions, cum_rotation, cum_scaling, t_zizz)
+        
+        # Step 5: Save stuff
+        self.cum_rotation = cum_rotation
+        self.cum_scaling = cum_scaling
+        
+        # Step 6: update x_intermediate_list & t_intermediate_list
+        # Well... we have the following ACTION_TAKEN options:
+        # - no_action -> do nothing
+        # - back_transformation -> save it
+        # - no_solution_found -> do nothing
+        # - yes -> save it
+        
+        if ACTION_TAKEN == "back_transformation" or ACTION_TAKEN == "yes":
+        
+            
+            # for vehicle_positions, cum_rotation, t_ in zip(vehicle_positions_saved, cum_rotation_saved, t_waypoints):
+            for i, vehicle in enumerate(self.vehicles):
+                vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
+                vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
+                vehicle.t_intermediate_list += [t]
+                
+            # "MPC style"
+            # for i, vehicle in enumerate(self.vehicles):
+            #     # delete first elemnt, attach new element to the end
+            #     vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation] 
+            #     vehicle.variable_history['x_intermediate_list'] += [vehicle.x_intermediate_list]
+            #     vehicle.xf = vehicle.x_intermediate_list[-3:] + vehicle.xf[3:]
+                
+            # vehicle_positions_new = []
+            # for i, vehicle in enumerate(self.vehicles):
+            #     vehicle_positions_new += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
+            # self.set_var({'new_positions': {'stage' : self.stage, 'vehicle_positions_new' : vehicle_positions_new}})
+            
+        if ACTION_TAKEN == 'no_action' or ACTION_TAKEN == 'no_solution_found':
+            
+            pass
+        
+        print('t_end, ACTION_TAKEN: ' + str(t_end) + ', ' + str(ACTION_TAKEN))
+        
+        return self
+        
+    def intermediate_position_generator_SZILARD(self, vehicle_positions, cum_rotation, cum_scaling, t):
+        """ This function is called iteratively every ?t_step? -> What should this value be?. It check for collision. 
+        If no collision:
+            - rotate/scale back -> save it to t&x_intermediate_list
+            - do nothing
+        If collision:
+            - save it to t&x_intermediate_list
+        """        
+        
+        "The best way to start is to copy everything from intermediate_position_generator_PENI"
+        # we will have an indicator on what action we have taken
+        ACTION_TAKEN = []
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+        """The goal of this function is to receive a set of vehicle positions and calculate a rotated-scaled frame, that does not collide with 
+        obstaacles at the given time-point.
+        If t is a list of time values, then each of these time values will be checked for collision"""
+        
+        
+        # Step 0: first always try to turn&scale it back... :)
+        #Backturning
+        rotation_angle = -1 * self.back_rotation_factor * cum_rotation
+        # --minimum rotation value--
+        if -5/360 * 2 * math.pi <= rotation_angle < 0.0 or 0.0 < rotation_angle <= -5/360 * 2 * math.pi:
+            rotation_angle = -1 * cum_rotation
+        
+        
+        # Backscaling
+        deviance = abs(1 - 1 / cum_scaling)
+        deviance *= self.back_scaling_factor
+        
+        # if the formation is larger, than the reference size, then we want to shrink it
+        if cum_scaling >= 1:
+            scaling_factor = 1 - deviance
+        # if the formation is smaller, than the reference size, then we want to expand it
+        else:
+            scaling_factor = 1 + deviance
+            
+        # --minimum scaling value--
+        # if the back-scaling factor changes the size less then 10%, then we scale back completely
+        if 0.9 <= scaling_factor < 1.0 or 1.0 < scaling_factor <= 1.1:
+            deviance = abs(1 - 1 / cum_scaling)
+            if cum_scaling >= 1:
+                scaling_factor = 1 - deviance
+            else:
+                scaling_factor = 1 + deviance
+        
+        vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
+        vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
+        collision_saved = []
+        for t_ in t:
+            # all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, self.get_scaled_obstacle_corners(t_))
+            all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions_scaled_rotated, self.get_scaled_obstacle_corners(t_))
+           
+            collision_saved += [False]
+            if collision == True:
+                collision_saved[-1] = True
+                break
+        
+        if all(collision is False for collision in collision_saved):
+            # If we are in this if, then no collision happens when we try to rotate/scale back the formation.
+            # print('-, -')
+            if rotation_angle == 0 and scaling_factor == 1:
+                ACTION_TAKEN = "no_action"
+            else:
+                ACTION_TAKEN = "back_transformation"
+            return vehicle_positions_scaled_rotated, cum_rotation + rotation_angle, cum_scaling * scaling_factor, ACTION_TAKEN
+        
+        # Otherwise, if we cannot rotate&scale back, find something else:
+        # Step 1: generate possible rotation angles & scaling factors
+        degree_step = 5
+        radian_step = degree_step/360 * 2 * math.pi
+        rotation_angles = [[0 + radian_step * i, 0 - radian_step * i] for i in range(1, int( (math.pi/2) / radian_step))]
+        rotation_angles = np.array(rotation_angles).reshape(-1).tolist()
+        
+        scaling_step = 1.5
+        scaling_factors_shrink = [  1 / (scaling_step ** i)  for i in range(0, math.floor(abs(math.log(0.25) / math.log(scaling_step))))  ]
+        scaling_factors_expand = [  1 * scaling_step ** i  for i in range(0, math.floor(abs(math.log(0.25) / math.log(scaling_step))))  ]
+        scaling_factors = scaling_factors_shrink + scaling_factors_expand
+        scaling_factors = [1, 0.9, 0.8, 0.6, 1.1, 1.2, 1.4, 1.8, 2.0, 2.5, 3.0, 4.0]
+        
+        # Step 2: We iterate through all possible rotation & scaling possibilities
+        # Then, in b) we check, if that specific rotation & sacling results in collision between [t0, tf] or not.
+        costs = []
+        vehicle_positions_new_saved = []
+        rotation_angle_new_saved = []
+        scaling_factor_new_saved = []
+        collision_saved = []
+        for scaling_factor in scaling_factors:
+            vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
+            for rotation_angle in rotation_angles:
+                
+                vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
+                # Step 2b) check for each t_ in t if collision happens. If yes, do not check further, 
+                # the given scaling factor & rotation angle is not good.
+                
+                # First let's save these :)
+                vehicle_positions_new_saved += [vehicle_positions_scaled_rotated]
+                rotation_angle_new_saved += [rotation_angle]
+                scaling_factor_new_saved += [scaling_factor]
+                collision_saved += [False]
+                
+                collision_saved_tmp = []
+                for t_ in t:
+                    all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, self.get_obstacle_corners(t_))
+                    collision_saved_tmp += [collision]
+                    if collision == True:
+                        collision_saved[-1] = True
+                        costs += [math.inf]
+                        break
+                # if for any t_ we did not break and put inf cost into costs, then calculate a proper cost   
+                if all(collision is False for collision in collision_saved_tmp):
+                    # Step 2c) if no collision happens, calculate a cost for the given rotation & scaling combo
+                    cost = self.formation_change_cost_calculator(vehicle_positions, vehicle_positions_scaled_rotated, rotation_angle, scaling_factor)
+                    # print(scaling_factor, rotation_angle, cost)
+                    costs += [cost]
+                    
+        max_distance = self.max_distance_during_turning(vehicle_positions, vehicle_positions_new_saved)
+        # if we cannot find good solution, do nothing
+        if all(collision_saved):
+            vehicle_positions_new = vehicle_positions
+            cum_rotation = 0
+            cum_scaling = 1
+            print("We have a problem boss! Every formation candidate collides :/")
+            ACTION_TAKEN = "no_solution_found"
+        else: 
+            # Now we have the costs and everything in order.
+            # Let's find the least cost value.
+            cost_min = min(costs)
+            cost_min_idx = costs.index(cost_min)
+            # And the ideal position, rotation angle & scaling factor is:
+            vehicle_positions_new = vehicle_positions_new_saved[cost_min_idx]
+            rotation_angle_new = rotation_angle_new_saved[cost_min_idx]
+            scaling_factor_new = scaling_factor_new_saved[cost_min_idx]
+            
+            cum_rotation += rotation_angle_new
+            cum_scaling *= scaling_factor_new
+            
+            ACTION_TAKEN = "yes"
+            
+            # print(rotation_angle_new, scaling_factor_new)
+        
+        
+        return vehicle_positions_new, cum_rotation, cum_scaling, ACTION_TAKEN
+
+        
+       
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ########################################################################### 
+        
+    def max_distance_during_turning(self, vehicle_positions_original , vehicle_positions_new_saved):
+        max_distance = -math.inf
+        # for each formation candidate
+        for vehicle_positions in vehicle_positions_new_saved:
+            # for each vehicle
+            for pos_new, pos_original in zip(vehicle_positions, vehicle_positions_original):
+                distance = np.sqrt((pos_new[0] - pos_original[0])**2 + (pos_new[1] - pos_original[1])**2)
+                if distance > max_distance:
+                    max_distance = distance
+                
+        return max_distance
+                        
+            
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
     
     def intermediate_position_generator_PENI_MPC(self):  
-        # 
+        """ This function is used, when generating new waypoints. 
+        """
         # Step 1: Set x0 as starting position
         if self.vehicles[0].t_intermediate_list == []:
             vehicle_positions = []
@@ -243,14 +948,30 @@ class Group(Environment):
         # Step 0: first always try to turn&scale it back... :)
         #Backturning
         rotation_angle = -1 * self.back_rotation_factor * cum_rotation
+        # --minimum rotation value--
+        if -5/360 * 2 * math.pi <= rotation_angle < 0.0 or 0.0 < rotation_angle <= -5/360 * 2 * math.pi:
+            rotation_angle = -1 * cum_rotation
+        
         
         # Backscaling
         deviance = abs(1 - 1 / cum_scaling)
         deviance *= self.back_scaling_factor
+        
+        # if the formation is larger, than the reference size, then we want to shrink it
         if cum_scaling >= 1:
             scaling_factor = 1 - deviance
+        # if the formation is smaller, than the reference size, then we want to expand it
         else:
             scaling_factor = 1 + deviance
+            
+        # --minimum scaling value--
+        # if the back-scaling factor changes the size less then 10%, then we scale back completely
+        if 0.9 <= scaling_factor < 1.0 or 1.0 < scaling_factor <= 1.1:
+            deviance = abs(1 - 1 / cum_scaling)
+            if cum_scaling >= 1:
+                scaling_factor = 1 - deviance
+            else:
+                scaling_factor = 1 + deviance
         
         vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
         vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
@@ -264,10 +985,11 @@ class Group(Environment):
                 break
         
         if all(collision is False for collision in collision_saved):
+            # If we are in this if, then no collision happens when we try to rotate/scale back the formation.
             # print('-, -')
             return vehicle_positions_scaled_rotated, cum_rotation + rotation_angle, cum_scaling * scaling_factor
-        # Otherwise, if we cannot rotate&scale back, find something else:
         
+        # Otherwise, if we cannot rotate&scale back, find something else:
         # Step 1: generate possible rotation angles & scaling factors
         degree_step = 5
         radian_step = degree_step/360 * 2 * math.pi
@@ -321,7 +1043,7 @@ class Group(Environment):
             vehicle_positions_new = vehicle_positions
             cum_rotation = 0
             cum_scaling = 1
-            # print(0, 1)
+            print("We have a problem boss! Every formation candidate collides :/")
         else: 
             # Now we have the costs and everything in order.
             # Let's find the least cost value.
@@ -405,8 +1127,46 @@ class Group(Environment):
         scaled_vector = [vector[0] * scaling_factor, vector[1] * scaling_factor]
         
         return scaled_vector
+    
+    def check_danger_zone_with_obstacles(self, vehicle_positions, obstacle_corners):
+        any_inside = []
         
+        # Getting the largest distance from the origo
+        s_danger = -math.inf
+        for position in vehicle_positions:
+            vehicle_distance_from_origo = np.sqrt((0-position[0])**2 + (0-position[1])**2)
+            if vehicle_distance_from_origo > s_danger:
+                s_danger = vehicle_distance_from_origo
         
+        # Check if any of the obstacles are in the danger zone
+        any_inside = []
+        corner_inside = []
+        for corners in obstacle_corners:
+            # corner_inside = []
+            for corner in corners:
+                corner_distance_from_origo = np.sqrt((0-corner[0])**2 + (0-corner[1])**2)
+                if corner_distance_from_origo <= s_danger: # is inside the danger zone?
+                    corner_inside += [True]
+                else:
+                    corner_inside += [False]
+            # if any(corner_inside):
+            #     any_inside += [True]
+            # else:
+            #     any_inside += [False]
+                
+                        
+        return corner_inside, any(corner_inside)
+        
+    
+    # def check_danger_zone_with_obstacle(self, vehicle_pos, obstacle_corners):
+    #     import matplotlib.path as mpltPath
+    #     path = mpltPath.Path(obstacle_corners)
+    #     try:
+    #         inside = path.contains_points(np.array([vehicle_pos]))[0] #, radius = 0.001)
+    #     except:
+    #         kappa = True
+            
+    #     return inside
         
     def check_collision_with_obstacles(self, vehicle_positions, obstacle_corners):
         any_inside = []
