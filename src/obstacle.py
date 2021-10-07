@@ -130,6 +130,7 @@ class Obstacle(Environment):
             #     k += 1
             
             # https://www.py4u.net/discuss/258067
+            # another option: https://www.tutorialspoint.com/how-to-plot-a-gradient-color-line-in-matplotlib
             from matplotlib.collections import LineCollection
             cols = np.linspace(0,1,len(p_))
             points = np.array([p_, q_]).T.reshape(-1, 1, 2)

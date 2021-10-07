@@ -3,5 +3,7 @@ matplotlib
 autograd
 pyyaml
 scipy
+cvxpy
+cvxopt
 pandas
 gurobipy
