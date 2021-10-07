@@ -382,7 +382,7 @@ class Group(Environment):
                 
                 t = (t_danger_start + t_danger_end) / 2
                 lookback = (t_danger_end - t_danger_start) / 2 * 1.0
-                lookahead = (t_danger_end - t_danger_start) / 2 * 1.5
+                lookahead = (t_danger_end - t_danger_start) / 2 * 1.0
                 t_zizz = np.linspace( (t-lookback >= 0) * (t-lookback) + (t-lookback > 0) * 0,
                                           (t+lookahead <= 1) * (t+lookahead) + (t+lookahead > 1) * 1,
                                           10)
@@ -1069,7 +1069,7 @@ class Group(Environment):
     
     def formation_change_cost_calculator(self, vehicle_positions_original, vehicle_positions_new, rotation_angle = 0, scaling_factor = 1):
         cost = 0
-        alpha_distance = 0.1 * 10
+        alpha_distance = 0.1 * 1 * 0
         alpha_rotation = 0.1
         alpha_scaling_up = 1000
         alpha_scaling_down = 100
@@ -1137,7 +1137,8 @@ class Group(Environment):
             vehicle_distance_from_origo = np.sqrt((0-position[0])**2 + (0-position[1])**2)
             if vehicle_distance_from_origo > s_danger:
                 s_danger = vehicle_distance_from_origo
-        
+        # print(s_danger)
+        # s_danger = 0.6988905493709299
         # Check if any of the obstacles are in the danger zone
         any_inside = []
         corner_inside = []

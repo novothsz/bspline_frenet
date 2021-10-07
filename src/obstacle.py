@@ -110,28 +110,95 @@ class Obstacle(Environment):
         fig, ax = plt.subplots()
         t = np.linspace(0, 1, 100)
         
-        for corner in self.corners_spline:
-            p_ = np.array([corner[0](t_)[0] for t_ in t]).reshape(-1)
-            q_ = np.array([corner[1](t_)[0] for t_ in t]).reshape(-1)
-            ax.plot(p_, q_)
-            
-        for corner in self.corners_t:
-            ax.plot(corner[0], corner[1], 'k.')
-            
-        t = np.linspace(0, 1, 5)
-        for corner in self.corners_spline:
-            p_ = np.array([corner[0](t_)[0] for t_ in t]).reshape(-1)
-            q_ = np.array([corner[1](t_)[0] for t_ in t]).reshape(-1)
-            ax.plot(p_, q_, 'ro')
-            
-            
-            
-        # circle = plt.Circle((0, 0), 1, color='k', alpha=0.5, zorder = 10)
-        circle = plt.Circle((0, 0), 0.52, color='k', alpha=0.5, zorder = 10)
-        ax.add_patch(circle)
         
+        from matplotlib.pyplot import cm
+        color=cm.Wistia(np.linspace(0,1,len(t)))
+        color=cm.YlOrRd(np.linspace(0,1,len(t)))
+        
+        transparency = np.logspace(-9, -5, base=2, num=len(t))
+        transparency = np.logspace(-1, 0, base=2, num=len(t))
+        
+        
+        for i, corner in enumerate(self.corners_spline):
+            p_ = np.array([corner[0](t_)[0] for t_ in t]).reshape(-1)
+            q_ = np.array([corner[1](t_)[0] for t_ in t]).reshape(-1)
+            
+            # ax.plot(p_, q_, c = 'cornflowerblue',lw=1.0,alpha = 0.9, zorder = 7)
+            # k = 0
+            # for p__, q__ in zip(p_, q_):
+            #     ax.plot(p__, q__, '.',  c = color[k], alpha = transparency[k], zorder = 7)
+            #     k += 1
+            
+            # https://www.py4u.net/discuss/258067
+            from matplotlib.collections import LineCollection
+            cols = np.linspace(0,1,len(p_))
+            points = np.array([p_, q_]).T.reshape(-1, 1, 2)
+            segments = np.concatenate([points[:-1], points[1:]], axis=1)
+            lc = LineCollection(segments, cmap='viridis')
+            lc = LineCollection(segments, cmap='Wistia')
+            lc = LineCollection(segments, cmap='hot')
+            if i == 0:
+                lc = LineCollection(segments, cmap='brg', label='corner trajectory')
+            else:
+                lc = LineCollection(segments, cmap='brg')
+            line = ax.add_collection(lc)
+            lc.set_array(cols)
+            lc.set_linewidth(2)
+            
+            
+            
+        import math
+        x_min = math.inf
+        x_max = -math.inf
+        y_min = math.inf
+        y_max = -math.inf
+        for corner in self.corners_t:
+            # ax.plot(corner[0], corner[1], 'k.')
+            x_min = min(x_min, min(corner[0]))
+            x_max = max(x_max, max(corner[0]))
+            y_min = min(y_min, min(corner[1]))
+            y_max = max(y_max, max(corner[1]))
+        
+        ax.set_xlim(x_min * 1.1, x_max * 1.1)
+        ax.set_ylim(y_min * 1.1, y_max * 1.1)
+            
+        # t = np.linspace(0, 1, 6)
+        # for corner in self.corners_spline:
+        #     p_ = np.array([corner[0](t_)[0] for t_ in t]).reshape(-1)
+        #     q_ = np.array([corner[1](t_)[0] for t_ in t]).reshape(-1)
+        #     ax.plot(p_, q_, 'yo')
+            
+        numera = 7
+        color=cm.brg(np.linspace(0,1,numera))
+        c = color
+        for i in range(numera):
+            corners = np.array(self.corners)
+            corners = np.vstack((corners, corners[0, :]))
+            p, q = [], []
+            for j in range(corners.shape[0]):
+                p_corn, q_corn = self.fp.inertial_to_frenet(x = corners[j, 0], y = corners[j, 1], t = interp(i,[0,numera-1],[0,1]))
+                p = np.append(p, p_corn)
+                q = np.append(q, q_corn)
+            ax.plot(p,
+                    q,
+                    c = c[i])
+        ax.set_title("Obstacle position in the Frenet frame")
+        ax.set_xlabel("p")  
+        ax.set_ylabel("q")  
+        ax.legend(fontsize = 'x-small')
+            
+            
+        s_danger = 0.6988905493709299    
+        # circle = plt.Circle((0, 0), 1, color='k', alpha=0.5, zorder = 10)
+        circle = plt.Circle((0, 0), s_danger, color='r', alpha=0.5, zorder = 10)
+        ax.add_patch(circle)
+        ax.legend([circle, line], ['collision radious', 'corner trajectory'])
         ax.set_aspect('equal', adjustable='box')
+        fig.colorbar(line,ax=ax)
+        
+        
         plt.savefig('b_' + str(self.ID) + '.png')
+        plt.show()
         return self
             
     def random_placement(self, x_limits, y_limits):

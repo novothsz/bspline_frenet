@@ -75,8 +75,6 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     corners = ([-0.132, -0.2], [0.182, -0.6  ], [0.495, -0.4], [0.185, 0.0]) # ACC
     corners = ([-0.132 + delta_x, -0.2 + delta_y], [0.182 + delta_x, -0.6 + delta_y], [0.495 + delta_x, -0.4 + delta_y], [0.185 + delta_x, 0.0 + delta_y]) # ACC
     
-    
-    
     obstacles += [Obstacle(ID = 0, corners = corners)]
     
     # Obstacle 2
