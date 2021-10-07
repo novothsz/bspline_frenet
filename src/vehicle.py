@@ -101,10 +101,10 @@ class Vehicle(VehicleBasis):
 
 
             for j in range(len(y)):
-                self.J += definite_integral(lambda_ij[j] * (y_j[j] - z_ij[j]), 0, 1)
-                # self.J += dot(lambda_ij[j].coeffs,  y_j[j].coeffs - z_ij[j].coeffs)
-                self.J += definite_integral(self.rho * (y_j[j] - z_ij[j])**2, 0, 1)
-                # self.J += self.rho * dot(np.ones(y_j[j].coeffs.shape[0]), (y_j[j].coeffs - z_ij[j].coeffs)**2)
+                # self.J += definite_integral(lambda_ij[j] * (y_j[j] - z_ij[j]), 0, 1)
+                self.J += dot(lambda_ij[j].coeffs,  y_j[j].coeffs - z_ij[j].coeffs)
+                # self.J += definite_integral(self.rho * (y_j[j] - z_ij[j])**2, 0, 1)
+                self.J += self.rho * dot(np.ones(y_j[j].coeffs.shape[0]), (y_j[j].coeffs - z_ij[j].coeffs)**2)
 
 
             def cross_product(spline1, spline2):
@@ -702,10 +702,10 @@ class Vehicle(VehicleBasis):
                                    category = 'parameter')
 
             for j in range(len(y)):
-                self.J += definite_integral(lambda_ji[j] * (y[j] - z_ji[j]), 0, 1)
-                # self.J += dot(lambda_ji[j].coeffs,y[j].coeffs - z_ji[j].coeffs)
-                self.J += definite_integral(self.rho * (y[j] - z_ji[j])**2, 0, 1)
-                # self.J += self.rho * dot(np.ones(y[j].coeffs.shape[0]), (y[j].coeffs - z_ji[j].coeffs)**2)
+                # self.J += definite_integral(lambda_ji[j] * (y[j] - z_ji[j]), 0, 1)
+                self.J += dot(lambda_ji[j].coeffs,y[j].coeffs - z_ji[j].coeffs)
+                # self.J += definite_integral(self.rho * (y[j] - z_ji[j])**2, 0, 1)
+                self.J += self.rho * dot(np.ones(y[j].coeffs.shape[0]), (y[j].coeffs - z_ji[j].coeffs)**2)
                 
             
             # self.define_constraint([phi - z_ji[2]],
