@@ -88,6 +88,11 @@ class Group(Environment):
     ###########################################################################
     ###########################################################################
     
+    def ACC_MPC_t_param(self):
+        "To this end, we introduce, ... :))"
+        
+        
+    
     
     def ACC_MPC(self):
         """This function is called at every iteration. If an obstacle enters the danger zone, it quickly looks at future times, and 
@@ -341,7 +346,7 @@ class Group(Environment):
     # Well, the size of the maximum formation size.
     
     
-    def sweep_ACC(self):
+    def sweep_ACC(self, t_sweep_start = 0, t_sweep_end = 1):
         import time
         t_iter = time.time()
         
@@ -356,8 +361,8 @@ class Group(Environment):
                 
         # s_danger = 0.5
         
-        t_end = 0
-        while t_end <= 1:
+        t_end = t_sweep_start # TODO: jajj, ne hívjuk már t_end-nek...
+        while t_end <= t_sweep_end:
             
             # Check for collision
             
@@ -1877,7 +1882,7 @@ class Group(Environment):
             ax.axes.yaxis.set_visible(False)
             # Saving figure to folder
             # fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
-            fig.savefig(self.cwd + '/video/' + '{:0>2d}'.format(frame_num) +'.pdf', dpi = 200)
+            fig.savefig(self.cwd + '/video/' + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
             ax.clear()
             frame_num += 1
             # print('t_start, fx(t_start)' + str(t_start) + ',' + str(self.vehicles[0].fp.fx_spline(t_start)[0][0]))
@@ -1926,7 +1931,7 @@ class Group(Environment):
             
             
             # Saving figure to folder
-            fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.pdf', dpi = 200)
+            fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
             ax.clear()
             frame_num += 1
             

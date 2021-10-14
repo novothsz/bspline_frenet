@@ -848,10 +848,7 @@ class FrenetPath(object):
         self.fit_all()
         sin_theta_c = self.sin_f_theta_spline
         cos_theta_c = self.cos_f_theta_spline
-        v[0].tolist()
-        print('v0')
-        sin_theta_c(0)
-        
+                
         # Choosing the equation
         if equation_name == 'p':
             equation = v[0] * cos_theta_c + v[1] * sin_theta_c

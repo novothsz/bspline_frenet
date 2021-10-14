@@ -51,14 +51,6 @@ def memoize(f):
                     print("spline.py: what is this type?")
                     print(getattr(type(args[1])))
                     
-            # if getattr(type(args[1]), '__module__', '').split('.')[0] == 'numpy':
-            #     kappa_num = True
-            #     print(args[0])
-            # if getattr(type(args[1]), '__module__', '').split('.')[0] != 'numpy':
-            #     if getattr(type(args[1]), '__module__', '').split('.')[0] == 'builtins':
-            #         kappa = True
-            #     else:
-            #         print(getattr(type(args[1]), '__module__', '').split('.')[0])
             else:
                 key = (args[0], md5(np.atleast_1d(args[1])))
             if key in self:

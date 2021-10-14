@@ -468,7 +468,21 @@ class Vehicle(VehicleBasis):
                                     xf[:self.n_dimensions_old] + [self.radious*1, self.radious*1],
                                     constraint_type='final_param',
                                     name=["yf"] * self.n_dimensions)
-            "End-point waypoint tracking END"    
+            "End-point waypoint tracking END"   
+            
+        elif self.MPC_version == 'MPC_param':
+            # Pretty much the same as the regular MPC version, but now we pass in t_intermediate as parameter.
+            n = self.n_of_saved_waypoints
+            assert n == len(self.t_intermediate_list) # Please generate the intermediate points first :)
+            for i, t_intermediate in enumerate(self.t_intermediate_list):
+                idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
+                # Define the parameter
+                x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += np.array(self.x_intermediate_list)[idx].tolist(); assert len(self.x_intermediate_list)/(self.state_len/2) == n  # [0] * int(self.state_len/2)
+                t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += self.t_intermediate_list[i]
+                lambda_ = np.power(np.linspace(1, 0, n), 1)
+                self.J += 10/100 * self.rho_final_value * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
+                self.J += 10/100 * self.rho_final_value * lambda_[i] *(q(t_intermediate) - x_intermediate[1])**2
+                self.J += 10/100 * self.rho_final_value * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
         else:
             raise NotImplementedError()
         
