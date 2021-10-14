@@ -29,8 +29,8 @@ class Group(Environment):
         self.rotation_angle = 0
         self.scaling_factor = 1
         self.og_final_positions = []
-        self.back_scaling_factor = 0.2
-        self.back_rotation_factor = 0.2
+        self.back_scaling_factor = 0.2 * 0
+        self.back_rotation_factor = 0.2 * 0
         
         self.DFM_division = 12
         self.DFM_lookback = 1 / self.DFM_division / 2
@@ -121,9 +121,9 @@ class Group(Environment):
         # therefore,  if the answer is yes, then we can skip checking for collision.
         # However, we still have to update the intermediate lists.
         
-        "Check, if (t_end < then the values is the queue)"
+        "Check, if (t_end < then the values in the queue)"
         # check, if we can feed something new to the intermediate lists. If no, let's just repeat the old values.
-        t_end = self.vehicles[0].t_end + self.vehicles[0].t_step
+        t_end = self.vehicles[0].t_end + self.vehicles[0].t_step # Traditionally we call it after simulation_step() --> therefore we have to add the t_step here :)
         
         # finding indices in the queue, which we should now extract
         queue_indices = []
@@ -176,13 +176,24 @@ class Group(Environment):
         "Check, if we should even do anything..."
         # If in the queue there are some values (but we didn't use any of them in the first step), then no... We shouldn't do anyithing
         # Except: doing a step forward
-        # if self.ACC_MPC_t_queue[1:] != []:
         if self.ACC_MPC_t_queue != []:
-            # Doing one step forward (shifting)
-            for i, vehicle in enumerate(self.vehicles):
-                vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + vehicle.x_intermediate_list[-3:]
-                vehicle.variable_history['x_intermediate_list'] = vehicle.x_intermediate_list
+            # Get the indice, that has to be replaced
+            for t_intermediate_value in self.ACC_MPC_t_queue:
+                t_intermediate_value_corrected = t_intermediate_value - self.vehicles[0].t_start
+                idx = self.to_where(self.vehicles[0].t_intermediate_list, t_intermediate_value_corrected)
+                
+                if idx != []:
+                    # Doing one step forward (shifting)
+                    for i, vehicle in enumerate(self.vehicles):
+                        vehicle.x_intermediate_list[idx] = self.ACC_MPC_pos_queue[0][i];
+                        vehicle.variable_history['x_intermediate_list'] = vehicle.x_intermediate_list
             return self
+        # else: # if nothing in the queue, that we should add      
+        #     # Doing one step forward (shifting)
+        #     for i, vehicle in enumerate(self.vehicles):
+        #         vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + vehicle.x_intermediate_list[-3:]; print("This is wrong, because we don't always add... Only if the time is correct...")
+        #         vehicle.variable_history['x_intermediate_list'] = vehicle.x_intermediate_list
+        #     return self
         
         "Okay... so...:"
         # nothing in the queue to add
@@ -196,17 +207,24 @@ class Group(Environment):
         
         # Step 1: Which obstacle is inside the danger zone?
         obstacle_idx = []
-        for i in range(len(all_collisions)):
-            if all_collisions[i] == True:
-                obstacle_idx += [i]
-                
+        i = 0
+        if collision == True:
+            for obst_idx, obstacle in enumerate(self.vehicles[0].obstacles):
+                for corner in obstacle.corners:
+                    if all_collisions[i] == True:
+                        obstacle_idx += [obst_idx]
+                    i += 1
+        # for i in range(len(all_collisions)):
+        #     if all_collisions[i] == True:
+        #         obstacle_idx += [i]
+            #
                 
         # Step 2: if collision has been found, find t_danger_end time
         if obstacle_idx != []:
             t_danger_start = t_end
             t_danger_end = t_danger_start
             t_danger_step = t_step / 10 # if collision is detected, we step this 'smoothly' until no danger is detected
-            while t_danger_end <= t_end + t_step:
+            while t_danger_end <= t_end + t_step: # TODO:  --> Why until t_step?
                 t_danger_end += t_danger_step
                 # Check collision but only with obstacles, which are dangerous (we expect, that this doesn't change. Meaning:
                 # obstacles are spaced out well.)
@@ -223,7 +241,7 @@ class Group(Environment):
             lookback = (t_danger_end - t_danger_start) / 2
             lookahead = (t_danger_end - t_danger_start) / 2
             # lookahead = lookahead + (t_step - t_danger_end % t_step); print("Please check this in debug mode :)")
-            lookahead = lookahead + (t_danger_end % t_step); assert lookahead%t_step >= -1e5 and lookahead%t_step <= 1e5; print("Please check this in debug mode :)")
+            lookahead = lookahead + (t_danger_end % t_step); assert lookahead%t_step >= -1e5 and lookahead%t_step <= 1e5; # print("Please check this in debug mode :)")
             
             
             # Zizzentsük be :)
@@ -253,7 +271,7 @@ class Group(Environment):
                 # The values are valid for range_ number of steps
                 range_ = ((t + lookahead) - (t - lookback)) / t_step
                 range_ = range_ + 2 # +2, because it is valid for [t - lookback] AND [t + lookahead] as well
-                statement = range_%1 >= range_ -1e-5 and range_%1 <= range_ + 1e-5
+                statement = range_%1 >= - 1e-5 and range_%1 <= + 1e-5
                 if statement == False:
                     kappa = True
                 range_ = int(range_)
@@ -264,7 +282,8 @@ class Group(Environment):
                 
                 assert self.ACC_MPC_pos_queue == [] and self.ACC_MPC_t_queue == [] # if we are here, these should be empty...
                 self.ACC_MPC_pos_queue += MPC_pos_new 
-                self.ACC_MPC_t_queue += t_queue_new
+                self.ACC_MPC_t_queue += t_queue_new; np.array(t_queue_new) - (t_end - self.vehicles[0].t_window_size)
+                print("Az a baj, hogy a t_intermediate_list nem kompatibili a t_step-ekkel")
                 
         else:
             pass # no collision has happened
@@ -306,8 +325,15 @@ class Group(Environment):
         
         return self
     
-    
-    
+    def to_where(self, t_intermediate_list, t_intermediate_value):
+        idx = []
+        for i, t_intermediate in enumerate(t_intermediate_list):
+            if abs(t_intermediate - t_intermediate_value) < 1e-5:
+                idx += [i]
+        if len(idx) != 1:
+            print(t_intermediate_value)
+        assert len(idx) == 1
+        return idx[0]
     
     
     # Okay, this will be the version, where we look, whether the obstacle has entered the danger zone.
@@ -944,7 +970,11 @@ class Group(Environment):
         obstaacles at the given time-point.
         If t is a list of time values, then each of these time values will be checked for collision"""
         
-        
+        if t[-1] >= self.vehicles[0].t_end + self.vehicles[0].t_window_size:
+            self.back_rotation_factor = 1
+            self.back_scaling_factor = 1
+            print(self.vehicles[0].t_end)
+            print(self.vehicles[0].t_end + self.vehicles[0].t_window_size)
         # Step 0: first always try to turn&scale it back... :)
         #Backturning
         rotation_angle = -1 * self.back_rotation_factor * cum_rotation
@@ -1837,8 +1867,8 @@ class Group(Environment):
             # Or setting the ax limits 
             ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
             ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
-            ax.set_xlim(self.vehicles[0].fp.fx_spline(t_start)[0][0] - 2, self.vehicles[0].fp.fx_spline(t_start)[0][0] + 2*2)
-            ax.set_ylim(self.vehicles[0].fp.fy_spline(t_start)[0][0] - 2, self.vehicles[0].fp.fy_spline(t_start)[0][0] + 2)
+            ax.set_xlim(self.vehicles[0].fp.fx_spline(t_start)[0][0] - 2, self.vehicles[0].fp.fx_spline(t_start)[0][0] + 2*3)
+            ax.set_ylim(self.vehicles[0].fp.fy_spline(t_start)[0][0] - 2.5, self.vehicles[0].fp.fy_spline(t_start)[0][0] + 2.5)
             # ax.set_xlabel("x axis")
             # ax.set_ylabel("y axis")
             ax.set_aspect('equal', adjustable='box')
@@ -1847,7 +1877,7 @@ class Group(Environment):
             ax.axes.yaxis.set_visible(False)
             # Saving figure to folder
             # fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
-            fig.savefig(self.cwd + '/video/' + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
+            fig.savefig(self.cwd + '/video/' + '{:0>2d}'.format(frame_num) +'.pdf', dpi = 200)
             ax.clear()
             frame_num += 1
             # print('t_start, fx(t_start)' + str(t_start) + ',' + str(self.vehicles[0].fp.fx_spline(t_start)[0][0]))
@@ -1896,7 +1926,7 @@ class Group(Environment):
             
             
             # Saving figure to folder
-            fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
+            fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.pdf', dpi = 200)
             ax.clear()
             frame_num += 1
             

@@ -44,7 +44,23 @@ def memoize(f):
             self.f = f
 
         def __call__(self, *args):
-            key = (args[0], md5(np.atleast_1d(args[1])))
+            if getattr(type(args[1]), '__module__', '').split('.')[0] != 'numpy' and getattr(type(args[1]), '__module__', '').split('.')[0] != 'builtins':
+                if getattr(type(args[1]), '__module__', '').split('.')[0] == 'casadi':
+                    key = (args[0], md5(b'casadi_param'))
+                else:
+                    print("spline.py: what is this type?")
+                    print(getattr(type(args[1])))
+                    
+            # if getattr(type(args[1]), '__module__', '').split('.')[0] == 'numpy':
+            #     kappa_num = True
+            #     print(args[0])
+            # if getattr(type(args[1]), '__module__', '').split('.')[0] != 'numpy':
+            #     if getattr(type(args[1]), '__module__', '').split('.')[0] == 'builtins':
+            #         kappa = True
+            #     else:
+            #         print(getattr(type(args[1]), '__module__', '').split('.')[0])
+            else:
+                key = (args[0], md5(np.atleast_1d(args[1])))
             if key in self:
                 return self[key]
             else:
@@ -244,7 +260,10 @@ class BSplineBasis(Basis):
 
         This function implements the Cox-de Boor formula for B-splines
         """
-        x = np.array(x)
+        if getattr(type(x), '__module__', '').split('.')[0] == 'casadi':
+            pass
+        else:
+            x = np.array(x)
         k = self.knots
         basis = [[self._ind(i, x) * 1.0 for i in range(len(k) - 1)]]
         for d in range(1, self.degree + 1):
@@ -259,7 +278,15 @@ class BSplineBasis(Basis):
                     b += (k[i + d + 1] - x) * basis[d - 1][i + 1] / bottom
                 basis[-1].append(b)
         # Consider sparse matrices?
-        return csr_matrix_alt(np.c_[basis[-1]].T)
+        
+        if getattr(type(x), '__module__', '').split('.')[0] == 'casadi':
+            kappa = np.c_[basis[-1]].T
+            return kappa
+        else:
+            return csr_matrix_alt(np.c_[basis[-1]].T)
+            
+            
+        
 
     def derivative(self, o=1):
         """Returns derivative of the basisfunctions
@@ -399,7 +426,10 @@ class Spline(object):
         #     self.basis._basis = cas.DMatrix(self.basis._basis)
 
     def __call__(self, x):
-        return self.basis(x).dot(self.coeffs)
+        try:
+            return self.basis(x).dot(self.coeffs)
+        except:
+            return cas.dot(cas.vertcat(*self.basis(x)[0]), self.coeffs)
 
     def __len__(self):
         return len(self.basis)

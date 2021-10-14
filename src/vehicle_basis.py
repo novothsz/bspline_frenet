@@ -218,6 +218,9 @@ class VehicleBasis(Environment):
             for t_ in t_evaluation:
                 for corner in obstacle.corners_spline:
                     self.PvX.obst += [corner[0](t_).tolist()[0][0], corner[1](t_).tolist()[0][0]]
+            # for i in range(obstacle.corners_spline[0][0].coeffs.shape[0]):
+            #     for corner in obstacle.corners_spline:
+            #         self.PvX.obst += [corner[0].coeffs[i].tolist()[0], corner[1].coeffs[i].tolist()[0]]
         self.PvX.x_intermediate = self.x_intermediate_list
         self.PvX.t_intermediate = self.t_intermediate_list
         try:
@@ -801,10 +804,15 @@ class VehicleBasis(Environment):
                 for point in points_t: # 4
                         # const2 += [a[0](t) * point[0](t) + a[1](t) * point[1](t) - b[0](t)]
                         const2 += [a[0](t_) * point[0] + a[1](t_) * point[1] - b[0](t_)  - d_tau[0](t_) ]
+            
+            # for corners in points:
+            #     for corner in corners:
+            #         const2 += [a[0] * corner[0] + a[1] * corner[1] - b[0]  - d_tau[0] ]
 
             # ----
             for i in range(len(const2)):
                 self.define_constraint([const2[i]], lower_bound = [0], upper_bound = [math.inf], constraint_type = "time", name = "eq2" + "_corn_" + str(i))
+                # self.define_constraint([const2[i]], lower_bound = [0], upper_bound = [math.inf], constraint_type = "overall", name = "eq2" + "_corn_" + str(i))
 
 
         elif constraint_type == 'inter_vehicle':

@@ -438,7 +438,8 @@ class Vehicle(VehicleBasis):
                 #                         [0.0 + slack, 0.0 + slack, 0.0 + slack],
                 #                         constraint_type='time',
                 #                         name=["guidence" + str(i)] * 1)
-                
+                # t_intermediate = MX.sym('t_intermediate', 1)
+                # kappa = p(t_intermediate)
                 lambda_ = np.power(np.linspace(1, 0, n), 1)
                 # for i in range(p.coeffs.shape[0]):
                 self.J += 10/100 * self.rho_final_value * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2

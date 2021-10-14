@@ -69,12 +69,18 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     corners = ([0.15, -0.15], [0.5, 0.053], [0.25, 0.38], [-0.145, 0.145])
     corners = ([0.2, -0.25], [0.52, -0.02  ], [0.15, 0.5], [-0.2, 0.23])
     corners = ([-0.323, -0.2], [-0.18, -0.4  ], [0.5, 0.0], [0.323, 0.2]) # ACC
+    corners = ([-0.323, -0.2], [0, -0.6  ], [0.658, -0.174], [0.323, 0.2]) # ACC
+    delta_x = 0.03
+    delta_y = -0.1
+    corners = ([-0.323 + delta_x, -0.2 + delta_y], [0 + delta_x, -0.6  + delta_y ], [0.658 + delta_x, -0.174 + delta_y], [0.323 + delta_x, 0.2 + delta_y]) # ACC
+    
     
     delta_x = 0.03 * -1
     delta_y = -0.1 * -1
+    delta_x = 0.03 * -0
+    delta_y = -0.1 * -0
     corners = ([-0.132, -0.2], [0.182, -0.6  ], [0.495, -0.4], [0.185, 0.0]) # ACC
     corners = ([-0.132 + delta_x, -0.2 + delta_y], [0.182 + delta_x, -0.6 + delta_y], [0.495 + delta_x, -0.4 + delta_y], [0.185 + delta_x, 0.0 + delta_y]) # ACC
-    
     obstacles += [Obstacle(ID = 0, corners = corners)]
     
     # Obstacle 2
@@ -129,7 +135,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     
     
-    n_intermediate_ADMM = 1
+    n_intermediate_ADMM = 5
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
     # n_steps = 10
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
@@ -148,6 +154,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     group.set_var({'MPC_version': True})
     group.set_var({'n_of_saved_waypoints': int(group.vehicles[0].t_window_size / group.vehicles[0].t_step) + 1}) 
+    # print(np.linspace(group.vehicles[0].t_step, 1, group.vehicles[0].n_of_saved_waypoints).tolist())
     # print(group.vehicles[0].n_of_saved_waypoints)
     
     
@@ -168,12 +175,18 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     for i in range(len(group.vehicles)):
             group.vehicles[i].set_position(position = positions[i], position_type = 'final')
     
+    new_version = False
     
-    group.intermediate_position_generator_PENI_MPC()
-    # group.ACC_MPC()
+    if new_version == False:
+        group.intermediate_position_generator_PENI_MPC()
+    else:
+        group.ACC_MPC()
+        
     group.prepare()
-    group.intermediate_position_generator_PENI_MPC()
-    # group.ACC_MPC()
+    if new_version == False:
+        group.intermediate_position_generator_PENI_MPC()
+    else:
+        group.ACC_MPC()
        
        
     
@@ -202,8 +215,10 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
               
         # import time
         # t_peni_mpc = time.time()
-        group.intermediate_position_generator_PENI_MPC()
-        # group.ACC_MPC()
+        if new_version == False:
+            group.intermediate_position_generator_PENI_MPC()
+        else:
+            group.ACC_MPC()
         # print('peni intermediate time: ' + str(time.time() - t_peni_mpc))
         # group.intermediate_position_generator()
         # group.frenet_plotter(iternum = i, seed = seed)

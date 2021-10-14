@@ -183,7 +183,7 @@ class Obstacle(Environment):
             ax.plot(p,
                     q,
                     c = c[i])
-        ax.set_title("Obstacle position in the Frenet frame")
+        ax.set_title(r'Obstacle position in the Frenet frame w.r.t time $t \in [0; 1]$')
         ax.set_xlabel("p")  
         ax.set_ylabel("q")  
         ax.legend(fontsize = 'x-small')
@@ -195,12 +195,12 @@ class Obstacle(Environment):
         ax.add_patch(circle)
         ax.legend([circle, line], ['collision radious', 'corner trajectory'])
         ax.set_aspect('equal', adjustable='box')
-        fig.colorbar(line,ax=ax)
+        fig.colorbar(line,ax=ax, orientation="horizontal")
         
         
-        plt.savefig('b_' + str(self.ID) + '.png')
+        plt.savefig('obstacle_corners_' + str(self.ID) + '.pdf')
         plt.show()
-        return self
+        return ax
             
     def random_placement(self, x_limits, y_limits):
         import random
