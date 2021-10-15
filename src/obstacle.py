@@ -4,6 +4,9 @@ from matplotlib.patches import Polygon
 import numpy as np
 from numpy import interp
 from .environment import Environment
+from .spline import BSpline
+
+
 class Obstacle(Environment):
     def __init__(self, ID : int = 0, corners: list = [], x_limits: list = [-0.2, 0.2], y_limits: list = [-0.3, 0.3]):
         super().__init__()
@@ -31,7 +34,25 @@ class Obstacle(Environment):
         self.spline_position_in_frenet() # This function creates the self.corners_spline values.
             
     def spline_position_in_frenet(self):
+        
+        try:
+            basis = self.fitter.define_knots(degree = 3, knot_intervals = self.fitter.knot_intervals)
+            import pickle
+            pickle_in = open("obst_" + str(int(self.ID)) + "_coeffs.pickle", "rb")
+            coeffs = pickle.load(pickle_in)
+    
+            for i in range(len(self.corners)):
+                self.corners_spline += [  [BSpline(basis, coeffs_) for coeffs_ in coeffs["corners_spline_coeffs"][i]]  ]
+                self.scaled_corners_spline += [  [BSpline(basis, coeffs_) for coeffs_ in coeffs["scaled_corners_spline_coeffs"][i]]  ]
+            return self
+        
+        except:
+            pass
+        
+        
         "Regular corners"
+        corners_spline_coeffs = []
+        scaled_corners_spline_coeffs = []
         t = np.linspace(0, 1, 100)
         self.fitter.knot_intervals = 10
         for i in range(len(self.corners)):
@@ -48,6 +69,7 @@ class Obstacle(Environment):
                                                  y_max = [20, 20]
                                                  )
             self.corners_spline += [fitted_splines]
+            corners_spline_coeffs += [ [sp.coeffs for sp in fitted_splines] ]
             self.corners_t += [corner_]
             
         "Scaled corners"
@@ -67,8 +89,20 @@ class Obstacle(Environment):
                                                  y_max = [20, 20]
                                                  )
             self.scaled_corners_spline += [fitted_splines]
+            scaled_corners_spline_coeffs += [ [sp.coeffs for sp in fitted_splines] ]
             self.scaled_corners_t += [corner_]
         # self.plot_corners_spline()
+        
+        coeffs = {
+                "corners_spline_coeffs" : corners_spline_coeffs,
+                "scaled_corners_spline_coeffs" : scaled_corners_spline_coeffs
+                }
+        import pickle
+        pickle_out = open("obst_" + str(int(self.ID)) + "_coeffs.pickle", "wb")
+        pickle.dump(coeffs, pickle_out)
+        pickle_out.close()
+            
+            
         return self
     
     

@@ -50,14 +50,15 @@ class FrenetPath(object):
         self.fy_dd = grad(self.fy_d)
         self.fz_dd = grad(self.fz_d)
         
+        self.fit_all()
         # Ezt is csináljuk meg, hamár :)
         
-        [equation_min_p, equation_max_p] = self.equation_min_max('p')
-        [equation_min_q, equation_max_q] = self.equation_min_max('q')
-        self.equation_min_p = equation_min_p
-        self.equation_max_p = equation_max_p
-        self.equation_min_q = equation_min_q
-        self.equation_max_q = equation_max_q
+        # [equation_min_p, equation_max_p] = self.equation_min_max('p')
+        # [equation_min_q, equation_max_q] = self.equation_min_max('q')
+        # self.equation_min_p = equation_min_p
+        # self.equation_max_p = equation_max_p
+        # self.equation_min_q = equation_min_q
+        # self.equation_max_q = equation_max_q
 
 
 
@@ -65,6 +66,9 @@ class FrenetPath(object):
 
         "Fitted splines"
         try:
+            # TODO: Maybe we shouldn't load the coeffs blindly, but check somehow, that the values we load are still valid.
+            # Because before there was a problem, that I have changed the horizon of the frenet path and because of that, 
+            # the loaded coefficients were a bit off...
             # 1 / 0
             fitter = SplineFitter()
             basis = fitter.define_knots(degree = 3, knot_intervals = fitter.knot_intervals)
@@ -86,6 +90,11 @@ class FrenetPath(object):
 
             self.cos_f_theta_spline = BSpline(basis, coeffs["cos_f_theta_spline"])
             self.sin_f_theta_spline = BSpline(basis, coeffs["sin_f_theta_spline"])
+                        
+            self.equation_min_p = BSpline(basis, coeffs["equation_min_p"])
+            self.equation_max_p = BSpline(basis, coeffs["equation_max_p"])
+            self.equation_min_q = BSpline(basis, coeffs["equation_min_q"])
+            self.equation_max_q = BSpline(basis, coeffs["equation_max_q"])
             
             return self
 
@@ -104,8 +113,25 @@ class FrenetPath(object):
 
             self.cos_f_theta_spline = []
             self.sin_f_theta_spline = []
-
+            
+            print("Starting create spline (frenet path/fit_all")
             self.create_splines()
+            print("Finished create spline (frenet path/fit_all")
+            
+            
+            
+            self.equation_min_p = []
+            self.equation_max_p = []
+            self.equation_min_q = []
+            self.equation_max_q = []
+            print("Starting equation_min_max (frenet path/fit_all")
+            [equation_min_p, equation_max_p] = self.equation_min_max('p')
+            [equation_min_q, equation_max_q] = self.equation_min_max('q')
+            
+            self.equation_min_p, self.equation_max_p = equation_min_p, equation_max_p
+            self.equation_min_q, self.equation_max_q = equation_min_q, equation_max_q
+            print("Ending equation_min_max (frenet path/fit_all")
+            
 
             coeffs = {
                 "fx_spline" : self.fx_spline.coeffs,
@@ -118,7 +144,11 @@ class FrenetPath(object):
                 "fz_d_spline" : self.fz_d_spline.coeffs,
                 "fz_c_spline" : self.fz_c_spline.coeffs,
                 "cos_f_theta_spline" : self.cos_f_theta_spline.coeffs,
-                "sin_f_theta_spline" : self.sin_f_theta_spline.coeffs
+                "sin_f_theta_spline" : self.sin_f_theta_spline.coeffs,
+                "equation_min_p" : self.equation_min_p.coeffs,
+                "equation_max_p" : self.equation_max_p.coeffs,
+                "equation_min_q" : self.equation_min_q.coeffs,
+                "equation_max_q" : self.equation_max_q.coeffs
                 }
             import pickle
             pickle_out = open("coeffs.pickle", "wb")
@@ -845,7 +875,7 @@ class FrenetPath(object):
                                name=["input_constraint"] * 2)
         
         # get some splines
-        self.fit_all()
+        # self.fit_all()
         sin_theta_c = self.sin_f_theta_spline
         cos_theta_c = self.cos_f_theta_spline
                 

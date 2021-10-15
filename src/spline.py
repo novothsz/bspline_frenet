@@ -56,7 +56,11 @@ def memoize(f):
             if key in self:
                 return self[key]
             else:
-                ret = self[key] = self.f(*args)
+                # This if statement might result in error...
+                if getattr(type(self.f(*args)[0, 0]), '__module__', '').split('.')[0] == 'casadi':
+                    ret = self.f(*args)
+                else:
+                    ret = self[key] = self.f(*args)
                 return ret
 
         def __get__(self, obj, objtype):

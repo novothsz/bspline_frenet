@@ -90,7 +90,40 @@ class Group(Environment):
     
     def ACC_MPC_t_param(self):
         "To this end, we introduce, ... :))"
+        # nothing, dude, just call the sweep_ACC :)
+        # We call the function BEFORE the simulation step, therefore to get the correct values for the next iteration, lets add a t_step to the values :)
         
+        t_sweep_start = self.vehicles[0].t_start + self.vehicles[0].t_step
+        t_sweep_end = self.vehicles[0].t_end + self.vehicles[0].t_step
+        
+        
+        # Okay, there is actually a little difference compared to the simple sweep:
+            # 1. We need to clear the intermediate values before every sweep
+            # 2. We need to duplicate the last values so that the length is consistent. 
+            # 3. (or truncate)
+            
+        max_len = self.vehicles[0].n_of_saved_waypoints * 3
+        self.sweep_ACC(t_sweep_start = t_sweep_start, t_sweep_end = t_sweep_end)
+        
+        
+        for i, vehicle in enumerate(self.vehicles):
+            x_intermediate_list = vehicle.x_intermediate_list
+            # vehicle.variable_history['x_intermediate_list']
+            t_intermediate_list = vehicle.t_intermediate_list
+            
+            current_len = len(x_intermediate_list)
+            if len(x_intermediate_list) > max_len:
+                vehicle.x_intermediate_list = x_intermediate_list[:(current_len-max_len)*3]
+                vehicle.variable_history['x_intermediate_list'][-1] = vehicle.x_intermediate_list
+                vehicle.t_intermediate_list = vehicle.t_intermediate_list[:(current_len-max_len)*3]
+            if len(x_intermediate_list) < max_len:
+                diff = max_len - current_len
+                vehicle.x_intermediate_list = vehicle.x_intermediate_list + vehicle.x_intermediate_list[-3:] * diff
+                vehicle.variable_history['x_intermediate_list'][-1] = vehicle.x_intermediate_list
+                vehicle.t_intermediate_list = vehicle.t_intermediate_list + [vehicle.t_intermediate_list[-1]] * int(diff/3)
+                            
+        
+        return self
         
     
     
@@ -347,6 +380,15 @@ class Group(Environment):
     
     
     def sweep_ACC(self, t_sweep_start = 0, t_sweep_end = 1):
+        """This is the function, described as Dynamic Formaiton Generator(DFG), that was described in the ACC paper.
+        It works as follows:
+            sweeps the time interval t \in [t_sweep_start, t_sweep_in]
+            searches for collision
+            if collision found, h... let's rather implemment it in a new function....
+        
+        
+        
+        """
         import time
         t_iter = time.time()
         
@@ -427,16 +469,33 @@ class Group(Environment):
                 self.cum_rotation = cum_rotation
                 self.cum_scaling = cum_scaling
                 
-                if ACTION_TAKEN == 'no_solution_found':
-                    print("No solution has ben found. We need to halve the time. This should be implemented later :)")
-                    assert 0
                     
                 # Create a t_intermediate & x_intermediate from this
                 if ACTION_TAKEN == "back_transformation" or ACTION_TAKEN == "yes":
-                    for i, vehicle in enumerate(self.vehicles):
-                        vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
-                        vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
-                        vehicle.t_intermediate_list += [t]
+                    
+                    if self.MPC_version == 'MPC_param':
+                        # we need to account for the fact, that t_global_horizon != t_local_horizon
+                        # AAAND for the fact, that the optimization problem is pre-built. So the intermediate lists have to have a certain length always!!!
+                        # We need to convert t_global_horizon to t_local_horizon
+                        t_local = t - t_sweep_start
+                        t_local = (t <= t_sweep_end) * t_local + (t > t_sweep_end) * t_sweep_end
+                        for i, vehicle in enumerate(self.vehicles):
+                            vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
+                            vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
+                            vehicle.t_intermediate_list += [t_local]
+                        
+                    elif self.MPC_version == False or self.MPC_version == True:
+                        for i, vehicle in enumerate(self.vehicles):
+                            vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
+                            vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
+                            vehicle.t_intermediate_list += [t]
+                        
+                        
+                elif ACTION_TAKEN == 'no_action':
+                    pass
+                elif ACTION_TAKEN == 'no_solution_found':
+                    print("No solution has ben found. We need to halve the time. This should be implemented later :)")
+                    assert 0
                         
                 
                 t_end = t_danger_end + t_step
@@ -452,11 +511,12 @@ class Group(Environment):
         print('x_intermediate_list')
         print(self.vehicles[0].x_intermediate_list)
         
-        # t_end = 1
-        for i, vehicle in enumerate(self.vehicles):
-            vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]
-            vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
-            vehicle.t_intermediate_list += [1]
+        if t_end >= 1 or self.vehicles[0].t_intermediate_list == []:
+            for i, vehicle in enumerate(self.vehicles):
+                vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]
+                vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
+                vehicle.t_intermediate_list += [1]
+        
             
         print('ACC_sweep full time: ' + str(time.time() - t_iter))
         
@@ -1472,6 +1532,7 @@ class Group(Environment):
         # without considering formation)
         for i in range(len(self.vehicles)):
             # Let's also do the initialization stuff here
+            
             self.vehicles[i].initialize_x()
 
         "Step 2: exchanging solution"
@@ -1500,7 +1561,7 @@ class Group(Environment):
         """
 
         # Extra step: we initialize decision variables and parameters for faster convergence
-        self.initialize_values()
+        # self.initialize_values()
 
         for i in range(len(self.vehicles)):
             self.vehicles[i].prepare0()
@@ -1546,6 +1607,7 @@ class Group(Environment):
                 
             if 'MPC_version' in var:
                 self.vehicles[i].MPC_version = var['MPC_version']
+                self.MPC_version = var['MPC_version']
             if 'n_of_saved_waypoints' in var:
                 self.vehicles[i].n_of_saved_waypoints = var['n_of_saved_waypoints']
                 
