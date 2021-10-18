@@ -251,8 +251,10 @@ group.save_trajectory_to_csv(n_steps)
 
 fig, ax = plt.subplots()
 ax.set_aspect('equal', adjustable='box')
-group.plot_environment(ax, 0)
-group.vehicles[0].plot_moovie_frames(ax, 0)
+# group.plot_environment(ax, 0)
+group.plot_environment(ax, 0.35900000000000004)
+# group.vehicles[0].plot_moovie_frames(ax, 0)
+group.vehicles[0].plot_configurations(ax)
 plt.show()
 
 

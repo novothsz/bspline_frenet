@@ -29,6 +29,7 @@ class VehicleBasis(Environment):
         
         self.x_intermediate_list = []
         self.t_intermediate_list = []
+        self.t_real_intermediate_list = []
         
         self.stage = []
         self.n_dimensions = 3 # this is considering a third state, the phi rotation angle
@@ -123,7 +124,8 @@ class VehicleBasis(Environment):
                                   't_end' : [],
                                   'xf': [],
                                   'x_intermediate_list' : [],
-                                  't_intermediate_list' : []
+                                  't_intermediate_list' : [],
+                                  't_real_intermediate_list' : []
                 }
         self.n_intermediate_ADMM = 1
         self.vehicle_positions_new = {'stage' : [], 'vehicle_positions_new' : []}
@@ -161,6 +163,7 @@ class VehicleBasis(Environment):
         # 2D
         if position_type == 'initial':
             self.x0 = position + [0, 0, 0]
+            self.current_configuration_position = position
         elif position_type == 'final':
             self.xf = position + [0, 0, 0]
             self.variable_history['xf'] += [self.xf]
@@ -1140,7 +1143,8 @@ class VehicleBasis(Environment):
                                   't_end' : [],
                                   'xf': [],
                                   'x_intermediate_list' : [],
-                                  't_intermediate_list' : []
+                                  't_intermediate_list' : [],
+                                  't_real_intermediate_list' : []
                 }
         
     def initialize_x(self):

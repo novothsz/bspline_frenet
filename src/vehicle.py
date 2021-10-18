@@ -36,6 +36,7 @@ class Vehicle(VehicleBasis):
                                                                                                         self.t_window_size % self.t_step < epsilon# math.floor(self.t_window_size / self.t_step)
         self.waypoints = []
         self.waypoint_timestamps = []
+        self.current_configuration_position = []
         
     
 
@@ -1117,6 +1118,16 @@ class Vehicle(VehicleBasis):
                 ax.plot(x_,
                         y_
                         , 'go', markersize = 2, zorder = 4)
+                
+        for i in range(len(self.variable_history['t_real_intermediate_list'][horizon_num])): 
+            idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
+            x_, y_ = self.fp.frenet_to_inertial(np.array([self.variable_history['x_intermediate_list'][horizon_num]]).reshape(-1)[idx][0], 
+                                                np.array([self.variable_history['x_intermediate_list'][horizon_num]]).reshape(-1)[idx][1],
+                                                self.variable_history['t_real_intermediate_list'][horizon_num][i])
+            ax.plot(x_,
+                    y_
+                    , 'go', markersize = 2, zorder = 4)
+                
         
         """
         point_x = self.variable_history['x_intermediate_list'][horizon_num][-3]
@@ -1306,6 +1317,28 @@ class Vehicle(VehicleBasis):
 
         return ax
         
+    def plot_configurations(self, ax):
+        
+        # Plotting of obstacle
+        for obstacle in self.obstacles:
+            obstacle.plot_obstacle(ax)
+            
+        x_t, y_t = [], []
+        i = 0
+        for t_intermediate_list, x_intermediate_list in zip(self.variable_history['t_real_intermediate_list'], self.variable_history['x_intermediate_list']):
+            for i in range(self.n_of_saved_waypoints):
+                idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
+                print(idx)
+                x = np.array([x_intermediate_list]).reshape(-1)[idx].tolist()
+                print(x[0])
+                print(x[1])
+                print(i)
+                print(t_intermediate_list)
+                x_, y_ = self.fp.frenet_to_inertial(x[0], x[1], t_intermediate_list[i])
+                x_t += [x_]
+                y_t += [y_]
+                
+        ax.plot(x_t, y_t, 'ro')
 
     def plot_moovie_frames(self, ax, t):
         # https://nickcharlton.net/posts/drawing-animating-shapes-matplotlib.html

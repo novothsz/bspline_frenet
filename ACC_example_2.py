@@ -135,7 +135,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     
     
-    n_intermediate_ADMM = 5
+    n_intermediate_ADMM = 1
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
     # n_steps = 10
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
@@ -204,7 +204,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         group.set_var({'stage': i})
         for j in range(n_intermediate_ADMM):
             group.solve()
-            group.frenet_plotter(iternum = j, seed = seed)
+            # group.frenet_plotter(iternum = j, seed = seed)
             group.set_simulation(False)
         
         # group.save_trajectory_to_csv(t_desired = 3, t_hover = 0)

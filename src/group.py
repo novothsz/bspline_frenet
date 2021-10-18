@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from .frenet_path import FrenetPath
 from .environment import Environment
 import yaml
+from numpy import interp
 
 class Group(Environment):
     def __init__(self, n_vehicles : int, start_position = [-0.8, 0, 0], goal_position = [0.8, 0, 0], stage = 0):
@@ -97,281 +98,75 @@ class Group(Environment):
         t_sweep_end = self.vehicles[0].t_end + self.vehicles[0].t_step
         
         
+        
+        if self.stage == 7:
+            kappa = True
+        
         # Okay, there is actually a little difference compared to the simple sweep:
             # 1. We need to clear the intermediate values before every sweep
             # 2. We need to duplicate the last values so that the length is consistent. 
             # 3. (or truncate)
             
-        max_len = self.vehicles[0].n_of_saved_waypoints * 3
+        # Step 1: clear the intermediate lists
+        for i, vehicle in enumerate(self.vehicles):
+            vehicle.x_intermediate_list = []
+            vehicle.t_intermediate_list = []
+            vehicle.t_real_intermediate_list = []
+        
+        max_len_x = self.vehicles[0].n_of_saved_waypoints * 3
+        max_len_t = self.vehicles[0].n_of_saved_waypoints
         self.sweep_ACC(t_sweep_start = t_sweep_start, t_sweep_end = t_sweep_end)
         
+        # Before we do this duplication stuff, we need to find the next "current_configuration_position" value
+        # What do we do? So if in the next step we will be in between some intermediate-calculated values, then we shall
+        # use the formation configuration valid at that timestep as a starting-point for the next DFG iteration.
+        # How do we do that?
+        # So if history of t_real_intermediate_list doesn't exist, we don't do anything
+        # If it does, then, we search for the highest index in the list, that is lower, than t_sweep_start
+        # use that index to extract the correct x_intermediate_list
         
+        for v, vehicle in enumerate(self.vehicles):
+            greater_ = False
+            index_ = 0
+            if len(vehicle.variable_history['t_real_intermediate_list']) > 0:
+                for i, t in enumerate(vehicle.variable_history['t_real_intermediate_list'][-1]):
+                    greater_new = (t <= t_sweep_start + vehicle.t_step)
+                    if (greater_ == True) and (greater_new == False):
+                        index_ = i
+                        break
+                    greater_ = greater_new
+            if index_ != 0 and len(vehicle.variable_history['t_real_intermediate_list']) > 0:
+                idx = np.arange(int(vehicle.state_len/2)*index_,int(vehicle.state_len/2)*index_+int(vehicle.state_len/2))
+                new_ = np.array(vehicle.variable_history['x_intermediate_list'][-1]).reshape(-1)[idx].tolist()[:2]
+                vehicle.current_configuration_position = new_
+                
         for i, vehicle in enumerate(self.vehicles):
             x_intermediate_list = vehicle.x_intermediate_list
             # vehicle.variable_history['x_intermediate_list']
             t_intermediate_list = vehicle.t_intermediate_list
+            # t_real_intermediate_list = vehicle.t_intermediate_list
             
-            current_len = len(x_intermediate_list)
-            if len(x_intermediate_list) > max_len:
-                vehicle.x_intermediate_list = x_intermediate_list[:(current_len-max_len)*3]
-                vehicle.variable_history['x_intermediate_list'][-1] = vehicle.x_intermediate_list
-                vehicle.t_intermediate_list = vehicle.t_intermediate_list[:(current_len-max_len)*3]
-            if len(x_intermediate_list) < max_len:
-                diff = max_len - current_len
-                vehicle.x_intermediate_list = vehicle.x_intermediate_list + vehicle.x_intermediate_list[-3:] * diff
-                vehicle.variable_history['x_intermediate_list'][-1] = vehicle.x_intermediate_list
-                vehicle.t_intermediate_list = vehicle.t_intermediate_list + [vehicle.t_intermediate_list[-1]] * int(diff/3)
-                            
-        
+            current_len_x = len(x_intermediate_list)
+            current_len_t = len(t_intermediate_list)
+            if len(x_intermediate_list) > max_len_x:
+                vehicle.x_intermediate_list = x_intermediate_list[:int((current_len_x-max_len_x)/3)]
+                vehicle.t_intermediate_list = vehicle.t_intermediate_list[:(current_len_t-max_len_t)]
+                vehicle.t_real_intermediate_list = vehicle.t_real_intermediate_list[:(current_len_t-max_len_t)]
+            if len(x_intermediate_list) < max_len_x:
+                diff_x = max_len_x - current_len_x
+                diff_t = max_len_t - current_len_t
+                vehicle.x_intermediate_list = vehicle.x_intermediate_list + vehicle.x_intermediate_list[-3:] * int(diff_x/3)
+                vehicle.t_intermediate_list = vehicle.t_intermediate_list + [vehicle.t_intermediate_list[-1]] * diff_t
+                vehicle.t_real_intermediate_list = vehicle.t_real_intermediate_list + [vehicle.t_real_intermediate_list[-1]] * diff_t
+                
+            vehicle.variable_history['x_intermediate_list'][-1] = vehicle.x_intermediate_list
+            vehicle.variable_history['t_intermediate_list'][-1] = vehicle.t_intermediate_list
+            vehicle.variable_history['t_real_intermediate_list'][-1] = vehicle.t_real_intermediate_list
+            if len(vehicle.t_intermediate_list) < max_len_t or len(vehicle.x_intermediate_list) < max_len_x:
+                kappa = True
         return self
         
     
-    
-    def ACC_MPC(self):
-        """This function is called at every iteration. If an obstacle enters the danger zone, it quickly looks at future times, and 
-        finds the time, when the obstacle leaves the danger zone.
-        
-        How does this function differ from the normal sweep_ACC function?
-            - t_end is not increased, but read from the vehicle member variable
-            - x_intermediate list is not neccesarely updated, because t_danger_middle might be outside of the horizon. It will be added, when the horizon reached the time
-            - t_danger cannot be an arbitrary value. It must be an integer multiply of t_step
-            
-        IMPORTANT:  - queue stores t values in frenet time
-                    - intermediate list stores t values in horizon time
-        """
-        # What we need to do:
-            # check for collision
-                # if collision, find t_danger_end
-                # find t_middle, which is an integer multiply of t_step
-                # find the optimal formation configuration at this time. Save it in a queue.
-                # check every time, if we should feed in something from the queue. Otherwise, we just feed in the 
-                #   the previous value again (because we always have to update the last value since the parameter count is 
-                #   predefined and always waits for a new update, no matter, what)
-                
-            # how do we avoid checking the same obstacle over and over?
-            #   why is this even necessary? --> because 1) we don't want to have duplicate value in the queue, 2) t_middle changes at
-            #   every step, so...
-            # Solution: we tell DFG not to do anything, until we pass t_danger_end
-            
-        # Step -2: check, if the queue contains a value, which is higher or equal, then the current t_end
-        # if yes, it means, that we have already dealt with that particular obstacle.
-        # obstacles are spaced out so we won't have to worry about other obstacles, while we haven't passed this one
-        # therefore,  if the answer is yes, then we can skip checking for collision.
-        # However, we still have to update the intermediate lists.
-        
-        "Check, if (t_end < then the values in the queue)"
-        # check, if we can feed something new to the intermediate lists. If no, let's just repeat the old values.
-        t_end = self.vehicles[0].t_end + self.vehicles[0].t_step # Traditionally we call it after simulation_step() --> therefore we have to add the t_step here :)
-        
-        # finding indices in the queue, which we should now extract
-        queue_indices = []
-        for i, t_ in enumerate(self.ACC_MPC_t_queue):
-            if t_ <= t_end:
-                queue_indices += [i]
-        
-        # if there exists such index, which we want to extract
-        if queue_indices != []:
-            length = len(queue_indices)
-            for i in range(length):
-                for j, vehicle in enumerate(self.vehicles):
-                    vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + self.ACC_MPC_pos_queue[i][j]
-                    vehicle.variable_history['x_intermediate_list'] = vehicle.x_intermediate_list
-                    vehicle.t_intermediate_list = vehicle.t_intermediate_list[1:] + [self.ACC_MPC_t_queue[i]]
-                    # We also need to delete this element from the queue
-                self.ACC_MPC_pos_queue = self.ACC_MPC_pos_queue[1:]
-                self.ACC_MPC_t_queue = self.ACC_MPC_t_queue[1:]
-            return self
-            
-        else:
-            pass # let's check for collision, etc.
-        
-        "Check, if we are in the first iteration, meaning the intermediate_lists are empty"
-        t_step = self.vehicles[0].t_step
-        
-            
-        # If the intermediate states are empty, set x0 as starting position
-        if self.vehicles[0].t_intermediate_list == []:
-            vehicle_positions = []
-            for vehicle in self.vehicles:
-                vehicle_positions += [vehicle.x0[:2]]
-            self.vehicle_positions_original = np.array(vehicle_positions).tolist()
-            
-            # We need to fill up the lists at the beginning
-            for i, vehicle in enumerate(self.vehicles):
-                vehicle.x_intermediate_list = np.array([vehicle.x0[:2] + [0]] * self.vehicles[0].n_of_saved_waypoints).reshape(-1).tolist()
-                vehicle.t_intermediate_list = np.linspace(self.vehicles[0].t_step, 1, self.vehicles[0].n_of_saved_waypoints).tolist()
-                # Make sure you have noticed, that in the above code we have the t range as: [t_step, 1]!
-            return self
-       
-        # If this is not the first iteration, then extract the vehicle positions from the intermediate lists
-        # TODO: We should actually take this position from the end of the queue... (if it is not an empty list)
-        else:
-            vehicle_positions = []
-            for vehicle in self.vehicles:
-                final_waypoints = vehicle.x_intermediate_list[-3:-1]
-                vehicle_positions += [final_waypoints]
-                
-        "Check, if we should even do anything..."
-        # If in the queue there are some values (but we didn't use any of them in the first step), then no... We shouldn't do anyithing
-        # Except: doing a step forward
-        if self.ACC_MPC_t_queue != []:
-            # Get the indice, that has to be replaced
-            for t_intermediate_value in self.ACC_MPC_t_queue:
-                t_intermediate_value_corrected = t_intermediate_value - self.vehicles[0].t_start
-                idx = self.to_where(self.vehicles[0].t_intermediate_list, t_intermediate_value_corrected)
-                
-                if idx != []:
-                    # Doing one step forward (shifting)
-                    for i, vehicle in enumerate(self.vehicles):
-                        vehicle.x_intermediate_list[idx] = self.ACC_MPC_pos_queue[0][i];
-                        vehicle.variable_history['x_intermediate_list'] = vehicle.x_intermediate_list
-            return self
-        # else: # if nothing in the queue, that we should add      
-        #     # Doing one step forward (shifting)
-        #     for i, vehicle in enumerate(self.vehicles):
-        #         vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + vehicle.x_intermediate_list[-3:]; print("This is wrong, because we don't always add... Only if the time is correct...")
-        #         vehicle.variable_history['x_intermediate_list'] = vehicle.x_intermediate_list
-        #     return self
-        
-        "Okay... so...:"
-        # nothing in the queue to add
-        # not the first iteration
-        # the queue is empty, so we can search for collision
-
-        "Walk the walk"        
-        # Step 0: Check if any obstacle is inside the danger zone.
-        # t_end = self.vehicles[0].t_end + self.vehicles[0].t_step #... well, maybe  - self.vehicles[0].t_step? Depends on when we call this method
-        all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, self.get_obstacle_corners(t_end))
-        
-        # Step 1: Which obstacle is inside the danger zone?
-        obstacle_idx = []
-        i = 0
-        if collision == True:
-            for obst_idx, obstacle in enumerate(self.vehicles[0].obstacles):
-                for corner in obstacle.corners:
-                    if all_collisions[i] == True:
-                        obstacle_idx += [obst_idx]
-                    i += 1
-        # for i in range(len(all_collisions)):
-        #     if all_collisions[i] == True:
-        #         obstacle_idx += [i]
-            #
-                
-        # Step 2: if collision has been found, find t_danger_end time
-        if obstacle_idx != []:
-            t_danger_start = t_end
-            t_danger_end = t_danger_start
-            t_danger_step = t_step / 10 # if collision is detected, we step this 'smoothly' until no danger is detected
-            while t_danger_end <= t_end + t_step: # TODO:  --> Why until t_step?
-                t_danger_end += t_danger_step
-                # Check collision but only with obstacles, which are dangerous (we expect, that this doesn't change. Meaning:
-                # obstacles are spaced out well.)
-                all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, np.array(self.get_obstacle_corners(t_danger_end))[obstacle_idx].tolist())
-                if collision == False:
-                    break  # this is the t_danger_end we were looking for (no obstacles in the danger zone anymore :) 
-                    
-            # Okay... we have [t_danger_start, t_danger_end]
-            # Let's get the right formation configuration
-            t = (t_danger_start + t_danger_end) / 2
-            # !!! t must be an integer multiply of t_step !!!
-            # Actually, no...
-            # It is sufficient, if I only expand lookahead... 
-            lookback = (t_danger_end - t_danger_start) / 2
-            lookahead = (t_danger_end - t_danger_start) / 2
-            # lookahead = lookahead + (t_step - t_danger_end % t_step); print("Please check this in debug mode :)")
-            lookahead = lookahead + (t_danger_end % t_step); assert lookahead%t_step >= -1e5 and lookahead%t_step <= 1e5; # print("Please check this in debug mode :)")
-            
-            
-            # Zizzentsük be :)
-            t_zizz = np.linspace( (t-lookback >= 0) * (t-lookback) + (t-lookback > 0) * 0,
-                                      (t+lookahead <= 1) * (t+lookahead) + (t+lookahead > 1) * 1,
-                                      10)
-            
-            # Step: Get the least cost formation & ACTION_TAKEN
-            cum_rotation = self.cum_rotation
-            cum_scaling = self.cum_scaling
-            
-            vehicle_positions, cum_rotation, cum_scaling, ACTION_TAKEN = self.intermediate_position_generator_SZILARD(vehicle_positions, cum_rotation, cum_scaling, t_zizz)
-        
-            self.cum_rotation = cum_rotation
-            self.cum_scaling = cum_scaling
-            
-            if ACTION_TAKEN == 'no_solution_found':
-                print("No solution has ben found. We need to halve the time. This should be implemented later :)")
-                assert 0
-                
-            # Create a t_intermediate & x_intermediate from this
-            if ACTION_TAKEN == "back_transformation" or ACTION_TAKEN == "yes":
-                
-                # Get the valid intermediate values between [t - lookback, t + lookahead]
-                # Okay, so we know, that the lower & upper bounds are on t_step values.
-                
-                # The values are valid for range_ number of steps
-                range_ = ((t + lookahead) - (t - lookback)) / t_step
-                range_ = range_ + 2 # +2, because it is valid for [t - lookback] AND [t + lookahead] as well
-                statement = range_%1 >= - 1e-5 and range_%1 <= + 1e-5
-                if statement == False:
-                    kappa = True
-                range_ = int(range_)
-                t_queue_new = np.linspace(t - lookback, t + lookahead, range_).tolist()
-                
-                MPC_pos_new = [[position[0], position[1], cum_rotation] for position in vehicle_positions]
-                MPC_pos_new = [MPC_pos_new]  * range_
-                
-                assert self.ACC_MPC_pos_queue == [] and self.ACC_MPC_t_queue == [] # if we are here, these should be empty...
-                self.ACC_MPC_pos_queue += MPC_pos_new 
-                self.ACC_MPC_t_queue += t_queue_new; np.array(t_queue_new) - (t_end - self.vehicles[0].t_window_size)
-                print("Az a baj, hogy a t_intermediate_list nem kompatibili a t_step-ekkel")
-                
-        else:
-            pass # no collision has happened
-                
-        # Step 3: check, if we can feed something new to the intermediate lists. If no, let's just shift the old values.
-        queue_indices = []
-        for i, t_ in enumerate(self.ACC_MPC_t_queue):
-            if t_ <= t_end:
-                queue_indices += [i] # we want to feed in these indices from the queue
-                
-        if queue_indices != []:
-            length = len(queue_indices)
-            for i in range(length):
-                for j, vehicle in enumerate(self.vehicles):
-                    vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + self.ACC_MPC_pos_queue[i][j]
-                    vehicle.variable_history['x_intermediate_list'] = vehicle.x_intermediate_list
-                    # vehicle.t_intermediate_list = [vehicle.t_intermediate_list[1:]] + [self.ACC_MPC_t_queue[i][j]]
-                    # We also need to delete this element from the queue
-                    
-                print('Only one')
-                self.set_var({'new_positions': {'stage' : self.stage, 'vehicle_positions_new' : self.ACC_MPC_pos_queue[i]}})
-        
-                self.ACC_MPC_pos_queue = self.ACC_MPC_pos_queue[1:]
-                self.ACC_MPC_t_queue = self.ACC_MPC_t_queue[1:]
-                
-                
-        
-            
-        else: # We don't want to feed in anything, but the list has to be shifted
-            for i, vehicle in enumerate(self.vehicles):
-                vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + vehicle.x_intermediate_list[-3:]
-                vehicle.variable_history['x_intermediate_list'] = vehicle.x_intermediate_list
-                # vehicle.t_intermediate_list = vehicle.t_intermediate_list[1:] + vehicle.t_intermediate_list[-1]
-        
-        
-        
-        
-            
-        
-        return self
-    
-    def to_where(self, t_intermediate_list, t_intermediate_value):
-        idx = []
-        for i, t_intermediate in enumerate(t_intermediate_list):
-            if abs(t_intermediate - t_intermediate_value) < 1e-5:
-                idx += [i]
-        if len(idx) != 1:
-            print(t_intermediate_value)
-        assert len(idx) == 1
-        return idx[0]
     
     
     # Okay, this will be the version, where we look, whether the obstacle has entered the danger zone.
@@ -396,7 +191,8 @@ class Group(Environment):
         
         vehicle_positions = []
         for vehicle in self.vehicles:
-            vehicle_positions += [vehicle.x0[:2]]
+            # vehicle_positions += [vehicle.x0[:2]]
+            vehicle_positions += [vehicle.current_configuration_position[:2]]
             
         vehicle_positions_original = np.array(vehicle_positions).tolist()
                 
@@ -477,18 +273,22 @@ class Group(Environment):
                         # we need to account for the fact, that t_global_horizon != t_local_horizon
                         # AAAND for the fact, that the optimization problem is pre-built. So the intermediate lists have to have a certain length always!!!
                         # We need to convert t_global_horizon to t_local_horizon
-                        t_local = t - t_sweep_start
-                        t_local = (t <= t_sweep_end) * t_local + (t > t_sweep_end) * t_sweep_end
+                        t_local = interp(t,[t_sweep_start,t_sweep_end],[0,1])
+                        # t_local = t - t_sweep_start
+                        # t_local = (t <= t_sweep_end) * t_local + (t > t_sweep_end) * t_sweep_end
                         for i, vehicle in enumerate(self.vehicles):
                             vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
-                            vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
+                            # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
                             vehicle.t_intermediate_list += [t_local]
+                            vehicle.t_real_intermediate_list += [t]
+                            # vehicle.variable_history['t_intermediate_list'] += [t_local]
                         
                     elif self.MPC_version == False or self.MPC_version == True:
                         for i, vehicle in enumerate(self.vehicles):
                             vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
-                            vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
+                            # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
                             vehicle.t_intermediate_list += [t]
+                            # vehicle.variable_history['t_intermediate_list'] += [t]
                         
                         
                 elif ACTION_TAKEN == 'no_action':
@@ -505,19 +305,38 @@ class Group(Environment):
                 t_end += t_step
                 
                 
-        print("ACC_sweep finished")
-        print('t_intermediate_list')
-        print(self.vehicles[0].t_intermediate_list)
-        print('x_intermediate_list')
-        print(self.vehicles[0].x_intermediate_list)
+        # print("ACC_sweep finished")
+        # print('t_intermediate_list')
+        # print(self.vehicles[0].t_intermediate_list)
+        # print('x_intermediate_list')
+        # print(self.vehicles[0].x_intermediate_list)
         
-        if t_end >= 1 or self.vehicles[0].t_intermediate_list == []:
-            for i, vehicle in enumerate(self.vehicles):
-                vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]
-                vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
-                vehicle.t_intermediate_list += [1]
+        tmp_len = len(self.vehicles[0].t_intermediate_list)
+        if t_end >= t_sweep_end or self.vehicles[0].t_intermediate_list == []:
+            if tmp_len > 0:
+                if self.vehicles[0].t_intermediate_list[-1] + 0.1 < t_sweep_end:
+                    for i, vehicle in enumerate(self.vehicles):
+                        vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]
+                        # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
+                        t_local = interp(t_sweep_end,[t_sweep_start,t_sweep_end],[0,1])
+                        vehicle.t_intermediate_list += [t_local]
+                        vehicle.t_real_intermediate_list += [t_sweep_end]
+                        # vehicle.variable_history['t_intermediate_list'] += [1]
+            else:
+                for i, vehicle in enumerate(self.vehicles):
+                    vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]
+                    # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
+                    t_local = interp(t_sweep_end,[t_sweep_start,t_sweep_end],[0,1])
+                    vehicle.t_intermediate_list += [t_local]
+                    vehicle.t_real_intermediate_list += [t_sweep_end]
+                    # vehicle.variable_history['t_intermediate_list'] += [1]
+                
         
-            
+        # Saving stuff to the history
+        for i, vehicle in enumerate(self.vehicles):
+            vehicle.variable_history['x_intermediate_list'] += [vehicle.x_intermediate_list]
+            vehicle.variable_history['t_intermediate_list'] += [vehicle.t_intermediate_list]
+            vehicle.variable_history['t_real_intermediate_list'] += [vehicle.t_real_intermediate_list]
         print('ACC_sweep full time: ' + str(time.time() - t_iter))
         
         return self
@@ -1311,6 +1130,7 @@ class Group(Environment):
                                                ellipse_rotation = math.pi / 2 + math.pi / 4)
             
             
+            
     # def ellipse_generator(self, centerpoint : list, n_positions : int, a : float, b : float, 
     #                       ellipse_rotation : float = 0, vehicles_rotation : float = 0,
     #                       ellipse_scale_x : float = 1, ellipse_scale_y : float = 1):
@@ -1561,7 +1381,7 @@ class Group(Environment):
         """
 
         # Extra step: we initialize decision variables and parameters for faster convergence
-        # self.initialize_values()
+        self.initialize_values()
 
         for i in range(len(self.vehicles)):
             self.vehicles[i].prepare0()
@@ -1582,12 +1402,20 @@ class Group(Environment):
             if 'stage' in var:
                 self.vehicles[i].stage = var['stage']
                 self.stage = var['stage']
+                
             if 'new_positions' in var:
                 self.vehicles[i].vehicle_positions_new['stage'] += [var['new_positions']['stage']]
                 if var['new_positions']['vehicle_positions_new'] != []:
                     self.vehicles[i].vehicle_positions_new['vehicle_positions_new'] += [var['new_positions']['vehicle_positions_new'][i]]
                 else:
                     self.vehicles[i].vehicle_positions_new['vehicle_positions_new'] += [var['new_positions']['vehicle_positions_new']]
+            if 'new_times' in var:
+                self.vehicles[i].vehicle_positions_new['stage'] += [var['new_times']['stage']]
+                if var['new_times']['vehicle_times_new'] != []:
+                    self.vehicles[i].vehicle_positions_new['vehicle_times_new'] += [var['new_times']['vehicle_times_new'][i]]
+                else:
+                    self.vehicles[i].vehicle_positions_new['vehicle_times_new'] += [var['new_times']['vehicle_times_new']]
+                    
             if 't_step' in var:
                 self.vehicles[i].t_step = var['t_step']
             if 't_window_size' in var:
