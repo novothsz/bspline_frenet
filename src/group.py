@@ -112,6 +112,7 @@ class Group(Environment):
             vehicle.x_intermediate_list = []
             vehicle.t_intermediate_list = []
             vehicle.t_real_intermediate_list = []
+            vehicle.t_real_activation_list = []
         
         max_len_x = self.vehicles[0].n_of_saved_waypoints * 3
         max_len_t = self.vehicles[0].n_of_saved_waypoints
@@ -128,14 +129,14 @@ class Group(Environment):
         for v, vehicle in enumerate(self.vehicles):
             greater_ = False
             index_ = 0
-            if len(vehicle.variable_history['t_real_intermediate_list']) > 0:
-                for i, t in enumerate(vehicle.variable_history['t_real_intermediate_list'][-1]):
-                    greater_new = (t <= t_sweep_start + vehicle.t_step)
+            if len(vehicle.variable_history['t_real_intermediate_list']) > 0: # asszem ez csak annyi, hogy nem az első iteráció...
+                for i, t in enumerate(vehicle.variable_history['t_real_activation_list'][-1]):
+                    greater_new = (t[0] <= t_sweep_start + vehicle.t_step)
                     if (greater_ == True) and (greater_new == False):
-                        index_ = i
+                        index_ = i-1
                         break
                     greater_ = greater_new
-            if index_ != 0 and len(vehicle.variable_history['t_real_intermediate_list']) > 0:
+            if index_ >= 0 and len(vehicle.variable_history['t_real_intermediate_list']) > 0:
                 idx = np.arange(int(vehicle.state_len/2)*index_,int(vehicle.state_len/2)*index_+int(vehicle.state_len/2))
                 new_ = np.array(vehicle.variable_history['x_intermediate_list'][-1]).reshape(-1)[idx].tolist()[:2]
                 vehicle.current_configuration_position = new_
@@ -281,6 +282,7 @@ class Group(Environment):
                             # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
                             vehicle.t_intermediate_list += [t_local]
                             vehicle.t_real_intermediate_list += [t]
+                            vehicle.t_real_activation_list += [[t_danger_start, t_danger_end]]
                             # vehicle.variable_history['t_intermediate_list'] += [t_local]
                         
                     elif self.MPC_version == False or self.MPC_version == True:
@@ -337,6 +339,8 @@ class Group(Environment):
             vehicle.variable_history['x_intermediate_list'] += [vehicle.x_intermediate_list]
             vehicle.variable_history['t_intermediate_list'] += [vehicle.t_intermediate_list]
             vehicle.variable_history['t_real_intermediate_list'] += [vehicle.t_real_intermediate_list]
+            vehicle.variable_history['t_real_activation_list'] += [vehicle.t_real_activation_list]
+            
         print('ACC_sweep full time: ' + str(time.time() - t_iter))
         
         return self
