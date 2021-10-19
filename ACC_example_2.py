@@ -135,11 +135,11 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     
     
-    n_intermediate_ADMM = 1
+    n_intermediate_ADMM = 5
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
     # n_steps = 10
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
-    group.set_var({'t_step': 0.04})
+    group.set_var({'t_step': 0.01})
     group.set_var({'t_window_size': 0.2})
     group.set_var({'t_end': 0 + 0.2})
     group.set_var({'knot_intervals': 5})
@@ -225,7 +225,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
             group.ACC_MPC_t_param()
         # print('peni intermediate time: ' + str(time.time() - t_peni_mpc))
         # group.intermediate_position_generator()
-        group.frenet_plotter(iternum = i, seed = seed)
+        # group.frenet_plotter(iternum = i, seed = seed)
         group.simulation_step()
             
 
@@ -257,3 +257,19 @@ group.plot_moovie_frames(n_steps, iternum=0, seed=0)
 # group.save_trajectory_to_csv(n_steps)
 "This is not good like this! We need to save the final plots for the various n_intermediate_ADMM values and run the code multiple times"
 "Only then can we assemble and compare the results."
+
+
+kappa_real = group.vehicles[0].variable_history['t_real_intermediate_list']
+kappa_pos = group.vehicles[0].variable_history['x_intermediate_list']
+kappa_act = group.vehicles[0].variable_history['t_real_activation_list']
+kappa_local = group.vehicles[0].variable_history['t_intermediate_list']
+kappa_current = group.vehicles[0].variable_history['current_configuration_position']
+
+kappa_real = self.vehicles[0].variable_history['t_real_intermediate_list']
+kappa_pos = self.vehicles[0].variable_history['x_intermediate_list']
+kappa_act = self.vehicles[0].variable_history['t_real_activation_list']
+kappa_local = self.vehicles[0].variable_history['t_intermediate_list']
+kappa_current = self.vehicles[0].variable_history['current_configuration_position']
+
+
+current_configuration_position
