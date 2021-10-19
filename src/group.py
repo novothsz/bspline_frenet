@@ -95,7 +95,7 @@ class Group(Environment):
         # We call the function BEFORE the simulation step, therefore to get the correct values for the next iteration, lets add a t_step to the values :)
         
         
-        if self.stage == 8:
+        if self.stage == 7:
             kappa = True
         
         # Setting start & end times
@@ -164,7 +164,7 @@ class Group(Environment):
                 # therefore greater_new will never be false again, hence we will not use the configuration?
                 # Then we take the last index.
                 if greater_ == True and greater_new == True:
-                    index_ = len(vehicle.variable_history['t_real_activation_list'][-1])
+                    index_ = len(vehicle.variable_history['t_real_activation_list'][-1]) - 1
                     change_of_current_configuration_needed = True
                 
                 

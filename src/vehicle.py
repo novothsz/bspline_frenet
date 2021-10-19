@@ -1119,11 +1119,11 @@ class Vehicle(VehicleBasis):
                         y_
                         , 'go', markersize = 2, zorder = 4)
                 
-        for i in range(len(self.variable_history['t_real_intermediate_list'][horizon_num])): 
+        for i in range(len(self.variable_history['t_real_intermediate_list'][horizon_num_original])): 
             idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-            x_, y_ = self.fp.frenet_to_inertial(np.array([self.variable_history['x_intermediate_list'][horizon_num]]).reshape(-1)[idx][0], 
-                                                np.array([self.variable_history['x_intermediate_list'][horizon_num]]).reshape(-1)[idx][1],
-                                                self.variable_history['t_real_intermediate_list'][horizon_num][i])
+            x_, y_ = self.fp.frenet_to_inertial(np.array([self.variable_history['x_intermediate_list'][horizon_num_original]]).reshape(-1)[idx][0], 
+                                                np.array([self.variable_history['x_intermediate_list'][horizon_num_original]]).reshape(-1)[idx][1],
+                                                self.variable_history['t_real_intermediate_list'][horizon_num_original][i])
             ax.plot(x_,
                     y_
                     , 'go', markersize = 2, zorder = 4)

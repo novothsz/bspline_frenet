@@ -135,7 +135,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     
     
-    n_intermediate_ADMM = 5
+    n_intermediate_ADMM = 1
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
     # n_steps = 10
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
