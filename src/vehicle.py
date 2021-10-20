@@ -472,6 +472,7 @@ class Vehicle(VehicleBasis):
             "End-point waypoint tracking END"   
             
         elif self.MPC_version == 'MPC_param':
+            
             # Pretty much the same as the regular MPC version, but now we pass in t_intermediate as parameter.
             n = self.n_of_saved_waypoints
             assert n == len(self.t_intermediate_list) # Please generate the intermediate points first :)
@@ -480,10 +481,27 @@ class Vehicle(VehicleBasis):
                 # Define the parameter
                 x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += np.array(self.x_intermediate_list)[idx].tolist()# ; # assert len(np.array([self.x_intermediate_list])[0][idx].tolist())/(self.state_len/2) == n  # [0] * int(self.state_len/2)
                 t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += [self.t_intermediate_list[i]]
+                "Cost-function version"
                 lambda_ = np.power(np.linspace(1, 0, n), 1)
                 self.J += 10/100 * self.rho_final_value * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
                 self.J += 10/100 * self.rho_final_value * lambda_[i] *(q(t_intermediate) - x_intermediate[1])**2
-                self.J += 10/100 * self.rho_final_value * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
+                self.J += 0 * 10/100 * self.rho_final_value * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
+                "Real DFG: using constraints"
+                self.define_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
+                                        [0], # self.slack, # 
+                                        [5 / 360 * math.pi * 2],
+                                        constraint_type='time',
+                                        name=["phi_intermediate" + str(i)] * self.n_dimensions)
+                                                
+                # Version 1
+                # Final position constraint on y
+                self.define_constraint([(p(t_intermediate) - x_intermediate[0])**2, (q(t_intermediate) - x_intermediate[1])**2],
+                                        [0, 0],
+                                        [self.radious*1, self.radious*1],
+                                        constraint_type='time',
+                                        name=["pq_intermediate" + str(i)] * self.n_dimensions)
+                
+                  
         else:
             raise NotImplementedError()
         

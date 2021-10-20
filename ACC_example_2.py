@@ -225,7 +225,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
             group.ACC_MPC_t_param()
         # print('peni intermediate time: ' + str(time.time() - t_peni_mpc))
         # group.intermediate_position_generator()
-        # group.frenet_plotter(iternum = i, seed = seed)
+        group.frenet_plotter(iternum = i, seed = seed)
         group.simulation_step()
             
 
