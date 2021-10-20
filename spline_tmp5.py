@@ -170,14 +170,14 @@ x = sv.define_splines(degree = 3, knot_intervals = sv.knot_intervals, n_spl = 2,
 
 # Setting objective
 # J = definite_integral(x[0]**2 + x[1]**2, 0, 1)
-sv.J += definite_integral(x[0].derivative()**2 + x[1].derivative()**2, 0.9, 1) # + dot(x[0].coeffs, x[0].coeffs) + dot(x[1].coeffs, x[1].coeffs)
+sv.J += definite_integral(x[0].derivative()**2 + x[1].derivative()**2, 0, 1) # + dot(x[0].coeffs, x[0].coeffs) + dot(x[1].coeffs, x[1].coeffs)
 # for i in range(x[0].coeffs.shape[0]):
 #     J += 0.1 * x[0].coeffs[i]
 
 # Setting initial constraint
-sv.define_constraint(x, [0, 0], [0, 0], 'initial', name = ["x", "y"] )
+sv.define_constraint(x, [0.1, 0.1], [0.1, 0.1], 'initial', name = ["x", "y"] )
 sv.define_constraint(x, [2, 2], [2, 2], 'final', name = ["x", "y"] )
-radious = np.sqrt( 0.5**2 + 0.5**2)
+radious = np.sqrt(0.5**2 + 0.5**2)
 corner = [1.5, 1.5]
 corner = [1, 1]
 # sv.collision_avoidance_circular(x, [1, 1], radious)
