@@ -97,12 +97,12 @@ def shift_spline(coeffs, t_shift, basis):
                    knots[-1]*np.ones(degree)]
     basis2 = BSplineBasis(knots2, degree)
     T_tf = basis2.transform(basis)
-    return T_tf.dot(coeffs)
+    return basis2, T_tf.dot(coeffs)
 
 
 def extrapolate(coeffs, t_extra, basis):
-    T = extrapolate_T(basis, t_extra)
-    return T.dot(coeffs)
+    basis2, T = extrapolate_T(basis, t_extra)
+    return basis2, T.dot(coeffs)
 
 
 def extrapolate_T(basis, t_extra):
@@ -155,12 +155,12 @@ def extrapolate_T(basis, t_extra):
     T = np.zeros((N+m, N))
     T[:N, :N] = np.eye(N)
     T[-(deg+1):, -(deg+1):] = _T
-    return T
+    return basis2, T
 
 
 def shift_over_knot(coeffs, basis):
-    T = shiftoverknot_T(basis)
-    return T.dot(coeffs)
+    basis, T = shiftoverknot_T(basis)
+    return basis, T.dot(coeffs)
 
 
 def shiftoverknot_T(basis):
@@ -187,9 +187,9 @@ def shiftoverknot_T(basis):
                 _t[j, j] = (t_shift-knots[j])/(knots[j+deg-k]-knots[j])
         _T = _t.dot(_T)
     T[:deg, :deg+1] = _T[deg+1:, :]
-    T_extr = extrapolate_T(basis, knots[-1] - knots[-deg-2])
+    basis, T_extr = extrapolate_T(basis, knots[-1] - knots[-deg-2])
     T[-(deg+1):, -(deg+1):] = T_extr[-(deg+1):, -(deg+1):]
-    return T
+    return basis, T
 
 
 def shift_knot1_fwd(cfs, basis, t_shift):

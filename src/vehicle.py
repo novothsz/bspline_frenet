@@ -501,6 +501,8 @@ class Vehicle(VehicleBasis):
                                         constraint_type='time',
                                         name=["pq_intermediate" + str(i)] * self.n_dimensions)
                 
+                
+                
                   
         else:
             raise NotImplementedError()
@@ -850,6 +852,38 @@ class Vehicle(VehicleBasis):
         p_solution = BSpline(basis, coeffs1)
         q_solution = BSpline(basis, coeffs2)
         
+        # Just for testing:
+        t_solution = np.linspace(0, 1, 100)
+        plt.figure()
+        plt.plot(t_solution, p_solution(t_solution))
+        plt.plot(p_solution.basis.knots[2:-2], p_solution.coeffs, 'ro')
+        p_solution = p_solution.insert_knots([0.13, 0.73, 0.9])
+        plt.plot(t_solution, p_solution(t_solution), ':')
+        plt.plot(p_solution.basis.knots[2:-2], p_solution.coeffs, 'go')
+        plt.show()
+        p_solution.integral()
+        definite_integral(p_solution, 0, 1)
+        p_solution(0) + q_solution(1)
+        # from .spline_extra import shift_spline
+        # p_solution.basis, p_solution.coeffs = shift_spline(p_solution.coeffs, 0.5, p_solution.basis)
+        # plt.plot(np.linspace(0.5, 1, 100), p_solution(np.linspace(0.5, 1, 100)), 'k.')
+        
+        # from .spline_extra import extrapolate
+        # p_solution.basis, p_solution.coeffs = extrapolate(p_solution.coeffs, 0.5, p_solution.basis)
+        # plt.plot(np.linspace(0.0, 1.5, 100), p_solution(np.linspace(0.0, 1.5, 100)), 'k.')
+        
+        # from .spline_extra import shift_over_knot
+        # basis, p_solution.coeffs = shift_over_knot(p_solution.coeffs, p_solution.basis)
+        # plt.plot(np.linspace(0.13, 1+0.09999999999999998, 100), p_solution(np.linspace(0, 1, 100)), 'k.')
+        
+        
+        
+        # 0.13: difference between 0 and "first knot"
+        # 0.1: difference between the "last knot" and 1
+        
+        
+        
+        # p_solution.roots()
         # from .spline_extra import shift_spline
         # p_solution.coeffs = shift_spline(p_solution.coeffs, 0.4, p_solution.basis)
         # q_solution.coeffs = shift_spline(q_solution.coeffs, 0.4, q_solution.basis)
