@@ -864,9 +864,15 @@ class Vehicle(VehicleBasis):
         p_solution.integral()
         definite_integral(p_solution, 0, 1)
         p_solution(0) + q_solution(1)
+        
         # from .spline_extra import shift_spline
         # p_solution.basis, p_solution.coeffs = shift_spline(p_solution.coeffs, 0.5, p_solution.basis)
-        # plt.plot(np.linspace(0.5, 1, 100), p_solution(np.linspace(0.5, 1, 100)), 'k.')
+        # plt.plot(np.linspace(0.5, 1, 100), p_solution(np.linspace(0.5, 1, 100)), 'k*')
+        
+        # p_solution2 = p_solution.scale(1, -0.5)
+        # p_solution2 = p_solution2.scale(2, 0)
+        # plt.plot(np.linspace(0.0, 1, 100), p_solution2(np.linspace(0.0, 1, 100)), 'b.')
+        # plt.plot(np.linspace(0.5, 1, 100), p_solution2(np.linspace(0.0, 1, 100)), 'g.')
         
         # from .spline_extra import extrapolate
         # p_solution.basis, p_solution.coeffs = extrapolate(p_solution.coeffs, 0.5, p_solution.basis)

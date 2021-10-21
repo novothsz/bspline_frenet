@@ -6,6 +6,8 @@ from numpy import interp
 from .environment import Environment
 from .spline import BSpline
 
+from .spline_extra import shift_spline
+
 
 class Obstacle(Environment):
     def __init__(self, ID : int = 0, corners: list = [], x_limits: list = [-0.2, 0.2], y_limits: list = [-0.3, 0.3]):
@@ -154,6 +156,9 @@ class Obstacle(Environment):
         
         
         for i, corner in enumerate(self.corners_spline):
+            
+            
+            
             p_ = np.array([corner[0](t_)[0] for t_ in t]).reshape(-1)
             q_ = np.array([corner[1](t_)[0] for t_ in t]).reshape(-1)
             
