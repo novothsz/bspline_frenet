@@ -247,14 +247,14 @@ class VehicleBasis(Environment):
         z_i_coeffs_shifted = []
         for i in range(3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
-            z_i_coeffs_shifted += shift_spline(self.DvZ.z_i[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
+            z_i_coeffs_shifted += shift_spline(self.DvZ.z_i[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
         self.DvZ.z_i = z_i_coeffs_shifted
         
         
         z_ij_coeffs_shifted = []
         for i in range(len(self.neighbours) * 3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
-            z_ij_coeffs_shifted += shift_spline(self.DvZ.z_ij[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
+            z_ij_coeffs_shifted += shift_spline(self.DvZ.z_ij[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
         self.DvZ.z_ij = z_ij_coeffs_shifted
         
         return self
@@ -275,7 +275,7 @@ class VehicleBasis(Environment):
         lambda_ij_coeffs_shifted = []
         for i in range(len(self.neighbours) * 3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
-            lambda_ij_coeffs_shifted += shift_spline(self.PvZ.lambda_ij[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
+            lambda_ij_coeffs_shifted += shift_spline(self.PvZ.lambda_ij[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
         self.PvZ.lambda_ij = lambda_ij_coeffs_shifted
         
         return self
@@ -316,8 +316,8 @@ class VehicleBasis(Environment):
         lambda_i_coeffs_shifted = []
         for i in range(3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
-            z_i_coeffs_shifted += shift_spline(self.PvX.z_i[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
-            lambda_i_coeffs_shifted += shift_spline(self.PvX.lambda_i[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
+            z_i_coeffs_shifted += shift_spline(self.PvX.z_i[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
+            lambda_i_coeffs_shifted += shift_spline(self.PvX.lambda_i[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
         self.PvX.z_i = z_i_coeffs_shifted
         self.PvX.lambda_i = lambda_i_coeffs_shifted
         
@@ -328,8 +328,8 @@ class VehicleBasis(Environment):
         lambda_ji_coeffs_shifted = []
         for i in range(len(self.neighbours) * 3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
-            z_ji_coeffs_shifted += shift_spline(self.PvX.z_ji[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
-            lambda_ji_coeffs_shifted += shift_spline(self.PvX.lambda_ji[idx[0]:idx[-1]+1], self.t_step, basis).tolist()
+            z_ji_coeffs_shifted += shift_spline(self.PvX.z_ji[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
+            lambda_ji_coeffs_shifted += shift_spline(self.PvX.lambda_ji[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
         self.PvX.z_ji = z_ji_coeffs_shifted
         self.PvX.lambda_ji = lambda_ji_coeffs_shifted
         
@@ -346,9 +346,9 @@ class VehicleBasis(Environment):
         coeffs1 = self.DvX.y[0:len(basis_y)]
         coeffs2 = self.DvX.y[len(basis_y):len(basis_y)*2]
         coeffs3 = self.DvX.y[len(basis_y)*2:len(basis_y)*3]
-        coeffs1 = shift_spline(coeffs1, self.t_step, basis_y).tolist()
-        coeffs2 = shift_spline(coeffs2, self.t_step, basis_y).tolist()
-        coeffs3 = shift_spline(coeffs3, self.t_step, basis_y).tolist()
+        coeffs1 = shift_spline(coeffs1, self.t_step, basis_y)[1].tolist()
+        coeffs2 = shift_spline(coeffs2, self.t_step, basis_y)[1].tolist()
+        coeffs3 = shift_spline(coeffs3, self.t_step, basis_y)[1].tolist()
         self.DvX.y = coeffs1
         self.DvX.y += coeffs2
         self.DvX.y += coeffs3
@@ -358,7 +358,7 @@ class VehicleBasis(Environment):
         a_coeffs_shifted = []
         for i in range(len(self.obstacles) * 2): # * 2, because a is 2 dimensional 
             idx = np.arange(len(basis_a)*i,len(basis_a)*i+len(basis_a)) # 4 values, step by step
-            a_coeffs_shifted += shift_spline(self.DvX.a[idx[0]:idx[-1]+1], self.t_step, basis_a).tolist()
+            a_coeffs_shifted += shift_spline(self.DvX.a[idx[0]:idx[-1]+1], self.t_step, basis_a)[1].tolist()
         self.DvX.a = a_coeffs_shifted
         
         # shifting b, d_tau
@@ -366,8 +366,8 @@ class VehicleBasis(Environment):
         d_tau_coeffs_shifted = []
         for i in range(len(self.obstacles)):
             idx = np.arange(len(basis_a)*i,len(basis_a)*i+len(basis_a)) # 4 values, step by step
-            b_coeffs_shifted += shift_spline(self.DvX.b[idx[0]:idx[-1]+1], self.t_step, basis_a).tolist()
-            d_tau_coeffs_shifted += shift_spline(self.DvX.d_tau[idx[0]:idx[-1]+1], self.t_step, basis_a).tolist()
+            b_coeffs_shifted += shift_spline(self.DvX.b[idx[0]:idx[-1]+1], self.t_step, basis_a)[1].tolist()
+            d_tau_coeffs_shifted += shift_spline(self.DvX.d_tau[idx[0]:idx[-1]+1], self.t_step, basis_a)[1].tolist()
         self.DvX.b = b_coeffs_shifted
         self.DvX.d_tau = d_tau_coeffs_shifted
     

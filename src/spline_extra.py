@@ -99,6 +99,18 @@ def shift_spline(coeffs, t_shift, basis):
     T_tf = basis2.transform(basis)
     return basis2, T_tf.dot(coeffs)
 
+def crop_spline2(coeffs, t_start, t_end, basis):
+    n_knots = len(basis) - basis.degree + 1
+    knots = basis.knots
+    degree = basis.degree
+    knots2 = np.r_[t_start*np.ones(degree),
+                   np.linspace(t_start, t_end, n_knots),
+                   t_end*np.ones(degree)]
+    basis2 = BSplineBasis(knots2, degree)
+    T_tf = basis2.transform(basis)
+    return basis2, T_tf.dot(coeffs)
+    
+
 
 def extrapolate(coeffs, t_extra, basis):
     basis2, T = extrapolate_T(basis, t_extra)

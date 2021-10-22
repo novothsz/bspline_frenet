@@ -38,6 +38,11 @@ class Vehicle(VehicleBasis):
         self.waypoint_timestamps = []
         self.current_configuration_position = []
         
+        self.obstacle_cropped_degree = 3
+        self.obstacle_cropped_coeffs = 5
+        self.obstacle_cropped_knots = 5
+        
+        
     
 
 
@@ -853,17 +858,17 @@ class Vehicle(VehicleBasis):
         q_solution = BSpline(basis, coeffs2)
         
         # Just for testing:
-        t_solution = np.linspace(0, 1, 100)
-        plt.figure()
-        plt.plot(t_solution, p_solution(t_solution))
-        plt.plot(p_solution.basis.knots[2:-2], p_solution.coeffs, 'ro')
-        p_solution = p_solution.insert_knots([0.13, 0.73, 0.9])
-        plt.plot(t_solution, p_solution(t_solution), ':')
-        plt.plot(p_solution.basis.knots[2:-2], p_solution.coeffs, 'go')
-        plt.show()
-        p_solution.integral()
-        definite_integral(p_solution, 0, 1)
-        p_solution(0) + q_solution(1)
+        # t_solution = np.linspace(0, 1, 100)
+        # plt.figure()
+        # plt.plot(t_solution, p_solution(t_solution))
+        # plt.plot(p_solution.basis.knots[2:-2], p_solution.coeffs, 'ro')
+        # p_solution = p_solution.insert_knots([0.13, 0.73, 0.9])
+        # plt.plot(t_solution, p_solution(t_solution), ':')
+        # plt.plot(p_solution.basis.knots[2:-2], p_solution.coeffs, 'go')
+        # plt.show()
+        # p_solution.integral()
+        # definite_integral(p_solution, 0, 1)
+        # p_solution(0) + q_solution(1)
         
         # from .spline_extra import shift_spline
         # p_solution.basis, p_solution.coeffs = shift_spline(p_solution.coeffs, 0.5, p_solution.basis)

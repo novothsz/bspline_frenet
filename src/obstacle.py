@@ -6,7 +6,7 @@ from numpy import interp
 from .environment import Environment
 from .spline import BSpline
 
-from .spline_extra import shift_spline
+from .spline_extra import shift_spline, shift_knot1_fwd
 
 
 class Obstacle(Environment):
@@ -159,8 +159,87 @@ class Obstacle(Environment):
             
             
             
-            p_ = np.array([corner[0](t_)[0] for t_ in t]).reshape(-1)
-            q_ = np.array([corner[1](t_)[0] for t_ in t]).reshape(-1)
+            p = corner[0]
+            q = corner[1]
+            
+            # p.coeffs = shift_knot1_fwd(p.coeffs, p.basis, 0.4)
+            # q.coeffs = shift_knot1_fwd(q.coeffs, q.basis, 0.4)
+            
+            
+            
+            p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
+            q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
+            from matplotlib.collections import LineCollection
+            cols = np.linspace(0,1,len(p_))
+            points = np.array([p_, q_]).T.reshape(-1, 1, 2)
+            segments = np.concatenate([points[:-1], points[1:]], axis=1)
+            lc = LineCollection(segments, cmap='viridis')
+            lc = LineCollection(segments, cmap='Wistia')
+            lc = LineCollection(segments, cmap='hot')
+            if i == 0:
+                lc = LineCollection(segments, cmap='brg', label='corner trajectory')
+            else:
+                lc = LineCollection(segments, cmap='brg')
+            line = ax.add_collection(lc)
+            lc.set_array(cols)
+            lc.set_linewidth(2)
+            
+            """
+            from .spline_extra import crop_spline
+            
+            p = corner[0]
+            q = corner[1]
+            p = crop_spline(p, 0.4, 0.6)
+            q = crop_spline(q, 0.4, 0.6)
+            p = p.scale(1, -0.4)
+            q = q.scale(1, -0.4)
+            p = p.scale(5.01, 0)
+            q = q.scale(5.01, 0)
+            
+            kappa = True
+            """
+            
+            # print(p.basis.knots)
+            # p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
+            # q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
+            
+            """
+            # Step 1: shift the spline to t = 0.4
+            p = corner[0]
+            p.basis, p.coeffs = shift_spline(p.coeffs, 0.4, p.basis)
+            q = corner[1]
+            q.basis, q.coeffs = shift_spline(q.coeffs, 0.4, q.basis)
+            # # Step 2: scale back by shifting t_shift = -0.4 
+            # p = p.scale(1, -0.4)
+            # q = q.scale(1, -0.4)
+            # # Step 3: scaling back to the right size [0, 1]
+            # p = p.scale(1 * 1 / (1 - 0.4), 0)
+            # q = q.scale(1 * 1 / (1 - 0.4), 0)
+            # # Step 4: plotting
+            # p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
+            # q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
+            
+            # Step 5: assume the knots are symmetrically arranged.
+            from .spline_extra import crop_spline2
+            p.basis, p.coeffs = crop_spline2(p.coeffs, 0.4, 0.6, p.basis)
+            q.basis, q.coeffs = crop_spline2(q.coeffs, 0.4, 0.6, q.basis)
+            p = p.scale(1, -0.4)
+            q = q.scale(1, -0.4)
+            p = p.scale(5.01, 0)
+            q = q.scale(5.01, 0)
+            """
+            
+            # print(p.basis.knots)
+            
+        
+            
+            
+            p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
+            q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
+            
+            
+            # p_ = np.array([corner[0](t_)[0] for t_ in t]).reshape(-1)
+            # q_ = np.array([corner[1](t_)[0] for t_ in t]).reshape(-1)
             
             # ax.plot(p_, q_, c = 'cornflowerblue',lw=1.0,alpha = 0.9, zorder = 7)
             # k = 0
@@ -187,6 +266,9 @@ class Obstacle(Environment):
             
             
             
+            
+            
+            
         import math
         x_min = math.inf
         x_max = -math.inf
@@ -198,9 +280,9 @@ class Obstacle(Environment):
             x_max = max(x_max, max(corner[0]))
             y_min = min(y_min, min(corner[1]))
             y_max = max(y_max, max(corner[1]))
-        
-        ax.set_xlim(x_min * 1.1, x_max * 1.1)
-        ax.set_ylim(y_min * 1.1, y_max * 1.1)
+        # print(corner[0])
+        # ax.set_xlim(x_min * 1.1, x_max * 1.1)
+        # ax.set_ylim(y_min * 1.1, y_max * 1.1)
             
         # t = np.linspace(0, 1, 6)
         # for corner in self.corners_spline:
