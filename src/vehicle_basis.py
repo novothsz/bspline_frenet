@@ -16,7 +16,7 @@ import random
 
 from casadi import MX, SX, Function, vertcat, dot, nlpsol, cos, sin, norm_2
 from .spline import BSpline, BSplineBasis
-from .spline_extra import definite_integral, shift_spline, shift_knot1_fwd, shift_knot1_bwd, shift_over_knot, extrapolate
+from .spline_extra import definite_integral, shift_spline, shift_knot1_fwd, shift_knot1_bwd, shift_over_knot, extrapolate, crop_spline
 from .environment import Environment
 
 
@@ -183,6 +183,43 @@ class VehicleBasis(Environment):
     ###########################################################################
     ###########################################################################
     ###########################################################################
+    
+    def shift_spline_v1(self, spline, t_shift):
+        """We can do shifting in two ways. In this function we utilize the knot_insertion(), shift_over_knot()
+        and (basis)transform() methods.
+        Essentially we insert knots uniformly, so that we are able to shift over the knots by an amount, defined by 
+        the closeness of the knots. Then, we transform the basis (and with it the coefficients) back to the original
+        basis in order to retain the original number of coefficients.
+        Drawback: cannot have very fine knot intervals, because singularity will occure.
+        """
+        
+    def shift_spline_v2(self, spline, t_shift):
+        """This is the second version of our infamous spline-shifting technology.
+        What we do is as follows. We 1) extrapolate over a knot interval.
+        Then we 2) crop the spline and lastly we 3) transform the spline to its original basis.
+        This version avoids having singularities due to increased knot number.
+        """
+        default_basis = self.define_knots(degree = spline.basis.degree, knots = spline.basis.knots)
+        # Step 1: extrapolation
+        spline.basis, spline.coeffs = extrapolate(spline.coeffs, t_shift, spline.basis)
+        # Step 3: cropping
+        spline.basis, spline.coeffs = shift_spline(spline.coeffs, t_shift, spline.basis)
+        spline = spline.scale(1, -t_shift)
+        # Step 4: transforming back
+        new_coeffs = default_basis.transform(spline.basis).dot(spline.coeffs)
+        new_spline = BSpline(default_basis, new_coeffs)
+    
+        return new_spline
+        
+    
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+        
 
     def update_PvZ(self):
         """Updating P0_z parameter. Values, that are commented out are not
@@ -220,13 +257,17 @@ class VehicleBasis(Environment):
         # t_evaluation = m(np.logspace(0, 3, self.t_resolution_length)/1e3-0.001)
         # if (self.ID == 0):
         #     print(t_evaluation)
-        for obstacle in self.obstacles:
-            for t_ in t_evaluation:
-                for corner in obstacle.corners_spline:
-                    self.PvX.obst += [corner[0](t_).tolist()[0][0], corner[1](t_).tolist()[0][0]]
-            # for i in range(obstacle.corners_spline[0][0].coeffs.shape[0]):
-            #     for corner in obstacle.corners_spline:
-            #         self.PvX.obst += [corner[0].coeffs[i].tolist()[0], corner[1].coeffs[i].tolist()[0]]
+        if self.MPC_version == 'MPC_param':
+            for obstacle in self.obstacles:
+                cropped_corners = obstacle.cropped_corner_trajectories(self.obstacle_cropped_basis, t_evaluation[0], t_evaluation[-1])
+                for corner in cropped_corners:
+                    self.PvX.obst += corner[0].coeffs.reshape(-1).tolist() + corner[1].coeffs.reshape(-1).tolist()
+        else: 
+            for obstacle in self.obstacles:
+                for t_ in t_evaluation:
+                    for corner in obstacle.corners_spline:
+                        self.PvX.obst += [corner[0](t_).tolist()[0][0], corner[1](t_).tolist()[0][0]]
+                        
         self.PvX.x_intermediate = self.x_intermediate_list
         self.PvX.t_intermediate = self.t_intermediate_list
         try:
@@ -247,14 +288,26 @@ class VehicleBasis(Environment):
         z_i_coeffs_shifted = []
         for i in range(3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
-            z_i_coeffs_shifted += shift_spline(self.DvZ.z_i[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
+            
+            z_i = BSpline(basis, self.DvZ.z_i[idx[0]:idx[-1]+1])
+            z_i_shifted = self.shift_spline_v2(z_i, self.t_step)
+            z_i_coeffs_shifted += z_i_shifted.coeffs.tolist()
+            
+            # Old code
+            # z_i_coeffs_shifted += shift_spline(self.DvZ.z_i[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
         self.DvZ.z_i = z_i_coeffs_shifted
         
         
         z_ij_coeffs_shifted = []
         for i in range(len(self.neighbours) * 3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
-            z_ij_coeffs_shifted += shift_spline(self.DvZ.z_ij[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
+            
+            z_ij = BSpline(basis, self.DvZ.z_ij[idx[0]:idx[-1]+1])
+            z_ij_shifted = self.shift_spline_v2(z_ij, self.t_step)
+            z_ij_coeffs_shifted += z_ij_shifted.coeffs.tolist()
+            
+            # Old code
+            # z_ij_coeffs_shifted += shift_spline(self.DvZ.z_ij[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
         self.DvZ.z_ij = z_ij_coeffs_shifted
         
         return self
@@ -269,37 +322,36 @@ class VehicleBasis(Environment):
         # This is already shifted!!!! Don't shift again
         
         # shifting lambda_i as the shifted version, which is found in self.DvX ....
-        self.PvX.lambda_i = self.PvX.lambda_i
+        # Itt valamiért PvX.lambda_i = ...volt... 
+        self.PvZ.lambda_i = self.PvX.lambda_i
         
         # shifting lambda_ij
         lambda_ij_coeffs_shifted = []
         for i in range(len(self.neighbours) * 3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
-            lambda_ij_coeffs_shifted += shift_spline(self.PvZ.lambda_ij[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
+            
+            lambda_ij = BSpline(basis, self.PvZ.lambda_ij[idx[0]:idx[-1]+1])
+            lambda_ij_shifted = self.shift_spline_v2(lambda_ij, self.t_step)
+            lambda_ij_coeffs_shifted += lambda_ij_shifted.coeffs.tolist()
+            
+            # Old code
+            # lambda_ij_coeffs_shifted += shift_spline(self.PvZ.lambda_ij[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
         self.PvZ.lambda_ij = lambda_ij_coeffs_shifted
         
         return self
-
+    
     def shift_PvX(self):
-        # Values, which are not being shifted, are:
-        # v_s, curvature, equation_min/max_p/q -> these are re-evaluated according the current time-window inside update_PvX
         # Values, which need to be shifted, are:
         # x0, z_i, z_ji, lambda_i, lambda_ji
-        
         # x0
         basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
-        # coeffs1 = self.DvX.y[0:len(basis)]
-        # coeffs2 = self.DvX.y[len(basis):len(basis)*2]
         sol = self.solution['x'].full().reshape(-1).tolist()
-        # sol = self.DvX.y
         coeffs1 = sol[0:len(basis)]
         coeffs2 = sol[len(basis):len(basis)*2]
         coeffs3 = sol[len(basis)*2:len(basis)*3]
         p = BSpline(basis, coeffs1)
         q = BSpline(basis, coeffs2)
         phi = BSpline(basis, coeffs3)
-        # p_ = [p(t_).tolist()[0] for t_ in np.linspace(0, 1, 100)]
-        # q_ = [q(t_).tolist()[0] for t_ in np.linspace(0, 1, 100)]
         p0 = p(self.t_step*1/self.t_window_size).tolist()[0]
         q0 = q(self.t_step*1/self.t_window_size).tolist()[0]
         phi0 = phi(self.t_step*1/self.t_window_size).tolist()[0]
@@ -316,63 +368,131 @@ class VehicleBasis(Environment):
         lambda_i_coeffs_shifted = []
         for i in range(3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
-            z_i_coeffs_shifted += shift_spline(self.PvX.z_i[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
-            lambda_i_coeffs_shifted += shift_spline(self.PvX.lambda_i[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
+            
+            # shifting z_i
+            z_i = BSpline(basis, self.PvX.z_i[idx[0]:idx[-1]+1])
+            z_i_shifted = self.shift_spline_v2(z_i, self.t_step)
+            z_i_coeffs_shifted += z_i_shifted.coeffs.tolist()
+            
+             # shifting lambda_i
+            lambda_i = BSpline(basis, self.PvX.lambda_i[idx[0]:idx[-1]+1])
+            lambda_i_shifted = self.shift_spline_v2(lambda_i, self.t_step)
+            lambda_i_coeffs_shifted += lambda_i_shifted.coeffs.tolist()
+             
+            # Old code
+            # z_i_coeffs_shifted += shift_spline(self.PvX.z_i[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
+            # lambda_i_coeffs_shifted += shift_spline(self.PvX.lambda_i[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
         self.PvX.z_i = z_i_coeffs_shifted
         self.PvX.lambda_i = lambda_i_coeffs_shifted
         
         
-        # shifting z_i, lambda_i
-        basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
+        
+        # shifting z_ji, lambda_ji
         z_ji_coeffs_shifted = []
         lambda_ji_coeffs_shifted = []
         for i in range(len(self.neighbours) * 3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
-            z_ji_coeffs_shifted += shift_spline(self.PvX.z_ji[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
-            lambda_ji_coeffs_shifted += shift_spline(self.PvX.lambda_ji[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
+            
+            # shifting z_ji
+            z_ji = BSpline(basis, self.PvX.z_ji[idx[0]:idx[-1]+1])
+            z_ji_shifted = self.shift_spline_v2(z_ji, self.t_step)
+            z_ji_coeffs_shifted += z_ji_shifted.coeffs.tolist()
+            
+            # shifting lambda_ji
+            lambda_ji = BSpline(basis, self.PvX.lambda_ji[idx[0]:idx[-1]+1])
+            lambda_ji_shifted = self.shift_spline_v2(lambda_ji, self.t_step)
+            lambda_ji_coeffs_shifted += lambda_ji_shifted.coeffs.tolist()
+            
+            # Old code
+            # z_ji_coeffs_shifted += shift_spline(self.PvX.z_ji[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
+            # lambda_ji_coeffs_shifted += shift_spline(self.PvX.lambda_ji[idx[0]:idx[-1]+1], self.t_step, basis)[1].tolist()
         self.PvX.z_ji = z_ji_coeffs_shifted
         self.PvX.lambda_ji = lambda_ji_coeffs_shifted
         
         # Also, we need to update some other parameters
         
-        
-        
-        
-        
+
     def shift_DvX(self):
         # shifting y
-        basis_y = self.define_knots(degree = 3, knot_intervals = self.knot_intervals)
+        basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
         
-        coeffs1 = self.DvX.y[0:len(basis_y)]
-        coeffs2 = self.DvX.y[len(basis_y):len(basis_y)*2]
-        coeffs3 = self.DvX.y[len(basis_y)*2:len(basis_y)*3]
-        coeffs1 = shift_spline(coeffs1, self.t_step, basis_y)[1].tolist()
-        coeffs2 = shift_spline(coeffs2, self.t_step, basis_y)[1].tolist()
-        coeffs3 = shift_spline(coeffs3, self.t_step, basis_y)[1].tolist()
-        self.DvX.y = coeffs1
-        self.DvX.y += coeffs2
-        self.DvX.y += coeffs3
+        coeffs1 = self.DvX.y[0:len(basis)]
+        coeffs2 = self.DvX.y[len(basis):len(basis)*2]
+        coeffs3 = self.DvX.y[len(basis)*2:len(basis)*3]
+        
+        # shifting p
+        p = BSpline(basis, coeffs1)
+        p_shifted = self.shift_spline_v2(p, self.t_step)
+        self.DvX.y = p_shifted.coeffs.tolist()
+        
+        # shifting q
+        q = BSpline(basis, coeffs2)
+        q_shifted = self.shift_spline_v2(q, self.t_step)
+        self.DvX.y += q_shifted.coeffs.tolist()
+        
+        # shifting phi
+        phi = BSpline(basis, coeffs3)
+        phi_shifted = self.shift_spline_v2(phi, self.t_step)
+        self.DvX.y += phi_shifted.coeffs.tolist()
+        
+        # Old code
+        # coeffs1 = shift_spline(coeffs1, self.t_step, basis)[1].tolist()
+        # coeffs2 = shift_spline(coeffs2, self.t_step, basis)[1].tolist()
+        # coeffs3 = shift_spline(coeffs3, self.t_step, basis)[1].tolist()
+        # self.DvX.y = coeffs1
+        # self.DvX.y += coeffs2
+        # self.DvX.y += coeffs3
         
         # shifting a
-        basis_a = self.define_knots(degree = 1, knot_intervals = self.knot_intervals)
         a_coeffs_shifted = []
+        basis_a = basis
         for i in range(len(self.obstacles) * 2): # * 2, because a is 2 dimensional 
             idx = np.arange(len(basis_a)*i,len(basis_a)*i+len(basis_a)) # 4 values, step by step
-            a_coeffs_shifted += shift_spline(self.DvX.a[idx[0]:idx[-1]+1], self.t_step, basis_a)[1].tolist()
+            a = BSpline(basis_a, self.DvX.a[idx[0]:idx[-1]+1])
+            a_shifted = self.shift_spline_v2(a, self.t_step)
+            a_coeffs_shifted += a_shifted.coeffs.tolist()
         self.DvX.a = a_coeffs_shifted
+        
+        # Old code
+        # shifting a
+        # basis_a = self.define_knots(degree = 1, knot_intervals = self.knot_intervals)
+        # a_coeffs_shifted = []
+        # for i in range(len(self.obstacles) * 2): # * 2, because a is 2 dimensional 
+        #     idx = np.arange(len(basis_a)*i,len(basis_a)*i+len(basis_a)) # 4 values, step by step
+        #     a_coeffs_shifted += shift_spline(self.DvX.a[idx[0]:idx[-1]+1], self.t_step, basis_a)[1].tolist()
+        # self.DvX.a = a_coeffs_shifted
         
         # shifting b, d_tau
         b_coeffs_shifted = []
         d_tau_coeffs_shifted = []
-        for i in range(len(self.obstacles)):
+        basis_a = basis
+        for i in range(len(self.obstacles)): # * 2, because a is 2 dimensional 
             idx = np.arange(len(basis_a)*i,len(basis_a)*i+len(basis_a)) # 4 values, step by step
-            b_coeffs_shifted += shift_spline(self.DvX.b[idx[0]:idx[-1]+1], self.t_step, basis_a)[1].tolist()
-            d_tau_coeffs_shifted += shift_spline(self.DvX.d_tau[idx[0]:idx[-1]+1], self.t_step, basis_a)[1].tolist()
+            b = BSpline(basis_a, self.DvX.b[idx[0]:idx[-1]+1])
+            b_shifted = self.shift_spline_v2(b, self.t_step)
+            if b_shifted.coeffs.shape[0] != 8:
+                kappa = True
+            b_coeffs_shifted += b_shifted.coeffs.tolist()
+                        
+            d_tau = BSpline(basis_a, self.DvX.d_tau[idx[0]:idx[-1]+1])
+            d_tau_shifted = self.shift_spline_v2(d_tau, self.t_step)
+            d_tau_coeffs_shifted += d_tau_shifted.coeffs.tolist()
+            
         self.DvX.b = b_coeffs_shifted
         self.DvX.d_tau = d_tau_coeffs_shifted
-    
-    
         
+        # Old code
+        # shifting b, d_tau
+        # b_coeffs_shifted = []
+        # d_tau_coeffs_shifted = []
+        # for i in range(len(self.obstacles)):
+        #     idx = np.arange(len(basis_a)*i,len(basis_a)*i+len(basis_a)) # 4 values, step by step
+        #     b_coeffs_shifted += shift_spline(self.DvX.b[idx[0]:idx[-1]+1], self.t_step, basis_a)[1].tolist()
+        #     d_tau_coeffs_shifted += shift_spline(self.DvX.d_tau[idx[0]:idx[-1]+1], self.t_step, basis_a)[1].tolist()
+        # self.DvX.b = b_coeffs_shifted
+        # self.DvX.d_tau = d_tau_coeffs_shifted
+    
+    
     
     def simulation_step(self):
         # self.t_step = 0.01
@@ -571,8 +691,8 @@ class VehicleBasis(Environment):
                           np.linspace(0, 1, knot_intervals+1),
                           np.ones(degree)]
         if 'knots' in kwargs:
-            knot_intervals = len(knots) - 2*degree - 1
             knots = kwargs['knots']
+            knot_intervals = len(knots) - 2*degree - 1
 
         basis = BSplineBasis(knots, degree)
 
@@ -746,7 +866,7 @@ class VehicleBasis(Environment):
         # initial_value = [[1, -1], [0.1, 0.1]]
         # the vehicle will try to avoid the obstacle from the bottom direction (because
         # a always points "up" a little bit, it's y coordinate is 0.1)
-        a = self.define_MX_spline(degree = 1, knot_intervals = self.knot_intervals, n_spl = len(splines),
+        a = self.define_MX_spline(degree = 3, knot_intervals = self.knot_intervals, n_spl = len(splines),
                                 lower_bound = [-math.inf] * len(splines),
                                 upper_bound = [math.inf] * len(splines),
                                 initial_value = [[1, -1], [0, 0]],
@@ -754,14 +874,14 @@ class VehicleBasis(Environment):
                                 name = ["a"] * self.n_dimensions_old)
 
         # b
-        b = self.define_MX_spline(degree = 1, knot_intervals = self.knot_intervals, n_spl = 1,
+        b = self.define_MX_spline(degree = 3, knot_intervals = self.knot_intervals, n_spl = 1,
                                 lower_bound = [-math.inf],
                                 upper_bound = [math.inf],
                                 # initial_value = [[0, 0]],
                                 name = ["b"])
         # initial_value = [[self.x0[0], self.xf[0]], [self.x0[1], self.xf[1]]],
         # d_tau
-        d_tau = self.define_MX_spline(degree = 1, knot_intervals = self.knot_intervals, n_spl = 1,
+        d_tau = self.define_MX_spline(degree = 3, knot_intervals = self.knot_intervals, n_spl = 1,
                                 lower_bound = [0],
                                 upper_bound = [math.inf],
                                 name = ["d_tau"])

@@ -34,9 +34,12 @@ class Vehicle(VehicleBasis):
         self.waypoint_timestamps = []
         self.current_configuration_position = []
         
-        self.obstacle_cropped_degree = 3
-        self.obstacle_cropped_coeffs = 5
-        self.obstacle_cropped_knots = 5
+        self.n_obstacle_cropped_degree = 3
+        self.n_obstacle_cropped_knots = 5
+        
+        self.obstacle_cropped_basis = self.define_knots(degree = self.n_obstacle_cropped_degree, 
+                                                        knot_intervals = self.n_obstacle_cropped_knots)
+        self.n_obstacle_cropped_coeffs = len(self.obstacle_cropped_basis)
         
         
     
@@ -433,19 +436,57 @@ class Vehicle(VehicleBasis):
                                     name=["q_dot_max"])
             
         # Collision avoidance with obstacles
-        for i, obstacle in enumerate(self.obstacles):
-            obst_corners = []
-            for j, t in enumerate(np.linspace(0, 1, self.t_resolution_length)):
-                corner1 = MX.sym('obst_' + str(i) + '_corner1', 2); self.P += [corner1]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
-                corner2 = MX.sym('obst_' + str(i) + '_corner2', 2); self.P += [corner2]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
-                corner3 = MX.sym('obst_' + str(i) + '_corner3', 2); self.P += [corner3]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
-                corner4 = MX.sym('obst_' + str(i) + '_corner4', 2); self.P += [corner4]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
-                obst_corners += [[corner1, corner2, corner3, corner4]]
         
-            self.collision_avoidance_hyperplane([p, q], obst_corners,
-                                                radious=self.radious, name="obst_" + str(i),
-                                                constraint_type='spline_obstacle_param',
-                                                n_samples=self.t_resolution_length)
+        # self.obstacle_cropped_basis = self.define_knots(degree = self.n_obstacle_cropped_degree, 
+        #                                                 knot_intervals = self.n_obstacle_cropped_knots)
+        
+        if self.MPC_version == 'MPC_param':
+            # We have a different collision-avoidance constraint if we are using the MPC_param version.
+            for i, obstacle in enumerate(self.obstacles):
+                obst_corners = []
+                deg = self.n_obstacle_cropped_degree
+                corner1 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knots, n_spl = 2,
+                           lower_bound = [], upper_bound = [],
+                           name = ['obst'] * 2,
+                           category = 'parameter')
+                
+                
+                corner2 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knots, n_spl = 2,
+                           lower_bound = [], upper_bound = [],
+                           name = ['obst'] * 2,
+                           category = 'parameter')
+                
+                corner3 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knots, n_spl = 2,
+                           lower_bound = [], upper_bound = [],
+                           name = ['obst'] * 2,
+                           category = 'parameter')
+                
+                corner4 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knots, n_spl = 2,
+                           lower_bound = [], upper_bound = [],
+                           name = ['obst'] * 2,
+                           category = 'parameter')
+                
+                obst_corners += [corner1, corner2, corner3, corner4]
+            
+                self.collision_avoidance_hyperplane([p, q], obst_corners,
+                                                    radious=self.radious, name="obst_" + str(i),
+                                                    constraint_type='obstacle')
+            
+            
+        else:
+            for i, obstacle in enumerate(self.obstacles):
+                obst_corners = []
+                for j, t in enumerate(np.linspace(0, 1, self.t_resolution_length)):
+                    corner1 = MX.sym('obst_' + str(i) + '_corner1', 2); self.P += [corner1]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
+                    corner2 = MX.sym('obst_' + str(i) + '_corner2', 2); self.P += [corner2]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
+                    corner3 = MX.sym('obst_' + str(i) + '_corner3', 2); self.P += [corner3]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
+                    corner4 = MX.sym('obst_' + str(i) + '_corner4', 2); self.P += [corner4]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
+                    obst_corners += [[corner1, corner2, corner3, corner4]]
+            
+                self.collision_avoidance_hyperplane([p, q], obst_corners,
+                                                    radious=self.radious, name="obst_" + str(i),
+                                                    constraint_type='spline_obstacle_param',
+                                                    n_samples=self.t_resolution_length)
             
         # Cost for extra acceleration in the frenet frame
         cost = 0
@@ -536,7 +577,9 @@ class Vehicle(VehicleBasis):
         self.arg['p'] = self.PvX.assemble()
         # Solving the problem
         self.solution = self.solver.call(self.arg)
+        print(len(self.solution['x'].full().reshape(-1).tolist()))
         # Extracting the solution
+        print(len(self.DvX.a))
         self.DvX.extract(self.solution)
         self.variable_history['y'] += [self.DvX.y]
         self.variable_history['t_start'] += [self.t_start]
@@ -568,7 +611,7 @@ class Vehicle(VehicleBasis):
 
         p_solution = BSpline(basis, coeffs1)
         q_solution = BSpline(basis, coeffs2)
-        
+        kappa = True
         # Just for testing:
         # t_solution = np.linspace(0, 1, 100)
         # plt.figure()

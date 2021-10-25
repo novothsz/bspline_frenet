@@ -4,9 +4,9 @@ from matplotlib.patches import Polygon
 import numpy as np
 from numpy import interp
 from .environment import Environment
-from .spline import BSpline
+from .spline import BSpline, BSplineBasis
 
-from .spline_extra import shift_spline, shift_knot1_fwd
+from .spline_extra import shift_spline, shift_knot1_fwd, crop_spline, extrapolate
 
 
 class Obstacle(Environment):
@@ -34,7 +34,26 @@ class Obstacle(Environment):
         self.scaled_corners_t = []
             
         self.spline_position_in_frenet() # This function creates the self.corners_spline values.
+        
+    def cropped_corner_trajectories(self, default_basis, t_start, t_end):
+        """In this function we slice up the entire spline trajectory into pices
+        """
+        cropped_corners = []
+        for corner in self.corners_spline:
+            cropped_corner = []
+            for xy in corner:
+                xy = crop_spline(xy, t_start, t_end)
+                xy = xy.scale(1, -t_start)
+                xy = xy.scale(  1 * 1 / (t_end - t_start)  )
+                # Oky, but the basis has changed. Let us now convert it to the default basis.
+                new_coeffs = default_basis.transform(xy.basis).dot(xy.coeffs)
+                cropped_corner += [BSpline(default_basis, new_coeffs)]
+            cropped_corners += [cropped_corner]
             
+        return cropped_corners
+            
+    
+    
     def spline_position_in_frenet(self):
         
         try:
@@ -139,7 +158,33 @@ class Obstacle(Environment):
             
         return size_scaled_corners
     
-    
+    def define_knots(self, degree = 3, **kwargs):
+        """This function defines the knots and creates the
+        B-spline basis function with the prescribed degree.
+        Input:
+            degree: degree of the B-spline basis functions
+            knot_intervals: number of knot intervals
+            knots (optional): knot vector. If not given, calculated using the
+            number of knot_intervals
+        Returns:
+            basis: array of B-spline basis functions
+            knots: the knot vector
+            knot_intervals
+        """
+
+        if 'knot_intervals' in kwargs:
+            knot_intervals = kwargs['knot_intervals']
+            knots = np.r_[np.zeros(degree),
+                          np.linspace(0, 1, knot_intervals+1),
+                          np.ones(degree)]
+        if 'knots' in kwargs:
+            knots = kwargs['knots']
+            knot_intervals = len(knots) - 2*degree - 1
+            
+
+        basis = BSplineBasis(knots, degree)
+
+        return basis
     
     def plot_corners_spline(self):
         import matplotlib.pyplot as plt
@@ -154,19 +199,122 @@ class Obstacle(Environment):
         transparency = np.logspace(-9, -5, base=2, num=len(t))
         transparency = np.logspace(-1, 0, base=2, num=len(t))
         
+        p = self.corners_spline[0][0]
+        cropped_corners = self.cropped_corner_trajectories(p.basis, 0.4, 0.6)
         
         for i, corner in enumerate(self.corners_spline):
             
             
             
+            
+            # corner2 = cropped_corners[i]
+            # p = corner2[0]
+            # q = corner2[1]
+            # p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
+            # q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
+            
+            
+            
+            
+            # from matplotlib.collections import LineCollection
+            # cols = np.linspace(0,1,len(p_))
+            # points = np.array([p_, q_]).T.reshape(-1, 1, 2)
+            # segments = np.concatenate([points[:-1], points[1:]], axis=1)
+            # lc = LineCollection(segments, cmap='viridis')
+            # lc = LineCollection(segments, cmap='Wistia')
+            # lc = LineCollection(segments, cmap='hot')
+            # if i == 0:
+            #     lc = LineCollection(segments, cmap='brg', label='corner trajectory', linewidths = 2)
+            # else:
+            #     lc = LineCollection(segments, cmap='brg', linewidths = 2)
+            # line = ax.add_collection(lc)
+            # lc.set_array(cols)
+            # lc.set_linewidth(2)
+            
+            
             p = corner[0]
             q = corner[1]
+            from .spline_extra import shift_over_knot
             
             # p.coeffs = shift_knot1_fwd(p.coeffs, p.basis, 0.4)
             # q.coeffs = shift_knot1_fwd(q.coeffs, q.basis, 0.4)
+            # p.coeffs = shift_knot1_fwd(p.coeffs, p.basis, 0.4)
+            # q.coeffs = shift_knot1_fwd(q.coeffs, q.basis, 0.4)
+            
+            """ shift over knot
+            # # Just for testing:
+            import matplotlib.pyplot as plt
+            t = np.linspace(0, 1, 100)
+            plt.figure()
+            plt.plot(t, q(t))
+            plt.plot(q.basis.knots[2:-2], q.coeffs, 'ro')
+            
+            
+            kappa, p.coeffs = shift_over_knot(p.coeffs, p.basis)
+            kappa, q.coeffs = shift_over_knot(q.coeffs, q.basis)
+            
+            # p.basis, p.coeffs = shift_spline(p.coeffs, 0.05, p.basis)
+            # p = p.scale(1, -0.05)
+            plt.plot(np.linspace(0.1, 1.1, 100), q(t), 'k')
+            plt.plot(q.basis.knots[2:-2], p.coeffs, 'ko')
+            plt.show()
+            """
+            
+            
+            def shift_spline_v2(spline, t_shift):
+                """This is the second version of our infamous spline-shifting technology.
+                What we do is as follows. We 1) extrapolate over a knot interval.
+                Then we 2) crop the spline and lastly we 3) transform the spline to its original basis.
+                This version avoids having singularities due to increased knot number.
+                """
+                default_basis = self.define_knots(degree = spline.basis.degree, knots = spline.basis.knots)
+                # Step 1: extrapolation
+                spline.basis, spline.coeffs = extrapolate(spline.coeffs, t_shift, spline.basis)
+                # Step 3: cropping
+                spline.basis, spline.coeffs = shift_spline(spline.coeffs, t_shift, spline.basis)
+                spline = spline.scale(1, -t_shift)
+                # Step 4: transforming back
+                new_coeffs = default_basis.transform(spline.basis).dot(spline.coeffs)
+                new_spline = BSpline(default_basis, new_coeffs)
+            
+                return new_spline
             
             
             
+            plt.figure()
+            plt.plot(t, q(t), 'k')
+            plt.plot(q.basis.knots[2:-2], q.coeffs, 'ko')
+            
+            "Trying new shift"
+            t_shift = 0.01
+            q = shift_spline_v2(q, t_shift)
+            plt.plot(np.linspace(t_shift, 1 + t_shift, 100), q(t), 'b:')
+            plt.plot(q.basis.knots[2:-2] + t_shift, q.coeffs, 'b*')
+            plt.show()
+            
+            "Working shift"
+            # q = q.insert_knots((q.basis.knots+ 0.05)[:-4] )
+            # plt.plot(t, q(t), 'b:')
+            # plt.plot(q.basis.knots[2:-2], q.coeffs, 'b*')
+            
+            # kappa, q.coeffs = shift_over_knot(q.coeffs, q.basis)
+            # plt.plot(np.linspace(0.05, 1 + 0.05, 100), q(t), 'r')
+            # plt.plot(q.basis.knots[2:-2] + 0.05, q.coeffs, 'ro')
+            
+            # default_basis = p.basis
+            # new_coeffs = default_basis.transform(q.basis).dot(q.coeffs)
+            # q.coeffs = new_coeffs
+            # q.basis = default_basis
+            
+            # t_shift = 0.01
+            # plt.plot(np.linspace(t_shift, 1 + t_shift, 100), q(t), 'g')
+            # plt.plot(q.basis.knots[2:-2] + t_shift, q.coeffs, 'g.')
+            
+            
+            
+            
+            # p = corner[0]
+            # q = corner[1]
             p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
             q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
             from matplotlib.collections import LineCollection
@@ -233,7 +381,7 @@ class Obstacle(Environment):
             
         
             
-            
+            """
             p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
             q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
             
@@ -263,7 +411,7 @@ class Obstacle(Environment):
             line = ax.add_collection(lc)
             lc.set_array(cols)
             lc.set_linewidth(2)
-            
+            """
             
             
             

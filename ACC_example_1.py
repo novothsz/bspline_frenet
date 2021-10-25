@@ -137,7 +137,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     n_intermediate_ADMM = 1
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
-    n_steps = 3
+    n_steps = 0
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
     group.set_var({'t_step': 0})
     group.set_var({'t_window_size': 1})
@@ -186,14 +186,14 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     # group.vehicles[0].obstacles[0].plot_corners_spline()
     # assert 0
     
-    group.sweep_ACC()
+    # group.sweep_ACC()
     
     # return 0, group
     
     # group.intermediate_position_generator_PENI_full()
     # group.intermediate_position_generator_SINGLE_RUN()
     # assert 0
-    group.prepare()
+    # group.prepare()
     
     import time
     t_iter = time.time()
@@ -239,7 +239,7 @@ stage = 0
 start_position = [0.0, 0.0, 0.0]
 goal_position = [0.0, 0.0, 0.0]
 n_steps, group = run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage)
-# group.vehicles[0].obstacles[0].plot_corners_spline()
+group.vehicles[0].obstacles[0].plot_corners_spline()
 
 
 # group.plot_moovie_frames(n_steps, iternum=0, seed=0)
