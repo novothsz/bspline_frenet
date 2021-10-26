@@ -34,10 +34,10 @@ class Environment():
         
         self.n_obstacle_cropped_degree = 3
         self.o_d = self.n_obstacle_cropped_degree
-        self.n_obstacle_cropped_knots = 8
+        self.n_obstacle_cropped_knot_intervals = 5
         
         self.obstacle_cropped_basis = self.define_knots(degree = self.n_obstacle_cropped_degree, 
-                                                        knot_intervals = self.n_obstacle_cropped_knots)
+                                                        knot_intervals = self.n_obstacle_cropped_knot_intervals)
         self.n_obstacle_cropped_coeffs = len(self.obstacle_cropped_basis)
         
         

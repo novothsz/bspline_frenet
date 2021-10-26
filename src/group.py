@@ -1498,16 +1498,12 @@ class Group(Environment):
         """
         for i in range(len(self.vehicles)):
             self.vehicles[i].x_update_prior()
-            
-        
-            
-            
         for i in range(len(self.vehicles)):
             self.vehicles[i].x_update()
         for i in range(len(self.vehicles)):
             self.vehicles[i].x_update_posterior()
             
-        self.plot_frenet_view()
+        # self.plot_frenet_view()
 
 
         """

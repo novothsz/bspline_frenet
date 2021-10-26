@@ -34,12 +34,6 @@ class Vehicle(VehicleBasis):
         self.waypoint_timestamps = []
         self.current_configuration_position = []
         
-        # self.n_obstacle_cropped_degree = 3
-        # self.n_obstacle_cropped_knots = 5
-        
-        # self.obstacle_cropped_basis = self.define_knots(degree = self.n_obstacle_cropped_degree, 
-        #                                                 knot_intervals = self.n_obstacle_cropped_knots)
-        # self.n_obstacle_cropped_coeffs = len(self.obstacle_cropped_basis)
         
         
     
@@ -449,8 +443,6 @@ class Vehicle(VehicleBasis):
             
         # Collision avoidance with obstacles
         
-        # self.obstacle_cropped_basis = self.define_knots(degree = self.n_obstacle_cropped_degree, 
-        #                                                 knot_intervals = self.n_obstacle_cropped_knots)
         
         # if self.MPC_version == 'MPC_param99':
         if True:
@@ -458,23 +450,23 @@ class Vehicle(VehicleBasis):
             for i, obstacle in enumerate(self.obstacles):
                 obst_corners = []
                 deg = self.n_obstacle_cropped_degree
-                corner1 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knots, n_spl = 2,
+                corner1 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knot_intervals, n_spl = 2,
                            lower_bound = [], upper_bound = [],
                            name = ['obst'] * 2,
                            category = 'parameter')
                 
                 
-                corner2 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knots, n_spl = 2,
+                corner2 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knot_intervals, n_spl = 2,
                            lower_bound = [], upper_bound = [],
                            name = ['obst'] * 2,
                            category = 'parameter')
                 
-                corner3 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knots, n_spl = 2,
+                corner3 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knot_intervals, n_spl = 2,
                            lower_bound = [], upper_bound = [],
                            name = ['obst'] * 2,
                            category = 'parameter')
                 
-                corner4 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knots, n_spl = 2,
+                corner4 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knot_intervals, n_spl = 2,
                            lower_bound = [], upper_bound = [],
                            name = ['obst'] * 2,
                            category = 'parameter')
