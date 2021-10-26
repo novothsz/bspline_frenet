@@ -35,6 +35,11 @@ class Obstacle(Environment):
             
         self.spline_position_in_frenet() # This function creates the self.corners_spline values.
         
+        
+        
+        
+        
+        
     def cropped_corner_trajectories(self, default_basis, t_start, t_end):
         """In this function we slice up the entire spline trajectory into pices
         """
@@ -44,7 +49,20 @@ class Obstacle(Environment):
             for xy in corner:
                 xy = crop_spline(xy, t_start, t_end)
                 xy = xy.scale(1, -t_start)
-                xy = xy.scale(  1 * 1 / (t_end - t_start)  )
+                xy = xy.scale(  1 * 1 / (t_end - t_start), 0  )
+                # for i in range(len(xy.basis.knots)):
+                eps = 1e-5
+                xy.basis.knots[0:default_basis.degree] = 0.0
+                xy.basis.knots[0] = 0.0 - eps
+                # xy.basis.knots[4] = xy.basis.knots[4] + eps * 10
+                xy.basis.knots[-default_basis.degree:] = 1.0
+                xy.basis.knots[-1] = 1.0 + eps
+                # xy.basis.knots[-4] = xy.basis.knots[-4] - eps
+                # xy.basis.knots[-1] = xy.basis.knots[-1] + eps * 10
+                    # if xy.basis.knots[i] >= -eps and xy.basis.knots[i] <= eps:
+                    #     xy.basis.knots[i] = 0
+                    # if xy.basis.knots[i] >= -eps + 1 and xy.basis.knots[i] <= eps + 1:
+                    #     xy.basis.knots[i] = 1
                 # Oky, but the basis has changed. Let us now convert it to the default basis.
                 new_coeffs = default_basis.transform(xy.basis).dot(xy.coeffs)
                 cropped_corner += [BSpline(default_basis, new_coeffs)]
@@ -128,7 +146,7 @@ class Obstacle(Environment):
     
     
     def scaled_corners(self, proportion = 1, size = 0.08 * 2):
-        """We can scale a scare by proportion or by size.
+        """We can scale by proportion or by size.
         For example: scaling by 2 will increase the distance of the
         corners from the center twofold.
         By increasing by size, the sides of the obstacle will increase
@@ -158,33 +176,7 @@ class Obstacle(Environment):
             
         return size_scaled_corners
     
-    def define_knots(self, degree = 3, **kwargs):
-        """This function defines the knots and creates the
-        B-spline basis function with the prescribed degree.
-        Input:
-            degree: degree of the B-spline basis functions
-            knot_intervals: number of knot intervals
-            knots (optional): knot vector. If not given, calculated using the
-            number of knot_intervals
-        Returns:
-            basis: array of B-spline basis functions
-            knots: the knot vector
-            knot_intervals
-        """
-
-        if 'knot_intervals' in kwargs:
-            knot_intervals = kwargs['knot_intervals']
-            knots = np.r_[np.zeros(degree),
-                          np.linspace(0, 1, knot_intervals+1),
-                          np.ones(degree)]
-        if 'knots' in kwargs:
-            knots = kwargs['knots']
-            knot_intervals = len(knots) - 2*degree - 1
-            
-
-        basis = BSplineBasis(knots, degree)
-
-        return basis
+    
     
     def plot_corners_spline(self):
         import matplotlib.pyplot as plt
@@ -286,11 +278,11 @@ class Obstacle(Environment):
             plt.plot(q.basis.knots[2:-2], q.coeffs, 'ko')
             
             "Trying new shift"
-            t_shift = 0.01
-            q = shift_spline_v2(q, t_shift)
-            plt.plot(np.linspace(t_shift, 1 + t_shift, 100), q(t), 'b:')
-            plt.plot(q.basis.knots[2:-2] + t_shift, q.coeffs, 'b*')
-            plt.show()
+            # t_shift = 0.01
+            # q = shift_spline_v2(q, t_shift)
+            # plt.plot(np.linspace(t_shift, 1 + t_shift, 100), q(t), 'b:')
+            # plt.plot(q.basis.knots[2:-2] + t_shift, q.coeffs, 'b*')
+            # plt.show()
             
             "Working shift"
             # q = q.insert_knots((q.basis.knots+ 0.05)[:-4] )
@@ -310,8 +302,17 @@ class Obstacle(Environment):
             # plt.plot(np.linspace(t_shift, 1 + t_shift, 100), q(t), 'g')
             # plt.plot(q.basis.knots[2:-2] + t_shift, q.coeffs, 'g.')
             
-            
-            
+            plt.figure()
+            for t_shift in np.linspace(0, 9, 10):
+                t_evaluation = np.linspace(0, 1/10, 100) + t_shift / 10
+                print(t_evaluation[0], t_evaluation[-1])
+                cropped_corners = self.cropped_corner_trajectories(self.obstacle_cropped_basis, t_evaluation[0], t_evaluation[-1])
+                for corner in cropped_corners:
+                    plt.plot(corner[0](t), corner[1](t))
+                plt.show()
+                kappa = True
+                    
+            plt.show()
             
             # p = corner[0]
             # q = corner[1]

@@ -245,6 +245,8 @@ class VehicleBasis(Environment):
         
         # updating values because we are following the mooving Frenet-frame
         t_evaluation = np.linspace(self.t_start, self.t_start + self.t_window_size, self.t_resolution_length)
+        # if self.ID == 0:
+        #     print(t_evaluation)
         self.PvX.v_s = [self.fp.fx_d_spline(t_).tolist()[0][0] + self.fp.fy_d_spline(t_).tolist()[0][0] for t_ in t_evaluation]
         self.PvX.curvature = [self.fp.fy_c_spline(t_).tolist()[0][0] for t_ in t_evaluation]
         self.PvX.equation_min_p = [self.fp.equation_min_p(t_).tolist()[0][0] for t_ in t_evaluation]
@@ -257,11 +259,22 @@ class VehicleBasis(Environment):
         # t_evaluation = m(np.logspace(0, 3, self.t_resolution_length)/1e3-0.001)
         # if (self.ID == 0):
         #     print(t_evaluation)
-        if self.MPC_version == 'MPC_param':
+        # if self.MPC_version == 'MPC_param99':
+            
+        # if self.ID == 0:
+        #     print(t_evaluation[0], t_evaluation[-1])
+            
+            
+        if True:
             for obstacle in self.obstacles:
-                cropped_corners = obstacle.cropped_corner_trajectories(self.obstacle_cropped_basis, t_evaluation[0], t_evaluation[-1])
+                val = t_evaluation[-1]
+                val = val * (val <= 1) + 1 * (val > 1)
+                cropped_corners = obstacle.cropped_corner_trajectories(self.obstacle_cropped_basis, t_evaluation[0], val)
+                # cropped_corners = obstacle.cropped_corner_trajectories(self.obstacle_cropped_basis, 0, 0.1)
                 for corner in cropped_corners:
                     self.PvX.obst += corner[0].coeffs.reshape(-1).tolist() + corner[1].coeffs.reshape(-1).tolist()
+                    # if self.stage == 4:
+                    #     print(corner[0].coeffs.reshape(-1).tolist() + corner[1].coeffs.reshape(-1).tolist())
         else: 
             for obstacle in self.obstacles:
                 for t_ in t_evaluation:
@@ -366,6 +379,7 @@ class VehicleBasis(Environment):
         basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
         z_i_coeffs_shifted = []
         lambda_i_coeffs_shifted = []
+        
         for i in range(3):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
             

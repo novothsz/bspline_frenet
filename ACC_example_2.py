@@ -200,6 +200,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     # group.intermediate_position_generator()
     n_steps = math.floor(1 / group.vehicles[0].t_step)
     for i in range(0, n_steps):
+    # for i in range(19):
         
         group.set_var({'stage': i})
         for j in range(n_intermediate_ADMM):
@@ -225,7 +226,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
             group.ACC_MPC_t_param()
         # print('peni intermediate time: ' + str(time.time() - t_peni_mpc))
         # group.intermediate_position_generator()
-        group.frenet_plotter(iternum = i, seed = seed)
+        # group.frenet_plotter(iternum = i, seed = seed)
         group.simulation_step()
             
 

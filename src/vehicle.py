@@ -34,12 +34,12 @@ class Vehicle(VehicleBasis):
         self.waypoint_timestamps = []
         self.current_configuration_position = []
         
-        self.n_obstacle_cropped_degree = 3
-        self.n_obstacle_cropped_knots = 5
+        # self.n_obstacle_cropped_degree = 3
+        # self.n_obstacle_cropped_knots = 5
         
-        self.obstacle_cropped_basis = self.define_knots(degree = self.n_obstacle_cropped_degree, 
-                                                        knot_intervals = self.n_obstacle_cropped_knots)
-        self.n_obstacle_cropped_coeffs = len(self.obstacle_cropped_basis)
+        # self.obstacle_cropped_basis = self.define_knots(degree = self.n_obstacle_cropped_degree, 
+        #                                                 knot_intervals = self.n_obstacle_cropped_knots)
+        # self.n_obstacle_cropped_coeffs = len(self.obstacle_cropped_basis)
         
         
     
@@ -82,8 +82,10 @@ class Vehicle(VehicleBasis):
             
 
         for i in range(len(y)):
-            self.J += definite_integral(lambda_i[i] * (y[i] - z_i[i]), 0, 1)
-            self.J += definite_integral(self.rho * (y[i] - z_i[i])**2, 0, 1)
+            # self.J += definite_integral(lambda_i[i] * (y[i] - z_i[i]), 0, 1)
+            self.J += dot(lambda_i[i].coeffs,  y[i].coeffs - z_i[i].coeffs)
+            # self.J += definite_integral(self.rho * (y[i] - z_i[i])**2, 0, 1)
+            self.J += self.rho * dot(np.ones(y[i].coeffs.shape[0]), (y[i].coeffs - z_i[i].coeffs)**2)
 
         # Cost sum: x_j - z_ij
         for i in range(len(self.neighbours)):
@@ -368,24 +370,34 @@ class Vehicle(VehicleBasis):
                 x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += np.array(self.x_intermediate_list)[idx].tolist()# ; # assert len(np.array([self.x_intermediate_list])[0][idx].tolist())/(self.state_len/2) == n  # [0] * int(self.state_len/2)
                 t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += [self.t_intermediate_list[i]]
                 # "Cost-function version"
-                # lambda_ = np.power(np.linspace(1, 0, n), 1)
-                # self.J += 10/100 * self.rho_final_value * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
-                # self.J += 10/100 * self.rho_final_value * lambda_[i] *(q(t_intermediate) - x_intermediate[1])**2
-                # self.J += 0 * 10/100 * self.rho_final_value * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
-                "Real DFG: using constraints"
-                self.define_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
-                                        [0], # self.slack, # 
-                                        [5 / 360 * math.pi * 2],
-                                        constraint_type='time',
-                                        name=["phi_intermediate" + str(i)] * self.n_dimensions)
+                lambda_ = np.power(np.linspace(1, 0, n), 1)
+                self.J += 10/100 * self.rho_final_value * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
+                self.J += 10/100 * self.rho_final_value * lambda_[i] *(q(t_intermediate) - x_intermediate[1])**2
+                self.J += 1 * 10/100 * self.rho_final_value * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
+                
+            
+                # "Real DFG: using constraints"
+                # self.define_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
+                #                         [0], # self.slack, # 
+                #                         [5 / 360 * math.pi * 2],
+                #                         constraint_type='time',
+                #                         name=["phi_intermediate" + str(i)] * 1)
                                                 
-                # Version 1
-                # Final position constraint on y
-                self.define_constraint([(p(t_intermediate) - x_intermediate[0])**2, (q(t_intermediate) - x_intermediate[1])**2],
-                                        [0, 0],
-                                        [self.radious*1, self.radious*1],
-                                        constraint_type='time',
-                                        name=["pq_intermediate" + str(i)] * self.n_dimensions)
+                # # Version 1
+                # # Final position constraint on y
+                # self.define_constraint([(p(t_intermediate) - x_intermediate[0])**2, (q(t_intermediate) - x_intermediate[1])**2],
+                #                         [0, 0],
+                #                         [(self.radious*1)**2, (self.radious*1)**2],
+                #                         constraint_type='time',
+                #                         name=["pq_intermediate" + str(i)] * 2)
+                
+                if i == 0:
+                    cost = 0
+                    for j in range(len(pq)):
+                        cost += (pq[i] - x_intermediate[j])**2
+                        # self.J += dot(pq_dotdot[i].coeffs,pq_dotdot[i].coeffs)
+                    self.J += self.rho_input * definite_integral(cost, 0, 1)
+                    
                 
                 
                 
@@ -440,7 +452,8 @@ class Vehicle(VehicleBasis):
         # self.obstacle_cropped_basis = self.define_knots(degree = self.n_obstacle_cropped_degree, 
         #                                                 knot_intervals = self.n_obstacle_cropped_knots)
         
-        if self.MPC_version == 'MPC_param':
+        # if self.MPC_version == 'MPC_param99':
+        if True:
             # We have a different collision-avoidance constraint if we are using the MPC_param version.
             for i, obstacle in enumerate(self.obstacles):
                 obst_corners = []
@@ -490,9 +503,13 @@ class Vehicle(VehicleBasis):
             
         # Cost for extra acceleration in the frenet frame
         cost = 0
+        cost2 = 0
         for i in range(len(pq_dotdot)):
             cost += pq_dotdot[i]**2
+            cost2 += (pq[i] - xf[i])**2
+            # self.J += dot(pq_dotdot[i].coeffs,pq_dotdot[i].coeffs)
         self.J += self.rho_input * definite_integral(cost, 0, 1)
+        self.J += self.rho_input / 100 * definite_integral(cost2, 0, 1)
         
         # Cost x_i - z_i
         z_i = self.define_MX_spline(degree = 3, knot_intervals = self.knot_intervals, n_spl = self.n_dimensions,
@@ -506,8 +523,10 @@ class Vehicle(VehicleBasis):
 
 
         for i in range(len(y)):
-            self.J += definite_integral(lambda_i[i] * (y[i] - z_i[i]), 0, 1)
-            self.J += definite_integral(self.rho * (y[i] - z_i[i])**2, 0, 1)
+            # self.J += definite_integral(lambda_i[i] * (y[i] - z_i[i]), 0, 1)
+            self.J += dot(lambda_i[i].coeffs,y[i].coeffs - z_i[i].coeffs)
+            # self.J += definite_integral(self.rho * (y[i] - z_i[i])**2, 0, 1)
+            self.J += self.rho * dot(np.ones(y[i].coeffs.shape[0]), (y[i].coeffs - z_i[i].coeffs)**2)
 
         # Cost sum: x_i - z_ji
         for i in range(len(self.neighbours)):
@@ -565,9 +584,155 @@ class Vehicle(VehicleBasis):
                    'p': self.PvX.assemble()}
 
 
-        return self
+        return 
+    
+    def visualize_x_problem(self, ax):
+        """This function visualizes the arguments of the x-optimizer. This is to check, if 
+        everything looks okay.
+        Elements, defining parameters will be plotted with filled colors.
+        Elements, defining decision variables will be plotted with opaque colors.
+        (kinda)
+        """
+        # fig = plt.figure()
+        # ax = fig.add_subplot(111)
+        
+        DvX = self.DvX
+        PvX = self.PvX
+        
+        
+        if self.stage == 4:
+            kappa = True
+    
+        def draw_colored_pq(ax, p_, q_, i = -1):
+            from matplotlib.collections import LineCollection
+            cols = np.linspace(0,1,len(p_))
+            points = np.array([p_, q_]).T.reshape(-1, 1, 2)
+            segments = np.concatenate([points[:-1], points[1:]], axis=1)
+            lc = LineCollection(segments, cmap='viridis')
+            lc = LineCollection(segments, cmap='Wistia')
+            lc = LineCollection(segments, cmap='hot')
+            if i == 0:
+                lc = LineCollection(segments, cmap='brg', label='corner trajectory')
+            else:
+                lc = LineCollection(segments, cmap='brg')
+            line = ax.add_collection(lc)
+            lc.set_array(cols)
+            lc.set_linewidth(2)
+            ax.plot()
+            return ax, line
+            
+        # plot obstacles trajectories (PvX)
+        n_c = self.n_obstacle_cropped_coeffs
+        all_corners = np.array(PvX.obst)
+        basis = self.obstacle_cropped_basis
+        p = BSpline(basis, np.zeros(len(basis)))
+        q = BSpline(basis, np.zeros(len(basis)))
+        t = np.linspace(0.001, 1-0.001, 100)
+        if self.ID == 0:    
+            
+            
+            # Colors
+            from matplotlib.pyplot import cm
+            color=cm.Wistia(np.linspace(0,1,len(t)))
+            color=cm.YlOrRd(np.linspace(0,1,len(t)))
+            
+            
+            for i in range(len(self.obstacles)):
+                idx = np.arange(n_c*int(4*2)*i,n_c*int(4*2)*i+n_c*int(4*2))
+                obstacle_i_corners = all_corners[idx]
+                
+                p_c, q_c = [], []
+                for j in range(4):
+                    idx2 = np.arange(n_c*int(2)*j,n_c*int(2)*j+n_c*int(2))
+                    corner_x = obstacle_i_corners[idx2[:n_c]]
+                    corner_y = obstacle_i_corners[idx2[n_c:]]
+                    p = BSpline(basis, corner_x)
+                    q = BSpline(basis, corner_y)
+                    
+                    # Plot colored lines
+                    p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
+                    q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
+                    ax, line = draw_colored_pq(ax, p_, q_, i)
+                    
+                    p_c.append(p)
+                    q_c.append(q)
+                    
+                    
+                # # Plot rectangles
+                numera = 3
+                t_c = [interp(int(i),[0,numera-1],[0,1]) for i in np.linspace(0, numera-1, numera)]
+                color=cm.brg(np.linspace(0,1,numera))
+                c = color
+                for j, t_ in enumerate(t_c):
+                    p_corners, q_corners = [], []
+                    for p, q in zip(p_c, q_c):
+                        p_ = p(t_).reshape(-1).tolist()[0]
+                        q_ = q(t_).reshape(-1).tolist()[0]
+                        
+                        p_corners.append(p_)
+                        q_corners.append(q_)
+                    p_corners.append(p_corners[0])
+                    q_corners.append(q_corners[0])
+                    ax.plot(p_corners,
+                        q_corners,
+                        c = c[j])
+                    plt.plot()
+                    
+                    
+            # plot danger zone
+            
+            s_danger = 0.6988905493709299    
+            # circle = plt.Circle((0, 0), 1, color='k', alpha=0.5, zorder = 10)
+            circle = plt.Circle((0, 0), s_danger, color='r', alpha=0.5, zorder = 0)
+            ax.add_patch(circle)
+            # ax.legend([circle, line], ['collision radious', 'corner trajectory'])
+            ax.set_aspect('equal', adjustable='box')
+            # fig.colorbar(line,ax=ax, orientation="horizontal")
+        
+        
+                    
+            ax.set_xlim(-3, 3)
+            ax.set_ylim(-3, 3)
+        
+        # plot vehicle position trajectories
+        x0 = np.array(PvX.x0)
+        ax.plot(x0[0], x0[1], 'bo', zorder = 2)
+        xf = np.array(PvX.xf)
+        ax.plot(xf[0], xf[1], 'g*', zorder = 2)
+        
+        basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
+        p_coeffs = np.array(DvX.y)[np.arange(0, len(basis))]
+        q_coeffs = np.array(DvX.y)[np.arange(len(basis), len(basis)*2)]
+        phi_coeffs = np.array(DvX.y)[np.arange(len(basis)*2, len(basis)*3)]
+        p = BSpline(basis, p_coeffs)
+        q = BSpline(basis, q_coeffs)
+        phi = BSpline(basis, phi_coeffs)
+        
+        p_ = p(t).reshape(-1).tolist()
+        q_ = q(t).reshape(-1).tolist()
+        phi_ = phi(t).reshape(-1).tolist()
+        
+        # ax.plot(p_, q_, c = 'cornflowerblue',lw=0.8,alpha = 0.5, zorder = 3)
+        ax, line = draw_colored_pq(ax, p_, q_, -1)
+        
+        # plot vehicle phi trajectories
+        # plot trajectory suggestions
+        # plot intermediate positions
+        basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
+        x = np.array(self.x_intermediate_list)
+        for i in range(len(self.t_intermediate_list)):
+            idx = np.arange(3*int(1)*i,3*int(1)*i+3*int(1))
+            p = x[idx[0]]
+            q = x[idx[1]]
+            phi = x[idx[2]]
+            
+            ax.plot(p, q, 'ko',alpha = 0.1)
+        
+        # fig.savefig('figures/' + 'cc' + '{:0>1d}'.format(self.stage) +'.pdf', dpi = 200)
+        
+        return ax
 
-    def x_update(self):
+    def x_update_prior(self):
         self.update_PvX()
         if self.shift_enabled == True:
             self.shift_DvX()
@@ -575,11 +740,11 @@ class Vehicle(VehicleBasis):
         # Updating the necessary arguments for the solver
         self.arg['x0'] = self.DvX.assemble()
         self.arg['p'] = self.PvX.assemble()
+    def x_update(self):
         # Solving the problem
         self.solution = self.solver.call(self.arg)
-        print(len(self.solution['x'].full().reshape(-1).tolist()))
+    def x_update_posterior(self):
         # Extracting the solution
-        print(len(self.DvX.a))
         self.DvX.extract(self.solution)
         self.variable_history['y'] += [self.DvX.y]
         self.variable_history['t_start'] += [self.t_start]
@@ -945,8 +1110,14 @@ class Vehicle(VehicleBasis):
             ax.plot(x_,
                     y_
                     , 'go', markersize = 2, zorder = 4)
-                
         
+        
+        x_, y_ = self.fp.frenet_to_inertial(np.array([self.variable_history['current_configuration_position'][horizon_num_original]]).reshape(-1)[0], 
+                                                np.array([self.variable_history['current_configuration_position'][horizon_num_original]]).reshape(-1)[1],
+                                                t_start)
+        ax.plot(x_,
+                y_
+                , 'bo', markersize = 2, zorder = 4)
         """
         point_x = self.variable_history['x_intermediate_list'][horizon_num][-3]
         # print(point_x)

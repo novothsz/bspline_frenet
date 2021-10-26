@@ -44,8 +44,8 @@ class Group(Environment):
         self.cum_scaling = 1
         
         
-        self.ACC_MPC_pos_queue = []
         self.ACC_MPC_t_queue = []
+        self.ACC_MPC_pos_queue = []
         
         
         
@@ -93,11 +93,7 @@ class Group(Environment):
     def ACC_MPC_t_param(self):
         "To this end, we introduce, DFG-MPC... :))"
         # We call the function BEFORE the simulation step, therefore to get the correct values for the next iteration, lets add a t_step to the values :)
-        
-        
-        if self.stage == 7:
-            kappa = True
-        
+                
         # Setting start & end times
         t_sweep_start = self.vehicles[0].t_start + self.vehicles[0].t_step
         t_sweep_end = self.vehicles[0].t_end + self.vehicles[0].t_step
@@ -146,7 +142,7 @@ class Group(Environment):
             greater_ = False
             index_ = 0
             change_of_current_configuration_needed = False
-            if len(vehicle.variable_history['t_real_intermediate_list']) > 0: # Meaning: no the first iteration...
+            if len(vehicle.variable_history['t_real_intermediate_list']) > 0: # Meaning: not the first iteration...
                 # If in the next iteration we enter the active zone of an intermediate formation, then the next iteration of the DFG should assume,
                 # that at the beginning of its iteration we will start from that specific formation.
                 # This is reasonable, because we can assume, that the previously generated trajectories have already brought
@@ -1501,7 +1497,17 @@ class Group(Environment):
         1) x_update(), which optimizes the trajectory of the given vehicle.
         """
         for i in range(len(self.vehicles)):
+            self.vehicles[i].x_update_prior()
+            
+        
+            
+            
+        for i in range(len(self.vehicles)):
             self.vehicles[i].x_update()
+        for i in range(len(self.vehicles)):
+            self.vehicles[i].x_update_posterior()
+            
+        self.plot_frenet_view()
 
 
         """
@@ -1788,6 +1794,14 @@ class Group(Environment):
 
         return self
     
+    def plot_frenet_view(self):
+        fig, ax = self.figures["figures"]
+        ax.clear()
+        
+        for vehicle in self.vehicles:
+            ax = vehicle.visualize_x_problem(ax)
+            
+        fig.savefig(self.cwd + '/figures/frenet_view_' + '{:0>2d}'.format(self.vehicles[0].stage) +'.png', dpi = 200)
     
     def plot_moovie_frames(self, n_frames, iternum : int = 0, seed = ''):
         fig, ax = self.figures["figures"]

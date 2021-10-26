@@ -3,6 +3,7 @@ import numpy as np
 from .frenet_path import FrenetPath
 from .frenet_spline import SplineFitter
 import os
+from .spline import BSpline, BSplineBasis
 
 # import pickle
 # import dill
@@ -31,6 +32,42 @@ class Environment():
         
         
         
+        self.n_obstacle_cropped_degree = 3
+        self.o_d = self.n_obstacle_cropped_degree
+        self.n_obstacle_cropped_knots = 8
+        
+        self.obstacle_cropped_basis = self.define_knots(degree = self.n_obstacle_cropped_degree, 
+                                                        knot_intervals = self.n_obstacle_cropped_knots)
+        self.n_obstacle_cropped_coeffs = len(self.obstacle_cropped_basis)
+        
+        
+    def define_knots(self, degree = 3, **kwargs):
+        """This function defines the knots and creates the
+        B-spline basis function with the prescribed degree.
+        Input:
+            degree: degree of the B-spline basis functions
+            knot_intervals: number of knot intervals
+            knots (optional): knot vector. If not given, calculated using the
+            number of knot_intervals
+        Returns:
+            basis: array of B-spline basis functions
+            knots: the knot vector
+            knot_intervals
+        """
+
+        if 'knot_intervals' in kwargs:
+            knot_intervals = kwargs['knot_intervals']
+            knots = np.r_[np.zeros(degree),
+                          np.linspace(0, 1, knot_intervals+1),
+                          np.ones(degree)]
+        if 'knots' in kwargs:
+            knots = kwargs['knots']
+            knot_intervals = len(knots) - 2*degree - 1
+            
+
+        basis = BSplineBasis(knots, degree)
+
+        return basis
         # try:
             # self.fp = dill.load('use_dill')
             # pickle_in = open("dict.pickle", "rb")
