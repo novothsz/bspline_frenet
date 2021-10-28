@@ -235,7 +235,7 @@ class VehicleBasis(Environment):
         return self
 
     def update_PvX(self):
-        if self.stage == 14:
+        if self.stage == 14 and self.ID == 0:
             kappa = True
         """Updating P0 parameter. Values, that are commented out are not
         currently updated. This can be changed later allowing additional functionality.

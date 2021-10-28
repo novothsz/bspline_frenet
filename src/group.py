@@ -120,7 +120,7 @@ class Group(Environment):
         if self.stage == 13:
             kappa = True
             
-        
+        # the cummulative values hold the relative formation rotation  scaling w.r.t. the original formation configuration
         cum_rotation_old = self.cum_rotation
         cum_scaling_old = self.cum_scaling
         self.sweep_ACC(t_sweep_start = t_sweep_start, t_sweep_end = t_sweep_end)
@@ -272,9 +272,12 @@ class Group(Environment):
                         # If we collide with an obstacle, we save its index
                         obstacle_idx += [i]
                         
-                        
+            if (t_end >= 1 - self.TOL and t_end <= 1 + self.TOL) == True:
+                obstacle_idx = [0]
+                # print("Setting original configuration")
             # Step 2: If collision has been found, find t_danger_end time.
             if obstacle_idx != []:
+                
                 t_danger_start = t_end
                 t_danger_end = t_danger_start
                 t_danger_step = t_step / 10 # if collision is detected, we step this 'smoothly' until no danger is detected
@@ -346,6 +349,7 @@ class Group(Environment):
                 elif ACTION_TAKEN == 'no_solution_found':
                     print("No solution has ben found. We need to halve the time. This should be implemented later :)")
                     assert 0
+                
                         
                 
                 t_end = t_danger_end + t_step
@@ -362,24 +366,47 @@ class Group(Environment):
         # print(self.vehicles[0].x_intermediate_list)
         
         tmp_len = len(self.vehicles[0].t_intermediate_list)
-        if t_end >= t_sweep_end or self.vehicles[0].t_intermediate_list == []:
+        
+        "What the hell is this code below?"
+        """
+        
+        # if we are right at the end OR no intermediate values have been generated during the sweep
+        if t_end >= t_sweep_end - self.TOL or self.vehicles[0].t_intermediate_list == []:
+            
+            
+            # If we are right at the end AND we did generate some intermediate values?
             if tmp_len > 0:
-                if self.vehicles[0].t_intermediate_list[-1] + 0.1 < t_sweep_end:
+                print("If we haven't generated ")
+                # if self.vehicles[0].t_intermediate_list[-1] + 0.1 < t_sweep_end:
+                # If we have put down an intermediate value, but for the next t_wait = 0.5 (half the local horizon)
+                # we haven't put down any more, then we can return to the original formation at the end of the interval.
+                
+                
+                t_wait = 0.5
+                if interp(self.vehicles[0].t_intermediate_list[-1] + t_wait,[0,1], [t_sweep_start,t_sweep_end]) < t_sweep_end:
                     for i, vehicle in enumerate(self.vehicles):
                         vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]
                         # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
                         t_local = interp(t_sweep_end,[t_sweep_start,t_sweep_end],[0,1])
                         vehicle.t_intermediate_list += [t_local]
                         vehicle.t_real_intermediate_list += [t_sweep_end]
+                
+                        
+                        
                         # vehicle.variable_history['t_intermediate_list'] += [1]
+            # if no intermediate values have been generated during the sweep
             else:
-                for i, vehicle in enumerate(self.vehicles):
-                    vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]
-                    # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
-                    t_local = interp(t_sweep_end,[t_sweep_start,t_sweep_end],[0,1])
-                    vehicle.t_intermediate_list += [t_local]
-                    vehicle.t_real_intermediate_list += [t_sweep_end]
-                    # vehicle.variable_history['t_intermediate_list'] += [1]
+                """
+        if tmp_len == 0:
+            print("We haven't generated anything, therefore what we started off with, is okay. Use that.")
+            # then we can set the original configuraiton back
+            for i, vehicle in enumerate(self.vehicles):
+                vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]
+                # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
+                t_local = interp(t_sweep_end,[t_sweep_start,t_sweep_end],[0,1])
+                vehicle.t_intermediate_list += [t_local]
+                vehicle.t_real_intermediate_list += [t_sweep_end]
+                # vehicle.variable_history['t_intermediate_list'] += [1]
                 
         
         # Saving stuff to the history
@@ -389,7 +416,7 @@ class Group(Environment):
             vehicle.variable_history['t_real_intermediate_list'] += [vehicle.t_real_intermediate_list]
             vehicle.variable_history['t_real_activation_list'] += [vehicle.t_real_activation_list]
             
-        print('ACC_sweep full time: ' + str(time.time() - t_iter))
+        # print('ACC_sweep full time: ' + str(time.time() - t_iter))
         
         return self
         
@@ -562,8 +589,18 @@ class Group(Environment):
         """The goal of this function is to receive a set of vehicle positions and calculate a rotated-scaled frame, that does not collide with 
         obstaacles at the given time-point.
         If t is a list of time values, then each of these time values will be checked for collision"""
-        
-        
+        if type(t) != list and type(t) != type(np.array([])):
+            if t >= 1 - self.TOL and t <= 1 + self.TOL:
+                self.back_rotation_factor = 1
+                self.back_scaling_factor = 1
+        elif type(t) == list or type(t) == type(np.array([])):
+            if any([(t_ >= 1 - self.TOL and t_ <= 1 + self.TOL) for t_ in t]):
+                self.back_rotation_factor = 1
+                self.back_scaling_factor = 1
+                
+        if self.stage == 23:
+            kappa = True
+            # print(t)
         # Step 0: first always try to turn&scale it back... :)
         #Backturning
         rotation_angle = -1 * self.back_rotation_factor * cum_rotation
