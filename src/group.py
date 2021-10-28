@@ -117,6 +117,9 @@ class Group(Environment):
         max_len_x = self.vehicles[0].n_of_saved_waypoints * 3
         max_len_t = self.vehicles[0].n_of_saved_waypoints
         
+        if self.stage == 13:
+            kappa = True
+            
         
         cum_rotation_old = self.cum_rotation
         cum_scaling_old = self.cum_scaling
@@ -238,7 +241,7 @@ class Group(Environment):
         
         # The DFG iteration!s
         t_end = t_sweep_start # TODO: jajj, ne hívjuk már t_end-nek...
-        while t_end <= t_sweep_end:
+        while t_end <= t_sweep_end + self.TOL:
             # Step 1: Check if inside danger zone at time t
             # all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions, self.get_obstacle_corners(t_end))
             all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, self.get_scaled_obstacle_corners(t_end))
@@ -246,7 +249,8 @@ class Group(Environment):
             # Let's check, with which obstacle we have collision.
             obstacle_idx = []
             for i, obstacle in enumerate(self.vehicles[0].obstacles):
-                idx = np.arange(len(self.vehicles)*i,len(self.vehicles)*i+len(self.vehicles))
+                idx = np.arange(len(self.vehicles)*i,len(self.vehicles)*i+len(self.vehicles)) 
+                idx = np.arange(4*i,4*i+4) # bacuse calculated with danger zone, where values are obst0->[corner 0, c1, c2, c3]; o1->[c0, c1, c2, c3]; ...
                 is_collision = any(np.array(all_collisions)[idx].tolist())
                 if is_collision:
                     # It's okay, that we check if the obstacle enters into the danger zone, but 
@@ -254,7 +258,15 @@ class Group(Environment):
                     # Meaning: use the collision function and not the danger zone function.
                     # (If none, then we can keep the formation :) )
                     # all_collisions2, collision2 = self.check_collision_with_obstacles(vehicle_positions, [self.get_obstacle_corners(t_end)[i]])
+                    # all_collisions2, collision2 = self.check_collision_with_obstacles(vehicle_positions, np.array(self.get_obstacle_corners(t_end))[ [i] ].tolist()) 
+                    
+                    
+                    # --> we need to use this, because danger zone is kind of arbitrary
+                    # we are using the non-scaled positions for a reason...
+                    # And the reason being
                     all_collisions2, collision2 = self.check_collision_with_obstacles(vehicle_positions, np.array(self.get_obstacle_corners(t_end))[ [i] ].tolist()) 
+                    # nah... maybe it is better to use the same, because let's just use the same. Because they might give different results.
+                    # all_collisions2, collision2 = self.check_danger_zone_with_obstacles(vehicle_positions, np.array(self.get_scaled_obstacle_corners(t_end))[ [i] ].tolist()) 
                     is_collision2 = collision2
                     if is_collision2:
                         # If we collide with an obstacle, we save its index
@@ -1503,7 +1515,7 @@ class Group(Environment):
         for i in range(len(self.vehicles)):
             self.vehicles[i].x_update_posterior()
             
-        # self.plot_frenet_view()
+        self.plot_frenet_view()
 
 
         """

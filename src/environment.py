@@ -40,6 +40,8 @@ class Environment():
                                                         knot_intervals = self.n_obstacle_cropped_knot_intervals)
         self.n_obstacle_cropped_coeffs = len(self.obstacle_cropped_basis)
         
+        self.TOL = 1e-7
+        
         
     def define_knots(self, degree = 3, **kwargs):
         """This function defines the knots and creates the

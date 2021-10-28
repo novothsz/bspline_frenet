@@ -82,7 +82,7 @@ class VehicleBasis(Environment):
         # self.rho_formation = 100# /5 # /50
         self.rho_input = 0.1 * 10 * 2 * 100
         self.rho_final_value = 0.1 * 10 * 100# * 1000
-        self.rho_intermediate = 1000
+        self.rho_intermediate = 10
         
         self.epsilon = 0.05 # try to keep minimum epsilon distance from the obstacle
         # self.epsilon = self.radious # try to keep minimum epsilon distance from the obstacle
@@ -235,6 +235,8 @@ class VehicleBasis(Environment):
         return self
 
     def update_PvX(self):
+        if self.stage == 14:
+            kappa = True
         """Updating P0 parameter. Values, that are commented out are not
         currently updated. This can be changed later allowing additional functionality.
         Updated values are: T, x0, z_i, z_ji, lambda_ji
@@ -245,8 +247,6 @@ class VehicleBasis(Environment):
         
         # updating values because we are following the mooving Frenet-frame
         t_evaluation = np.linspace(self.t_start, self.t_start + self.t_window_size, self.t_resolution_length)
-        # if self.ID == 0:
-        #     print(t_evaluation)
         self.PvX.v_s = [self.fp.fx_d_spline(t_).tolist()[0][0] + self.fp.fy_d_spline(t_).tolist()[0][0] for t_ in t_evaluation]
         self.PvX.curvature = [self.fp.fy_c_spline(t_).tolist()[0][0] for t_ in t_evaluation]
         self.PvX.equation_min_p = [self.fp.equation_min_p(t_).tolist()[0][0] for t_ in t_evaluation]
@@ -255,26 +255,14 @@ class VehicleBasis(Environment):
         self.PvX.equation_max_q = [self.fp.equation_max_q(t_).tolist()[0][0] for t_ in t_evaluation]
         self.PvX.obst = []
         
-        # m = interp1d([0, 1], [self.t_start, self.t_start + self.t_window_size])
-        # t_evaluation = m(np.logspace(0, 3, self.t_resolution_length)/1e3-0.001)
-        # if (self.ID == 0):
-        #     print(t_evaluation)
-        # if self.MPC_version == 'MPC_param99':
             
-        # if self.ID == 0:
-        #     print(t_evaluation[0], t_evaluation[-1])
-            
-            
-        if True:
+        if self.MPC_version == 'MPC_param':
             for obstacle in self.obstacles:
                 val = t_evaluation[-1]
                 val = val * (val <= 1) + 1 * (val > 1)
                 cropped_corners = obstacle.cropped_corner_trajectories(self.obstacle_cropped_basis, t_evaluation[0], val)
-                # cropped_corners = obstacle.cropped_corner_trajectories(self.obstacle_cropped_basis, 0, 0.1)
                 for corner in cropped_corners:
                     self.PvX.obst += corner[0].coeffs.reshape(-1).tolist() + corner[1].coeffs.reshape(-1).tolist()
-                    # if self.stage == 4:
-                    #     print(corner[0].coeffs.reshape(-1).tolist() + corner[1].coeffs.reshape(-1).tolist())
         else: 
             for obstacle in self.obstacles:
                 for t_ in t_evaluation:
@@ -283,6 +271,7 @@ class VehicleBasis(Environment):
                         
         self.PvX.x_intermediate = self.x_intermediate_list
         self.PvX.t_intermediate = self.t_intermediate_list
+        
         try:
             self.PvX.z_ji = self.message_in['z_ji']
             self.PvX.lambda_ji = self.message_in['lambda_ji']
@@ -376,7 +365,7 @@ class VehicleBasis(Environment):
         self.PvX.x0 = self.x0
         
         # shifting z_i, lambda_i
-        basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
+        # basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
         z_i_coeffs_shifted = []
         lambda_i_coeffs_shifted = []
         
@@ -740,7 +729,6 @@ class VehicleBasis(Environment):
                 if initial_value:
                     if len(initial_value[k]) == len(basis):
                         self.w0 += initial_value[k]
-                        # assert True == print("Lefutott LOL")
                     elif initial_value[k][0] is not None or initial_value[k][1] is not None:
                         # self.w0 += np.linspace(initial_value[k][0], initial_value[k][1], len(basis)).tolist()
                         w0_noise_added = np.linspace(initial_value[k][0], initial_value[k][1], len(basis))
@@ -849,7 +837,7 @@ class VehicleBasis(Environment):
                 self.lbg += [0]
                 self.ubg += [math.inf]
             for i in range(upper_bound.shape[0]):
-                self.g += [constraint[i].coeffs[-1] - upper_bound[i]] # we restrict the first coefficient
+                self.g += [constraint[i].coeffs[-1] - upper_bound[i]] # we restrict the last coefficient
                 self.g_list += [name[i] + '_part2']
                 self.lbg += [-math.inf]
                 self.ubg += [0]

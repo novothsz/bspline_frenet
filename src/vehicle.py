@@ -30,6 +30,8 @@ class Vehicle(VehicleBasis):
         
         self.n_of_saved_waypoints = int(self.t_window_size / self.t_step) + 1; epsilon = 10e-10; assert self.t_window_size % self.t_step > -epsilon and \
                                                                                                         self.t_window_size % self.t_step < epsilon# math.floor(self.t_window_size / self.t_step)
+        
+        self.n_of_saved_waypoints = 5
         self.waypoints = []
         self.waypoint_timestamps = []
         self.current_configuration_position = []
@@ -193,12 +195,19 @@ class Vehicle(VehicleBasis):
             p_sum += z_ij[0]
             q_sum += z_ij[1]
                 
-        for t in np.linspace(0, 1, self.t_resolution_length):
-            self.define_constraint([p_sum(t), q_sum(t)],
-                                    [-self.slack,-self.slack],
-                                    [ self.slack, self.slack],
-                                    constraint_type='time',
-                                    name=["frenet_zero_" + str(i)] * self.n_dimensions_old)
+        # for t in np.linspace(0, 1, self.t_resolution_length):
+        #     self.define_constraint([p_sum(t), q_sum(t)],
+        #                             [-self.slack,-self.slack],
+        #                             [ self.slack, self.slack],
+        #                             constraint_type='time',
+        #                             name=["frenet_zero_" + str(i)] * self.n_dimensions_old)
+            
+        # Spline-coeff version
+        self.define_constraint([p_sum, q_sum],
+                                [-self.slack,-self.slack],
+                                [ self.slack, self.slack],
+                                constraint_type='overall',
+                                name=["frenet_zero_" + str(i)] * self.n_dimensions_old)
         
 
 
@@ -337,9 +346,9 @@ class Vehicle(VehicleBasis):
                 # Define the parameter
                 x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += np.array(self.x_intermediate_list)[idx].tolist(); assert len(self.x_intermediate_list)/(self.state_len/2) == n  # [0] * int(self.state_len/2)
                 lambda_ = np.power(np.linspace(1, 0, n), 1)
-                self.J += 10/100 * self.rho_final_value * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
-                self.J += 10/100 * self.rho_final_value * lambda_[i] *(q(t_intermediate) - x_intermediate[1])**2
-                self.J += 10/100 * self.rho_final_value * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
+                self.J += self.rho_intermediate * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
+                self.J += self.rho_intermediate * lambda_[i] *(q(t_intermediate) - x_intermediate[1])**2
+                self.J += self.rho_intermediate * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
                 
             # Final state constraint
             self.define_constraint([p, q],
@@ -363,34 +372,35 @@ class Vehicle(VehicleBasis):
                 # Define the parameter
                 x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += np.array(self.x_intermediate_list)[idx].tolist()# ; # assert len(np.array([self.x_intermediate_list])[0][idx].tolist())/(self.state_len/2) == n  # [0] * int(self.state_len/2)
                 t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += [self.t_intermediate_list[i]]
+                
                 # "Cost-function version"
-                lambda_ = np.power(np.linspace(1, 0, n), 1)
-                self.J += 10/100 * self.rho_final_value * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
-                self.J += 10/100 * self.rho_final_value * lambda_[i] *(q(t_intermediate) - x_intermediate[1])**2
-                self.J += 1 * 10/100 * self.rho_final_value * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
+                # lambda_ = np.power(np.linspace(1, 0, n), 1)
+                # self.J += self.rho_intermediate * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
+                # self.J += self.rho_intermediate * lambda_[i] *(q(t_intermediate) - x_intermediate[1])**2
+                # self.J += self.rho_intermediate * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
                 
             
                 # "Real DFG: using constraints"
-                # self.define_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
-                #                         [0], # self.slack, # 
-                #                         [5 / 360 * math.pi * 2],
-                #                         constraint_type='time',
-                #                         name=["phi_intermediate" + str(i)] * 1)
+                self.define_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
+                                        [0], # self.slack, # 
+                                        [5 / 360 * math.pi * 2],
+                                        constraint_type='time',
+                                        name=["phi_intermediate" + str(i)] * 1)
                                                 
-                # # Version 1
-                # # Final position constraint on y
-                # self.define_constraint([(p(t_intermediate) - x_intermediate[0])**2, (q(t_intermediate) - x_intermediate[1])**2],
-                #                         [0, 0],
-                #                         [(self.radious*1)**2, (self.radious*1)**2],
-                #                         constraint_type='time',
-                #                         name=["pq_intermediate" + str(i)] * 2)
+                # Version 1
+                # Final position constraint on y
+                self.define_constraint([(p(t_intermediate) - x_intermediate[0])**2, (q(t_intermediate) - x_intermediate[1])**2],
+                                        [0, 0],
+                                        [(self.radious*1)**2, (self.radious*1)**2],
+                                        constraint_type='time',
+                                        name=["pq_intermediate" + str(i)] * 2)
                 
                 if i == 0:
                     cost = 0
                     for j in range(len(pq)):
                         cost += (pq[i] - x_intermediate[j])**2
                         # self.J += dot(pq_dotdot[i].coeffs,pq_dotdot[i].coeffs)
-                    self.J += self.rho_input * definite_integral(cost, 0, 1)
+                    self.J += self.rho_intermediate * definite_integral(cost, 0, 1)
                     
                 
                 
@@ -442,10 +452,7 @@ class Vehicle(VehicleBasis):
                                     name=["q_dot_max"])
             
         # Collision avoidance with obstacles
-        
-        
-        # if self.MPC_version == 'MPC_param99':
-        if True:
+        if self.MPC_version == 'MPC_param':
             # We have a different collision-avoidance constraint if we are using the MPC_param version.
             for i, obstacle in enumerate(self.obstacles):
                 obst_corners = []

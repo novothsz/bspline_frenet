@@ -139,7 +139,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
     # n_steps = 10
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
-    group.set_var({'t_step': 0.04})
+    group.set_var({'t_step': 0.01})
     group.set_var({'t_window_size': 0.2})
     group.set_var({'t_end': 0 + 0.2})
     group.set_var({'knot_intervals': 5})
@@ -154,7 +154,8 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     # group.set_var({'MPC_version': True})
     group.set_var({'MPC_version': 'MPC_param'}) 
-    group.set_var({'n_of_saved_waypoints': int(group.vehicles[0].t_window_size / group.vehicles[0].t_step) + 1}) 
+    # group.set_var({'n_of_saved_waypoints': int(group.vehicles[0].t_window_size / group.vehicles[0].t_step) + 1}) 
+    group.set_var({'n_of_saved_waypoints': 5}) 
     # print(np.linspace(group.vehicles[0].t_step, 1, group.vehicles[0].n_of_saved_waypoints).tolist())
     # print(group.vehicles[0].n_of_saved_waypoints)
     
@@ -199,8 +200,8 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     # group.intermediate_position_generator()
     n_steps = math.floor(1 / group.vehicles[0].t_step)
-    # for i in range(0, n_steps):
-    for i in range(19):
+    for i in range(0, n_steps):
+    # for i in range(19):
         
         group.set_var({'stage': i})
         for j in range(n_intermediate_ADMM):
