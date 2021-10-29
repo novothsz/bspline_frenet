@@ -395,19 +395,38 @@ class Vehicle(VehicleBasis):
                                         constraint_type='time',
                                         name=["pq_intermediate" + str(i)] * 2)
                 
-                if i == 0:
+                # Here we actually should integrate in between t_intermediate values and 
+                # make the optimizer run for its money. definite_integral(cost, 0, t_intermediate[j])
+                if i == n-1:
+                    """
                     cost = 0
                     for j in range(len(pq)):
-                        cost += (pq[i] - x_intermediate[j])**2
+                        cost += (pq[j] - x_intermediate[j])**2
+                        # cost += (pq_dot[j])**2
                         # self.J += dot(pq_dotdot[i].coeffs,pq_dotdot[i].coeffs)
-                    self.J += self.rho_intermediate * definite_integral(cost, 0, 1)
+                    self.J += self.rho_intermediate * 100 * definite_integral(cost, 0, 1)
+                    """
                     
+                    
+                    self.J += self.rho_intermediate * (p_dot(t_intermediate)**2 + q_dot(t_intermediate)**2)
+        
+        
+                    
+                    # self.J += self.rho_intermediate * 10000 * definite_integral(cost, 0, 1)
+                    
+                    
+                    
+                    self.define_constraint([q_dot(t_intermediate)],
+                                            [0],
+                                            [0],
+                                            constraint_type='time',
+                                            name=["__" + str(i)] * 2)
                 
-                
-                
-                  
         else:
             raise NotImplementedError()
+            
+        # self.J += self.rho_intermediate * 10000 * (p_dot(t_intermediate)**2 + q_dot(t_intermediate)**2)
+        # self.J += self.rho_intermediate * 10000 * (p_dot(1)**2 + q_dot(1)**2)
         
         # Min-max state constraints
         v_s = MX.sym('v_s', self.t_resolution_length); self.P += [v_s]; self.P_list += ['v_s'] * self.t_resolution_length; self.P0 += [0] * self.t_resolution_length
@@ -503,12 +522,15 @@ class Vehicle(VehicleBasis):
         # Cost for extra acceleration in the frenet frame
         cost = 0
         cost2 = 0
+        cost3 = 0
         for i in range(len(pq_dotdot)):
             cost += pq_dotdot[i]**2
             cost2 += (pq[i] - xf[i])**2
+            cost3 += (pq_dot[i])**2
             # self.J += dot(pq_dotdot[i].coeffs,pq_dotdot[i].coeffs)
         self.J += self.rho_input * definite_integral(cost, 0, 1)
         self.J += self.rho_input / 100 * definite_integral(cost2, 0, 1)
+        self.J += self.rho_input * definite_integral(cost3, 0, 1)
         
         # Cost x_i - z_i
         z_i = self.define_MX_spline(degree = 3, knot_intervals = self.knot_intervals, n_spl = self.n_dimensions,

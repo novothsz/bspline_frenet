@@ -397,11 +397,23 @@ class Group(Environment):
             # if no intermediate values have been generated during the sweep
             else:
                 """
+                
+        # if tmp_len != 0:
+        #     # Repeat the last formation configuration at the end of the local time horizon. We can do this, because we can.
+        #     for i, vehicle in enumerate(self.vehicles):
+        #         vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
+        #         # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
+        #         t_local = interp(t_sweep_end,[t_sweep_start,t_sweep_end],[0,1])
+        #         vehicle.t_intermediate_list += [t_local]
+        #         vehicle.t_real_intermediate_list += [t_sweep_end]
+            
+                
+                
         if tmp_len == 0:
             print("We haven't generated anything, therefore what we started off with, is okay. Use that.")
             # then we can set the original configuraiton back
             for i, vehicle in enumerate(self.vehicles):
-                vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]
+                vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], self.cum_rotation]
                 # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
                 t_local = interp(t_sweep_end,[t_sweep_start,t_sweep_end],[0,1])
                 vehicle.t_intermediate_list += [t_local]
