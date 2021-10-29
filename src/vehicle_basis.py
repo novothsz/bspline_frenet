@@ -86,15 +86,14 @@ class VehicleBasis(Environment):
         
         self.epsilon = 0.05 # try to keep minimum epsilon distance from the obstacle
         # self.epsilon = self.radious # try to keep minimum epsilon distance from the obstacle
-        self.safety_weight = 1000000 # cost parameter for epsilon
-        "TODO: something is wrong when shifting, we get too close to the obstacles and confusion..."
-        "Safety weight needn't be this high"
+        self.safety_weight = 100 # cost parameter for epsilon
+        
         self.knot_intervals = 5 # number of knots for the output (position) spline of the vehicle
         # self.t_resolution_length = 30
         self.t_resolution_length = self.knot_intervals + 1
         
-        self.obstacle_avoidance_multiplier = 1.5
-        self.vehicle_avoidance_multiplier = 1.5
+        # self.obstacle_avoidance_multiplier = 1.5
+        # self.vehicle_avoidance_multiplier = 1.5
         
         # Constraints on decision variables
         # self.y_min = [self.border_x[0], self.border_y[0]]

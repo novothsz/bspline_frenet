@@ -201,7 +201,7 @@ class Vehicle(VehicleBasis):
         #                             [ self.slack, self.slack],
         #                             constraint_type='time',
         #                             name=["frenet_zero_" + str(i)] * self.n_dimensions_old)
-            
+        
         # Spline-coeff version
         self.define_constraint([p_sum, q_sum],
                                 [-self.slack,-self.slack],
