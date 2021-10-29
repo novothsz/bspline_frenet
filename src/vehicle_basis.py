@@ -255,7 +255,8 @@ class VehicleBasis(Environment):
         self.PvX.equation_max_q = [self.fp.equation_max_q(t_).tolist()[0][0] for t_ in t_evaluation]
         self.PvX.obst = []
         
-            
+        
+        # In this case we fill it up with the coefficients
         if self.MPC_version == 'MPC_param':
             for obstacle in self.obstacles:
                 val = t_evaluation[-1]
@@ -263,6 +264,8 @@ class VehicleBasis(Environment):
                 cropped_corners = obstacle.cropped_corner_trajectories(self.obstacle_cropped_basis, t_evaluation[0], val)
                 for corner in cropped_corners:
                     self.PvX.obst += corner[0].coeffs.reshape(-1).tolist() + corner[1].coeffs.reshape(-1).tolist()
+                    
+        # In this version we are filling it up with positions at prescribed time points
         else: 
             for obstacle in self.obstacles:
                 for t_ in t_evaluation:
@@ -288,7 +291,7 @@ class VehicleBasis(Environment):
         
         
         z_i_coeffs_shifted = []
-        for i in range(3):
+        for i in range(self.state_degree):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
             
             z_i = BSpline(basis, self.DvZ.z_i[idx[0]:idx[-1]+1])
@@ -301,7 +304,7 @@ class VehicleBasis(Environment):
         
         
         z_ij_coeffs_shifted = []
-        for i in range(len(self.neighbours) * 3):
+        for i in range(len(self.neighbours) * self.state_degree):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
             
             z_ij = BSpline(basis, self.DvZ.z_ij[idx[0]:idx[-1]+1])
@@ -329,7 +332,7 @@ class VehicleBasis(Environment):
         
         # shifting lambda_ij
         lambda_ij_coeffs_shifted = []
-        for i in range(len(self.neighbours) * 3):
+        for i in range(len(self.neighbours) * self.state_degree):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
             
             lambda_ij = BSpline(basis, self.PvZ.lambda_ij[idx[0]:idx[-1]+1])
@@ -369,7 +372,7 @@ class VehicleBasis(Environment):
         z_i_coeffs_shifted = []
         lambda_i_coeffs_shifted = []
         
-        for i in range(3):
+        for i in range(self.state_degree):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
             
             # shifting z_i
@@ -393,7 +396,7 @@ class VehicleBasis(Environment):
         # shifting z_ji, lambda_ji
         z_ji_coeffs_shifted = []
         lambda_ji_coeffs_shifted = []
-        for i in range(len(self.neighbours) * 3):
+        for i in range(len(self.neighbours) * self.state_degree):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
             
             # shifting z_ji
@@ -469,12 +472,10 @@ class VehicleBasis(Environment):
         b_coeffs_shifted = []
         d_tau_coeffs_shifted = []
         basis_a = basis
-        for i in range(len(self.obstacles)): # * 2, because a is 2 dimensional 
+        for i in range(len(self.obstacles) * 1): # * 1, because b and d_tau are 1 dimensional
             idx = np.arange(len(basis_a)*i,len(basis_a)*i+len(basis_a)) # 4 values, step by step
             b = BSpline(basis_a, self.DvX.b[idx[0]:idx[-1]+1])
             b_shifted = self.shift_spline_v2(b, self.t_step)
-            if b_shifted.coeffs.shape[0] != 8:
-                kappa = True
             b_coeffs_shifted += b_shifted.coeffs.tolist()
                         
             d_tau = BSpline(basis_a, self.DvX.d_tau[idx[0]:idx[-1]+1])
@@ -498,17 +499,22 @@ class VehicleBasis(Environment):
     
     
     def simulation_step(self):
-        # self.t_step = 0.01
+        
+        # Increasing the start & end times
         self.t_start = self.t_start + self.t_step
         self.t_end = self.t_start + self.t_window_size
         
+        # Limiting t_end
         if self.t_end > 1:
             self.t_end = 1
-            
+        # Limiting t_start
         if self.t_start > 1:
             self.t_start = 1
             
-        
+        # If we call the simulation_step, then we automatically change the shift_enabled value
+        # and as a result, the decision variables and parameters will be shifted before running 
+        # the optimizaiton. If we don't want to do that (for example when initializing values or 
+        # when we want to run multiple ADMM iterations), then we can set this variable back to False.
         self.shift_enabled = True
         
         return self

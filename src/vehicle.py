@@ -380,20 +380,21 @@ class Vehicle(VehicleBasis):
                 # self.J += self.rho_intermediate * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
                 
             
-                # "Real DFG: using constraints"
-                self.define_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
-                                        [0], # self.slack, # 
-                                        [5 / 360 * math.pi * 2],
-                                        constraint_type='time',
-                                        name=["phi_intermediate" + str(i)] * 1)
                                                 
-                # Version 1
-                # Final position constraint on y
+                # constraint on pq at t_intermediate
                 self.define_constraint([(p(t_intermediate) - x_intermediate[0])**2, (q(t_intermediate) - x_intermediate[1])**2],
                                         [0, 0],
                                         [(self.radious*1)**2, (self.radious*1)**2],
                                         constraint_type='time',
                                         name=["pq_intermediate" + str(i)] * 2)
+                
+                
+                # constraint on phi at t_intermediate
+                self.define_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
+                                        [0], # self.slack, # 
+                                        [5 / 360 * math.pi * 2],
+                                        constraint_type='time',
+                                        name=["phi_intermediate" + str(i)] * 1)
                 
                 # Here we actually should integrate in between t_intermediate values and 
                 # make the optimizer run for its money. definite_integral(cost, 0, t_intermediate[j])
@@ -407,20 +408,14 @@ class Vehicle(VehicleBasis):
                     self.J += self.rho_intermediate * 100 * definite_integral(cost, 0, 1)
                     """
                     
-                    
-                    self.J += self.rho_intermediate * (p_dot(t_intermediate)**2 + q_dot(t_intermediate)**2)
-        
-        
-                    
-                    # self.J += self.rho_intermediate * 10000 * definite_integral(cost, 0, 1)
-                    
-                    
-                    
+                    # Cost on p directional velocity
+                    # self.J += self.rho_intermediate * p_dot(t_intermediate)**2
+                    # Constraint on q directional velocity (on the LAST intermediate position)
                     self.define_constraint([q_dot(t_intermediate)],
                                             [0],
                                             [0],
                                             constraint_type='time',
-                                            name=["__" + str(i)] * 2)
+                                            name=["q_dot_at_intermediate" + str(i)] * 1)
                 
         else:
             raise NotImplementedError()
@@ -470,7 +465,7 @@ class Vehicle(VehicleBasis):
                                     constraint_type='time',
                                     name=["q_dot_max"])
             
-        # Collision avoidance with obstacles
+        # Collision avoidance with obstacles (coefficient based)
         if self.MPC_version == 'MPC_param':
             # We have a different collision-avoidance constraint if we are using the MPC_param version.
             for i, obstacle in enumerate(self.obstacles):
@@ -503,7 +498,7 @@ class Vehicle(VehicleBasis):
                                                     radious=self.radious, name="obst_" + str(i),
                                                     constraint_type='obstacle')
             
-            
+        # Collision avoidance with obstacles (time-sampling based)
         else:
             for i, obstacle in enumerate(self.obstacles):
                 obst_corners = []
@@ -521,16 +516,16 @@ class Vehicle(VehicleBasis):
             
         # Cost for extra acceleration in the frenet frame
         cost = 0
-        cost2 = 0
-        cost3 = 0
+        # cost2 = 0
+        # cost3 = 0
         for i in range(len(pq_dotdot)):
             cost += pq_dotdot[i]**2
-            cost2 += (pq[i] - xf[i])**2
-            cost3 += (pq_dot[i])**2
+            # cost2 += (pq[i] - xf[i])**2
+            # cost3 += (pq_dot[i])**2
             # self.J += dot(pq_dotdot[i].coeffs,pq_dotdot[i].coeffs)
         self.J += self.rho_input * definite_integral(cost, 0, 1)
-        self.J += self.rho_input / 100 * definite_integral(cost2, 0, 1)
-        self.J += self.rho_input * definite_integral(cost3, 0, 1)
+        # self.J += self.rho_input / 100 * definite_integral(cost2, 0, 1)
+        # self.J += self.rho_input * definite_integral(cost3, 0, 1)
         
         # Cost x_i - z_i
         z_i = self.define_MX_spline(degree = 3, knot_intervals = self.knot_intervals, n_spl = self.n_dimensions,
