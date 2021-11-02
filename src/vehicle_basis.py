@@ -34,7 +34,7 @@ class VehicleBasis(Environment):
         self.t_real_activation_list = []
         
         self.stage = []
-        self.n_dimensions = 4 # this is considering a third state, the phi rotation angle
+        self.n_dimensions = 3 # this is considering a third state, the phi rotation angle
         # if changed, don't forget to adjust: y_min, ellipse_generator()
         self.state_len = self.n_dimensions * 2 
         
@@ -100,10 +100,10 @@ class VehicleBasis(Environment):
         # Constraints on decision variables
         # self.y_min = [self.border_x[0], self.border_y[0]]
         # self.y_max = [self.border_x[1], self.border_y[1]]
-        # self.y_min = [-1, -1, -math.pi]
-        # self.y_max = [1, 1, math.pi]
-        self.y_min = [-1, -1, -1, -1]
-        self.y_max = [1, 1, 1, 1]
+        self.y_min = [-1, -1, -math.pi]
+        self.y_max = [1, 1, math.pi]
+        # self.y_min = [-1, -1, -1, -1]
+        # self.y_max = [1, 1, 1, 1]
         
         assert len(self.y_min) == self.n_dimensions
         
@@ -172,11 +172,11 @@ class VehicleBasis(Environment):
         assert len(position) == self.n_dimensions
         if position_type == 'initial':
             self.x0 = position + [0] * len(position)
-            self.x0[2] = 1 # because cos(0) = 1
+            # self.x0[2] = 1 # because cos(0) = 1
             self.current_configuration_position = position
         elif position_type == 'final':
             self.xf = position + [0] * len(position)
-            self.xf[2] = 1
+            # self.xf[2] = 1
             self.variable_history['xf'] += [self.xf]
         else:
             raise NotImplementedError()
@@ -280,18 +280,18 @@ class VehicleBasis(Environment):
                     for corner in obstacle.corners_spline:
                         self.PvX.obst += [corner[0](t_).tolist()[0][0], corner[1](t_).tolist()[0][0]]
                         
-        # self.PvX.x_intermediate = self.x_intermediate_list
+        self.PvX.x_intermediate = self.x_intermediate_list
         # We need to enrich the x_intermediate_list, because DFG only puts in the phi values.
         # However, in optimization we have cos_phi and sin_phi.
-        x_intermediate_list = np.array(copy.deepcopy(self.x_intermediate_list)).reshape(-1,3).transpose()
-        x_intermediate_list = np.vstack((x_intermediate_list,x_intermediate_list[-1, :]))
-        x_intermediate_list = x_intermediate_list.transpose()
-        x_intermediate_list[:, 2] = np.cos(x_intermediate_list[:, 2])
-        x_intermediate_list[:, 3] = np.sin(x_intermediate_list[:, 3])
-        x_intermediate_list = x_intermediate_list.reshape(-1,).tolist()
+        # x_intermediate_list = np.array(copy.deepcopy(self.x_intermediate_list)).reshape(-1,3).transpose()
+        # x_intermediate_list = np.vstack((x_intermediate_list,x_intermediate_list[-1, :]))
+        # x_intermediate_list = x_intermediate_list.transpose()
+        # x_intermediate_list[:, 2] = np.cos(x_intermediate_list[:, 2])
+        # x_intermediate_list[:, 3] = np.sin(x_intermediate_list[:, 3])
+        # x_intermediate_list = x_intermediate_list.reshape(-1,).tolist()
+        # assert len(self.x_intermediate_list) != self.n_dimensions * self.n_of_saved_waypoints
+        # self.PvX.x_intermediate = x_intermediate_list
         
-        assert len(self.x_intermediate_list) != self.n_dimensions * self.n_of_saved_waypoints
-        self.PvX.x_intermediate = x_intermediate_list
         self.PvX.t_intermediate = self.t_intermediate_list
         
         try:

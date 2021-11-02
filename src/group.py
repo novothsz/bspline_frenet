@@ -1324,9 +1324,9 @@ class Group(Environment):
         b *= ellipse_scale_y
         positions = []
         for i in range(n_positions):
-            # positions += [ [centerpoint[0] + a * np.cos(alpha), centerpoint[1] + b * np.sin(alpha), centerpoint[2]] ] # [p, q, phi]
+            positions += [ [centerpoint[0] + a * np.cos(alpha), centerpoint[1] + b * np.sin(alpha), centerpoint[2]] ] # [p, q, phi]
             # Because of having cos_phi and sin_phi instead of a single phi value, our position array will be 4 long
-            positions += [ [centerpoint[0] + a * np.cos(alpha), centerpoint[1] + b * np.sin(alpha), np.cos(centerpoint[2]), np.sin(centerpoint[2])] ] # [p, q, cos_phi, sin_phi]
+            # positions += [ [centerpoint[0] + a * np.cos(alpha), centerpoint[1] + b * np.sin(alpha), np.cos(centerpoint[2]), np.sin(centerpoint[2])] ] # [p, q, cos_phi, sin_phi]
             alpha += np.pi * 2.0 / n_positions
         
         # Rotating the ellipse itself with the vehicles already in place
