@@ -53,7 +53,7 @@ class Vehicle(VehicleBasis):
 
 
         # Define ADMM cost
-        # x_i - z_i
+        # Cost: x_i - z_i
         y = self.define_MX_spline(degree=self.state_degree, knot_intervals=self.knot_intervals, n_spl=self.n_dimensions,
                                 lower_bound=self.y_min, upper_bound=self.y_max,
                                 name=["y"] * self.n_dimensions,
@@ -61,7 +61,7 @@ class Vehicle(VehicleBasis):
 
         z_i = self.define_MX_spline(degree = self.state_degree, knot_intervals = self.knot_intervals, n_spl = self.n_dimensions,
                                lower_bound=self.y_min, upper_bound=self.y_max,
-                               initial_value = [[self.x0[0], self.xf[0]], [self.x0[1], self.xf[1]], [self.x0[2], self.xf[2]]],
+                               initial_value = [[self.x0[i], self.xf[i]] for i in range(self.n_dimensions)],
                                name = ['z_i'] * self.n_dimensions)
 
         lambda_i  = self.define_MX_spline(degree = self.state_degree, knot_intervals = self.knot_intervals, n_spl = self.n_dimensions,
@@ -75,8 +75,16 @@ class Vehicle(VehicleBasis):
         q_sum = 0
         p_sum += z_i[0]
         q_sum += z_i[1]
+        
+        
+        self.define_constraint([z_i[2]**2 + z_i[3]**2],
+                                [1 - self.slack],
+                                [1 + self.slack],
+                                constraint_type='overall',
+                                name=["cos-sin-phi=1"] * self.n_dimensions_old)
+        
             
-
+        
         for i in range(len(y)):
             # self.J += definite_integral(lambda_i[i] * (y[i] - z_i[i]), 0, 1)
             self.J += dot(lambda_i[i].coeffs,  y[i].coeffs - z_i[i].coeffs)
@@ -93,12 +101,20 @@ class Vehicle(VehicleBasis):
 
             z_ij = self.define_MX_spline(degree = self.state_degree, knot_intervals = self.knot_intervals, n_spl = self.n_dimensions,
                                    lower_bound=self.y_min, upper_bound=self.y_max,
-                                   initial_value = [[self.neighbours[i].x0[0], self.neighbours[i].xf[0]], [self.neighbours[i].x0[1], self.neighbours[i].xf[1]], [self.neighbours[i].x0[2], self.neighbours[i].xf[2]]],
+                                   initial_value = [[self.neighbours[i].x0[j], self.neighbours[i].xf[j]] for j in range(self.n_dimensions)],
                                    name = ['z_ij'] * self.n_dimensions)
             lambda_ij  = self.define_MX_spline(degree = self.state_degree, knot_intervals = self.knot_intervals, n_spl = self.n_dimensions,
                                    lower_bound = [], upper_bound = [],
                                    name = ['lambda_ij'] * self.n_dimensions,
                                    category = 'parameter')
+            
+            
+            
+            self.define_constraint([z_ij[2]**2 + z_ij[3]**2],
+                                    [1 - self.slack],
+                                    [1 + self.slack],
+                                    constraint_type='overall',
+                                    name=["cos-sin-phi=1"] * self.n_dimensions_old)
 
 
             for j in range(len(y)):
@@ -111,7 +127,7 @@ class Vehicle(VehicleBasis):
             def cross_product(spline1, spline2):
                 a1, a2 = spline1[0], spline1[1]
                 b1, b2 = spline2[0], spline2[1]
-                return (a1 * b2 - a2 * b1)**2
+                return a1 * b2 - a2 * b1
             
             def dot_product(spline1, spline2):
                 a1, a2 = spline1[0], spline1[1]
@@ -122,8 +138,25 @@ class Vehicle(VehicleBasis):
                 a1, a2 = spline[0], spline[1]
                 return (a1 * cos(alpha(t)) - a2 * sin(alpha(t)), \
                         a1 * sin(alpha(t)) + a2 * cos(alpha(t)))
-                
-
+                    
+            # R = [cos(phi), -sin(phi); --> R = [cos_phi, -sin_phi; and det(R) = cos_phi**2 + sin_phi**2 = 1 -> this is now a valid rotation matrix
+            #      sin(phi),  cos(phi)]          sin_phi,  cos_phi]
+            
+            # R_x_ref = dot(R, x_ref) = [cos_phi * x_ref[0] - sin_phi * x_ref[1];    --> spline
+            #                            sin_phi * x_ref[0] + cos_phi * x_ref[1]  ]  --> spline
+            
+            # --> cross_product(vec1, R_x_ref) = 2D spline
+            
+            cos_phi = y[2]
+            sin_phi = y[3]
+            x_ref = np.array(self.xf[:self.n_dimensions_old]) - np.array(self.neighbours[i].xf[:self.n_dimensions_old])
+            row1 = cos_phi * x_ref[0] - sin_phi * x_ref[1]
+            row2 = sin_phi * x_ref[0] + cos_phi * x_ref[1]
+            
+            vec1 = z_i - z_ij
+            vec2 = [row1, row2]
+            coeff_constraint = cross_product(vec1, vec2)
+            
 
             # vec1: what is should be
             # vec2: what we have
@@ -135,14 +168,21 @@ class Vehicle(VehicleBasis):
             # usage: cross(t), dot(t)
             
             
-            # Formation constraint.
-            for t in np.linspace(0, 1, self.t_resolution_length):
-                self.define_constraint([cross_product(vec1, vector_rotation(vec2, z_i[2], t))(t)],
-                                        [-self.slack * 1],
-                                        [self.slack * 1],
-                                        constraint_type='time',
-                                        name=["formation_vehicle_" + str(i)] * self.n_dimensions_old)
+            # (Original rotational) Formation constraint.
+            # for t in np.linspace(0, 1, self.t_resolution_length):
+            #     self.define_constraint([cross_product(vec1, vector_rotation(vec2, z_i[2], t))(t)],
+            #                             [-self.slack * 1],
+            #                             [self.slack * 1],
+            #                             constraint_type='time',
+            #                             name=["formation_vehicle_" + str(i)] * self.n_dimensions_old)
                 
+            # Formation constraint
+            self.define_constraint([coeff_constraint],
+                                    [-self.slack * 1],
+                                    [self.slack * 1],
+                                    constraint_type='overall',
+                                    name=["formation_vehicle_" + str(i)])
+            
             
             # Dot-product constraint
             # But the dot product should be > 0, to avoid the vehicles switching place and still
@@ -155,10 +195,10 @@ class Vehicle(VehicleBasis):
             #                             name=["formation_dot_vehicle_" + str(i)] * self.n_dimensions_old)
                 
             
-            # Phi constraint
-            self.define_constraint([z_i[2] - z_ij[2]],
-                                    [0],
-                                    [0],
+            # New Phi constraint
+            self.define_constraint([z_i[2] - z_ij[2], z_i[3] - z_ij[3] ],
+                                    [0, 0],
+                                    [0, 0],
                                     constraint_type='overall',
                                     name=["phi_equality_constraint"])
             
@@ -284,30 +324,33 @@ class Vehicle(VehicleBasis):
 
         pq = self.define_MX_spline(degree=3, knot_intervals=self.knot_intervals, n_spl=self.n_dimensions,
                                 lower_bound=self.y_min, upper_bound=self.y_max,
-                                initial_value = [ [self.x0[0], self.xf[0]], [self.x0[1], self.xf[1]], [self.x0[2], self.xf[2]] ],
+                                initial_value = [[self.x0[i], self.xf[i]] for i in range(self.n_dimensions)],
                                 name=["y"] * self.n_dimensions)
 
         y = pq # we basically rename the thing :)
         pq_dot = [pq_.derivative() for pq_ in pq]
+        y_dot = pq_dot
         pq_dotdot = [pq_dot_.derivative() for pq_dot_ in pq]
 
         p = pq[0]
         q = pq[1]
-        phi = pq[2]
+        phi = 0
+        cos_phi = pq[2]
+        sin_phi = pq[3]
         
         p_dot = pq_dot[0]
         q_dot = pq_dot[1]
-        phi_dot = pq_dot[2]
+        # phi_dot = pq_dot[2]
         
         
         # Initial position constraint on y
-        self.define_constraint([p, q, phi],
+        self.define_constraint(y,
                                 x0[:self.n_dimensions],
                                 x0[:self.n_dimensions],
                                 constraint_type='initial_param',
                                 name=["y0"] * self.n_dimensions)
         # Initial velocity constraint on dy
-        self.define_constraint([p_dot, q_dot, phi_dot],
+        self.define_constraint(y_dot,
                                 x0[self.n_dimensions:self.n_dimensions*2],
                                 x0[self.n_dimensions:self.n_dimensions*2],
                                 constraint_type='initial_param',
@@ -370,7 +413,13 @@ class Vehicle(VehicleBasis):
             for i, t_intermediate in enumerate(self.t_intermediate_list):
                 idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
                 # Define the parameter
-                x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += np.array(self.x_intermediate_list)[idx].tolist()# ; # assert len(np.array([self.x_intermediate_list])[0][idx].tolist())/(self.state_len/2) == n  # [0] * int(self.state_len/2)
+                x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2);
+                # self.P0 += np.array(self.x_intermediate_list)[idx].tolist()
+                # the above line has to be changed, because x_intermediate_list actually holds only 3 values
+                # the last one is phi, from which 2 values will be generated --> cos_phi, sin_phi
+                self.P0 += np.array(self.x_intermediate_list)[:2].tolist()
+                self.P0 += [np.cos(self.x_intermediate_list[2]).tolist()]
+                self.P0 += [np.sin(self.x_intermediate_list[2]).tolist()]
                 t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += [self.t_intermediate_list[i]]
                 
                 # "Cost-function version"
@@ -388,11 +437,15 @@ class Vehicle(VehicleBasis):
                                         constraint_type='time',
                                         name=["pq_intermediate" + str(i)] * 2)
                 
-                
-                # constraint on phi at t_intermediate
-                self.define_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
-                                        [0], # self.slack, # 
-                                        [5 / 360 * math.pi * 2],
+                                # constraint on phi at t_intermediate
+                # self.define_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
+                #                         [0], # self.slack, # 
+                #                         [5 / 360 * math.pi * 2],
+                #                         constraint_type='time',
+                #                         name=["phi_intermediate" + str(i)] * 1)
+                self.define_constraint([(cos_phi(t_intermediate) - x_intermediate[2])**2, (sin_phi(t_intermediate) - x_intermediate[3])**2],
+                                        [0, 0],
+                                        [5 / 360 * math.pi * 2, 5 / 360 * math.pi * 2],
                                         constraint_type='time',
                                         name=["phi_intermediate" + str(i)] * 1)
                 
@@ -1120,6 +1173,7 @@ class Vehicle(VehicleBasis):
                 
         for i in range(len(self.variable_history['t_real_intermediate_list'][horizon_num_original])): 
             idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
+            idx = np.arange(3*i,3*i+3)
             x_, y_ = self.fp.frenet_to_inertial(np.array([self.variable_history['x_intermediate_list'][horizon_num_original]]).reshape(-1)[idx][0], 
                                                 np.array([self.variable_history['x_intermediate_list'][horizon_num_original]]).reshape(-1)[idx][1],
                                                 self.variable_history['t_real_intermediate_list'][horizon_num_original][i])

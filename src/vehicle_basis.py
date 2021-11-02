@@ -2,6 +2,7 @@ import numpy as np
 from numpy import interp
 from scipy.interpolate import interp1d
 import math
+import copy
 
 from matplotlib.patches import Polygon
 import matplotlib.patches as patches
@@ -33,8 +34,9 @@ class VehicleBasis(Environment):
         self.t_real_activation_list = []
         
         self.stage = []
-        self.n_dimensions = 3 # this is considering a third state, the phi rotation angle
-        self.state_len = 6 
+        self.n_dimensions = 4 # this is considering a third state, the phi rotation angle
+        # if changed, don't forget to adjust: y_min, ellipse_generator()
+        self.state_len = self.n_dimensions * 2 
         
         
         self.n_dimensions_old = 2
@@ -98,8 +100,12 @@ class VehicleBasis(Environment):
         # Constraints on decision variables
         # self.y_min = [self.border_x[0], self.border_y[0]]
         # self.y_max = [self.border_x[1], self.border_y[1]]
-        self.y_min = [-1, -1, -math.pi]
-        self.y_max = [1, 1, math.pi]
+        # self.y_min = [-1, -1, -math.pi]
+        # self.y_max = [1, 1, math.pi]
+        self.y_min = [-1, -1, -1, -1]
+        self.y_max = [1, 1, 1, 1]
+        
+        assert len(self.y_min) == self.n_dimensions
         
         u__ = 10e-5
         u__ = 1
@@ -163,11 +169,14 @@ class VehicleBasis(Environment):
 
     def set_position(self, position : list, position_type : str):
         # 2D
+        assert len(position) == self.n_dimensions
         if position_type == 'initial':
-            self.x0 = position + [0, 0, 0]
+            self.x0 = position + [0] * len(position)
+            self.x0[2] = 1 # because cos(0) = 1
             self.current_configuration_position = position
         elif position_type == 'final':
-            self.xf = position + [0, 0, 0]
+            self.xf = position + [0] * len(position)
+            self.xf[2] = 1
             self.variable_history['xf'] += [self.xf]
         else:
             raise NotImplementedError()
@@ -271,7 +280,18 @@ class VehicleBasis(Environment):
                     for corner in obstacle.corners_spline:
                         self.PvX.obst += [corner[0](t_).tolist()[0][0], corner[1](t_).tolist()[0][0]]
                         
-        self.PvX.x_intermediate = self.x_intermediate_list
+        # self.PvX.x_intermediate = self.x_intermediate_list
+        # We need to enrich the x_intermediate_list, because DFG only puts in the phi values.
+        # However, in optimization we have cos_phi and sin_phi.
+        x_intermediate_list = np.array(copy.deepcopy(self.x_intermediate_list)).reshape(-1,3).transpose()
+        x_intermediate_list = np.vstack((x_intermediate_list,x_intermediate_list[-1, :]))
+        x_intermediate_list = x_intermediate_list.transpose()
+        x_intermediate_list[:, 2] = np.cos(x_intermediate_list[:, 2])
+        x_intermediate_list[:, 3] = np.sin(x_intermediate_list[:, 3])
+        x_intermediate_list = x_intermediate_list.reshape(-1,).tolist()
+        
+        assert len(self.x_intermediate_list) != self.n_dimensions * self.n_of_saved_waypoints
+        self.PvX.x_intermediate = x_intermediate_list
         self.PvX.t_intermediate = self.t_intermediate_list
         
         try:
@@ -290,8 +310,8 @@ class VehicleBasis(Environment):
         
         
         z_i_coeffs_shifted = []
-        for i in range(self.state_degree):
-            idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
+        for i in range(self.n_dimensions):
+            idx = np.arange(len(basis)*i,len(basis)*i+len(basis))
             
             z_i = BSpline(basis, self.DvZ.z_i[idx[0]:idx[-1]+1])
             z_i_shifted = self.shift_spline_v2(z_i, self.t_step)
@@ -303,8 +323,8 @@ class VehicleBasis(Environment):
         
         
         z_ij_coeffs_shifted = []
-        for i in range(len(self.neighbours) * self.state_degree):
-            idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
+        for i in range(len(self.neighbours) * self.n_dimensions):
+            idx = np.arange(len(basis)*i,len(basis)*i+len(basis))
             
             z_ij = BSpline(basis, self.DvZ.z_ij[idx[0]:idx[-1]+1])
             z_ij_shifted = self.shift_spline_v2(z_ij, self.t_step)
@@ -331,8 +351,8 @@ class VehicleBasis(Environment):
         
         # shifting lambda_ij
         lambda_ij_coeffs_shifted = []
-        for i in range(len(self.neighbours) * self.state_degree):
-            idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
+        for i in range(len(self.neighbours) * self.n_dimensions):
+            idx = np.arange(len(basis)*i,len(basis)*i+len(basis))
             
             lambda_ij = BSpline(basis, self.PvZ.lambda_ij[idx[0]:idx[-1]+1])
             lambda_ij_shifted = self.shift_spline_v2(lambda_ij, self.t_step)
@@ -350,28 +370,40 @@ class VehicleBasis(Environment):
         # x0
         basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
         sol = self.solution['x'].full().reshape(-1).tolist()
-        coeffs1 = sol[0:len(basis)]
-        coeffs2 = sol[len(basis):len(basis)*2]
-        coeffs3 = sol[len(basis)*2:len(basis)*3]
-        p = BSpline(basis, coeffs1)
-        q = BSpline(basis, coeffs2)
-        phi = BSpline(basis, coeffs3)
-        p0 = p(self.t_step*1/self.t_window_size).tolist()[0]
-        q0 = q(self.t_step*1/self.t_window_size).tolist()[0]
-        phi0 = phi(self.t_step*1/self.t_window_size).tolist()[0]
-        p_dot0 = p.derivative()(self.t_step*1/self.t_window_size).tolist()[0]
-        q_dot0 = q.derivative()(self.t_step*1/self.t_window_size).tolist()[0]
-        phi_dot0 = phi.derivative()(self.t_step*1/self.t_window_size).tolist()[0]
-        # updating x0 in PvX
-        self.x0 = [p0, q0, phi0, p_dot0, q_dot0, phi_dot0]
+        
+        
+        # Shifting entire state (p, q, phi1, phi2)
+        coeffs = [sol[len(basis)*i:len(basis)*(i+1)] for i in range(self.n_dimensions)]
+        y = [BSpline(basis, coeffs_) for coeffs_ in coeffs]
+        y_dot = [y_.derivative() for y_ in y]
+        y0 = [y_(self.t_step*1/self.t_window_size).tolist()[0] for y_ in y]
+        y_dot0 = [y_dot_(self.t_step*1/self.t_window_size).tolist()[0] for y_dot_ in y_dot]
+        self.x0 = y0 + y_dot0
         self.PvX.x0 = self.x0
+        
+        # New code, but already depricated
+        # coeffs1 = sol[0:len(basis)]
+        # coeffs2 = sol[len(basis):len(basis)*2]
+        # coeffs3 = sol[len(basis)*2:len(basis)*3]
+        # p = BSpline(basis, coeffs1)
+        # q = BSpline(basis, coeffs2)
+        # phi = BSpline(basis, coeffs3)
+        # p0 = p(self.t_step*1/self.t_window_size).tolist()[0]
+        # q0 = q(self.t_step*1/self.t_window_size).tolist()[0]
+        # phi0 = phi(self.t_step*1/self.t_window_size).tolist()[0]
+        # p_dot0 = p.derivative()(self.t_step*1/self.t_window_size).tolist()[0]
+        # q_dot0 = q.derivative()(self.t_step*1/self.t_window_size).tolist()[0]
+        # phi_dot0 = phi.derivative()(self.t_step*1/self.t_window_size).tolist()[0]
+        # # updating x0 in PvX
+        # self.x0 = [p0, q0, phi0, p_dot0, q_dot0, phi_dot0]
+        # self.PvX.x0 = self.x0
         
         # shifting z_i, lambda_i
         # basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
         z_i_coeffs_shifted = []
         lambda_i_coeffs_shifted = []
         
-        for i in range(self.state_degree):
+        for i in range(self.n_dimensions):
             idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
             
             # shifting z_i
@@ -395,8 +427,8 @@ class VehicleBasis(Environment):
         # shifting z_ji, lambda_ji
         z_ji_coeffs_shifted = []
         lambda_ji_coeffs_shifted = []
-        for i in range(len(self.neighbours) * self.state_degree):
-            idx = np.arange(len(basis)*i,len(basis)*i+len(basis)) # 4 values, step by step
+        for i in range(len(self.neighbours) * self.n_dimensions):
+            idx = np.arange(len(basis)*i,len(basis)*i+len(basis))
             
             # shifting z_ji
             z_ji = BSpline(basis, self.PvX.z_ji[idx[0]:idx[-1]+1])
@@ -421,24 +453,32 @@ class VehicleBasis(Environment):
         # shifting y
         basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
         
-        coeffs1 = self.DvX.y[0:len(basis)]
-        coeffs2 = self.DvX.y[len(basis):len(basis)*2]
-        coeffs3 = self.DvX.y[len(basis)*2:len(basis)*3]
+        # Shifting entire state (p, q, phi1, phi2)
+        coeffs = [self.DvX.y[len(basis)*i:len(basis)*(i+1)] for i in range(self.n_dimensions)]
+        y = [BSpline(basis, coeffs_) for coeffs_ in coeffs]
+        y_shifted = [self.shift_spline_v2(y_, self.t_step) for y_ in y]
+        y_shifted_coeffs = [y_shifted_.coeffs for y_shifted_ in y_shifted]
+        self.DvX.y = np.array(y_shifted_coeffs).reshape(-1).tolist()
         
-        # shifting p
-        p = BSpline(basis, coeffs1)
-        p_shifted = self.shift_spline_v2(p, self.t_step)
-        self.DvX.y = p_shifted.coeffs.tolist()
+        # New code, but already depricated
+        # coeffs1 = self.DvX.y[0:len(basis)]
+        # coeffs2 = self.DvX.y[len(basis):len(basis)*2]
+        # coeffs3 = self.DvX.y[len(basis)*2:len(basis)*3]
         
-        # shifting q
-        q = BSpline(basis, coeffs2)
-        q_shifted = self.shift_spline_v2(q, self.t_step)
-        self.DvX.y += q_shifted.coeffs.tolist()
+        # # shifting p
+        # p = BSpline(basis, coeffs1)
+        # p_shifted = self.shift_spline_v2(p, self.t_step)
+        # self.DvX.y = p_shifted.coeffs.tolist()
         
-        # shifting phi
-        phi = BSpline(basis, coeffs3)
-        phi_shifted = self.shift_spline_v2(phi, self.t_step)
-        self.DvX.y += phi_shifted.coeffs.tolist()
+        # # shifting q
+        # q = BSpline(basis, coeffs2)
+        # q_shifted = self.shift_spline_v2(q, self.t_step)
+        # self.DvX.y += q_shifted.coeffs.tolist()
+        
+        # # shifting phi
+        # phi = BSpline(basis, coeffs3)
+        # phi_shifted = self.shift_spline_v2(phi, self.t_step)
+        # self.DvX.y += phi_shifted.coeffs.tolist()
         
         # Old code
         # coeffs1 = shift_spline(coeffs1, self.t_step, basis)[1].tolist()

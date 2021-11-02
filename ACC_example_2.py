@@ -224,6 +224,9 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
             group.intermediate_position_generator_PENI_MPC()
         else:
             # group.ACC_MPC()
+            print("Stage == " + str(group.stage))
+            if group.stage == 7:
+                kappa = True
             group.ACC_MPC_t_param()
         # print('peni intermediate time: ' + str(time.time() - t_peni_mpc))
         # group.intermediate_position_generator()

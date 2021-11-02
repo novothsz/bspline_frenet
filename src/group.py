@@ -170,6 +170,7 @@ class Group(Environment):
             # We only change the "current_configuration_position" value, if 1) it needs to be changed 3) we don't get error when indexing
             if change_of_current_configuration_needed ==  True and index_ >= 0 and len(vehicle.variable_history['t_real_intermediate_list']) > 0:
                 idx = np.arange(int(vehicle.state_len/2)*index_,int(vehicle.state_len/2)*index_+int(vehicle.state_len/2))
+                idx = np.arange(3*index_,3*index_+3)
                 vehicle.current_configuration_position = np.array(vehicle.variable_history['x_intermediate_list'][-1]).reshape(-1)[idx].tolist()[:3]
                 self.cum_rotation = np.array(vehicle.variable_history['x_intermediate_list'][-1]).reshape(-1)[idx].tolist()[2]
                 self.cum_scaling = cum_scaling_old # TODO: well, what to do with this?
@@ -410,7 +411,7 @@ class Group(Environment):
                 
                 
         if tmp_len == 0:
-            print("We haven't generated anything, therefore what we started off with, is okay. Use that.")
+            # print("We haven't generated anything, therefore what we started off with, is okay. Use that.")
             # then we can set the original configuraiton back
             for i, vehicle in enumerate(self.vehicles):
                 vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], self.cum_rotation]
@@ -1323,7 +1324,9 @@ class Group(Environment):
         b *= ellipse_scale_y
         positions = []
         for i in range(n_positions):
-            positions += [ [centerpoint[0] + a * np.cos(alpha), centerpoint[1] + b * np.sin(alpha), centerpoint[2]] ] # [x, vx, y, vy, z, vz]
+            # positions += [ [centerpoint[0] + a * np.cos(alpha), centerpoint[1] + b * np.sin(alpha), centerpoint[2]] ] # [p, q, phi]
+            # Because of having cos_phi and sin_phi instead of a single phi value, our position array will be 4 long
+            positions += [ [centerpoint[0] + a * np.cos(alpha), centerpoint[1] + b * np.sin(alpha), np.cos(centerpoint[2]), np.sin(centerpoint[2])] ] # [p, q, cos_phi, sin_phi]
             alpha += np.pi * 2.0 / n_positions
         
         # Rotating the ellipse itself with the vehicles already in place
@@ -1332,7 +1335,7 @@ class Group(Environment):
                 positions[i][:2] = self.rotate_vector(pos[:2], ellipse_rotation)
                 
         if ellipse_rotation != 0 and centerpoint[:2] != [0.0, 0.0]:
-            raise NotImplementedError()
+            raise NotImplementedError("Please set the centerpoint to [0, 0]")
             
         
         return positions
