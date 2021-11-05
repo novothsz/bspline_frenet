@@ -238,7 +238,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     # writing_parameters_to_file(iteration_times)
     
-    return n_steps, group
+    return n_steps, group, iteration_times
     
 # """    
 group_stages = []
@@ -251,7 +251,7 @@ max_iterations = 2
 stage = 0
 start_position = [0.0, 0.0, 0.0]
 goal_position = [0.0, 0.0, 0.0]
-n_steps, group = run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage)
+n_steps, group, iteration_times = run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage)
 
 group.plot_moovie_frames(n_steps, iternum=0, seed=0)
 # group.plot_moovie_frames_old(iternum=0, seed=0)

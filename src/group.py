@@ -1485,7 +1485,7 @@ class Group(Environment):
         """
 
         # Extra step: we initialize decision variables and parameters for faster convergence
-        self.initialize_values()
+        # self.initialize_values()
 
         for i in range(len(self.vehicles)):
             self.vehicles[i].prepare0()
@@ -1552,6 +1552,43 @@ class Group(Environment):
             self.vehicles[i].simulation = simulation
             self.vehicles[i].shift_enabled = simulation
         
+    def data_exchange_x(self):
+        self.plot_frenet_view()
+        """
+        2) data_exchange_x(), where these values are shared between agents.
+        """
+        message_container = []
+        # Collecting messages
+        for i in range(len(self.vehicles)):
+            message_container += self.vehicles[i].data_exchange_x_send()
+
+        # Broadcasting messages
+        for i in range(len(self.vehicles)):
+            self.vehicles[i].data_exchange_x_receive(message_container)
+            
+        return self
+    
+    def lambda_update_data_exchange_z(self):
+        """
+        4) lambda_update(), which updates the lambda values.
+        """
+        for i in range(len(self.vehicles)):
+            self.vehicles[i].lambda_update()
+
+        """
+        5) data_exchange_z, where z_i, z_ij, lambda_i, lambda_ij are shared.
+        """
+        message_container = []
+        # Collecting messages
+        for i in range(len(self.vehicles)):
+            message_container += self.vehicles[i].data_exchange_z_send()
+
+        # Broadcasting messages
+        for i in range(len(self.vehicles)):
+            self.vehicles[i].data_exchange_z_receive(message_container)
+        
+        return self
+        
         
 
     def solve(self):
@@ -1586,7 +1623,11 @@ class Group(Environment):
         3) z_update(), optimizing the the duplicate variables z and z_ij.
         """
         for i in range(len(self.vehicles)):
+            self.vehicles[i].z_update_prior()
+        for i in range(len(self.vehicles)):
             self.vehicles[i].z_update()
+        for i in range(len(self.vehicles)):
+            self.vehicles[i].z_update_posterior()
 
         """
         4) lambda_update(), which updates the lambda values.

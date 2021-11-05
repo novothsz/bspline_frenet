@@ -290,7 +290,7 @@ class Vehicle(VehicleBasis):
 
         return self
     
-    def z_update(self):
+    def z_update_prior(self):
         self.update_PvZ()
         if self.shift_enabled == True:
             self.shift_DvZ()
@@ -298,16 +298,17 @@ class Vehicle(VehicleBasis):
         # Updating the necessary arguments for the solver
         self.arg_z['x0'] = self.DvZ.assemble()
         self.arg_z['p'] = self.PvZ.assemble()
-
+        return self
+    def z_update(self):
         # Solving the problem
         # t1 = time.time()
         self.solution_z = self.solver_z.call(self.arg_z)
         # t2 = time.time()
         # self.z_update_time += [t2-t1]
-
+        return self
+    def z_update_posterior(self):
         # Extracting the solution
         self.DvZ.extract(self.solution_z)
-
         return self
     
     def setup_x_update(self):
@@ -800,6 +801,15 @@ class Vehicle(VehicleBasis):
         # fig.savefig('figures/' + 'cc' + '{:0>1d}'.format(self.stage) +'.pdf', dpi = 200)
         
         return ax
+    
+    def distributed_x_update(self, list_):
+        args, idx = list_
+        return {idx: self.solver.call(args)}
+    
+    def distributed_z_update(self, list_):
+        args, idx = list_
+        return {idx: self.solver_z.call(args)}
+        
 
     def x_update_prior(self):
         self.update_PvX()
@@ -809,9 +819,13 @@ class Vehicle(VehicleBasis):
         # Updating the necessary arguments for the solver
         self.arg['x0'] = self.DvX.assemble()
         self.arg['p'] = self.PvX.assemble()
+        return self
+    
     def x_update(self):
         # Solving the problem
         self.solution = self.solver.call(self.arg)
+        return self
+    
     def x_update_posterior(self):
         # Extracting the solution
         self.DvX.extract(self.solution)
