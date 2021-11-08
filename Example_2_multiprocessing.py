@@ -207,13 +207,19 @@ target_function_z = group.vehicles[0].distributed_z_update
 
 def target_function(list_):
     args, idx = list_
+    start_time = time.time()
     res = group.vehicles[idx].solver.call(args)
-    return {idx: res}
+    final_time = time.time()
+    update_time = final_time - start_time
+    return {idx: [res, update_time]}
 
 def target_function_z(list_):
     args, idx = list_
+    start_time = time.time()
     res = group.vehicles[idx].solver_z.call(args)
-    return {idx: res}
+    final_time = time.time()
+    z_update_time = final_time - start_time
+    return {idx: [res, z_update_time]}
 
 
 
@@ -225,7 +231,7 @@ if __name__ == '__main__':
         iteration_times = []
         
         for i in range(0, n_steps):
-            t_iter = time()
+            t_iter = time.time()
             
             
             # vehicles = [vehicle for vehicle in group.vehicles]
@@ -245,7 +251,8 @@ if __name__ == '__main__':
                 res_dicitonary.update(res_)
             
             for i in range(4):
-                group.vehicles[i].solution = res_dicitonary[i]
+                group.vehicles[i].solution = res_dicitonary[i][0]
+                group.vehicles[i].variable_history["x_update_time"] += [res_dicitonary[i][1]]
                 
             for i in range(4):
                 group.vehicles[i] = group.vehicles[i].x_update_posterior()
@@ -268,7 +275,8 @@ if __name__ == '__main__':
                 res_dicitonary.update(res_)
             
             for i in range(4):
-                group.vehicles[i].solution_z = res_dicitonary[i]
+                group.vehicles[i].solution_z = res_dicitonary[i][0]
+                group.vehicles[i].variable_history["z_update_time"] += [res_dicitonary[i][1]]
                 
             for i in range(4):
                 group.vehicles[i] = group.vehicles[i].z_update_posterior()
@@ -278,15 +286,15 @@ if __name__ == '__main__':
             
             # group.solve()
             
-            print(str(time() - t_iter) + " seconds")
-            iteration_times += [time() - t_iter]
-            t_iter = time()
+            print(str(time.time() - t_iter) + " seconds")
+            iteration_times += [time.time() - t_iter]
+            t_iter = time.time()
             
             
             group.ACC_MPC_t_param()
             group.simulation_step()
             
-    
+    group.write_iteration_times(prefix = 'multi_core_')
 
 
 

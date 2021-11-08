@@ -15,7 +15,7 @@ from .spline_extra import definite_integral
 
 from .vehicle_basis import VehicleBasis
 from .param import ParamValX, ParamValZ, DecisionVarX, DecisionVarZ
-
+import time
 
 class Vehicle(VehicleBasis):
     def __init__(self):
@@ -302,7 +302,10 @@ class Vehicle(VehicleBasis):
     def z_update(self):
         # Solving the problem
         # t1 = time.time()
+        start_time = time.time()
         self.solution_z = self.solver_z.call(self.arg_z)
+        final_time = time.time()
+        self.variable_history["z_update_time"] += [final_time - start_time]
         # t2 = time.time()
         # self.z_update_time += [t2-t1]
         return self
@@ -823,7 +826,10 @@ class Vehicle(VehicleBasis):
     
     def x_update(self):
         # Solving the problem
+        start_time = time.time()
         self.solution = self.solver.call(self.arg)
+        final_time = time.time()
+        self.variable_history["x_update_time"] += [final_time - start_time]
         return self
     
     def x_update_posterior(self):

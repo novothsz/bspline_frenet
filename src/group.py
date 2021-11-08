@@ -7,6 +7,7 @@ from .environment import Environment
 import yaml
 from numpy import interp
 import time
+import csv
 
 class Group(Environment):
     def __init__(self, n_vehicles : int, start_position = [-0.8, 0, 0], goal_position = [0.8, 0, 0], stage = 0):
@@ -1604,7 +1605,7 @@ class Group(Environment):
         for i in range(len(self.vehicles)):
             self.vehicles[i].x_update_posterior()
             
-        self.plot_frenet_view()
+        # self.plot_frenet_view()
 
 
         """
@@ -1659,7 +1660,94 @@ class Group(Environment):
     ###########################################################################
     ###########################################################################
 
+    def write_iteration_times(self, prefix = ''):
+        # first_line = "vehicle 1; vehicle 2; vehicle 3; vehicle 4; worst; sum"
+        first_line = ["vehicle 1", "vehicle 2", "vehicle 3", "vehicle 4", "worst", "sum", "worst * 4"]
+        mode = 'w'
+        n_steps = math.floor(1 / self.vehicles[0].t_step)
+        horizon_num = n_steps
+        horizon_num_original = int(horizon_num)    
+        
+        # x update
+        with open(self.cwd + '/log/' + prefix + 'x_update_times.csv', mode = mode) as csvfile:
+            writer = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            writer.writerow(first_line)
+            for i in range(horizon_num_original):
+                horizon_num = int(i * self.vehicles[0].n_intermediate_ADMM + self.vehicles[0].n_intermediate_ADMM - 1)
+                line = []
+                worst = 0
+                sum_ = 0
+                for vehicle in self.vehicles:
+                    sol_time = vehicle.variable_history["x_update_time"][horizon_num]
+                    line += [sol_time]
+                    worst = worst * (worst > sol_time) + sol_time * (sol_time > worst)
+                    sum_ += sol_time
+                line += [worst, sum_, worst * 4]
+                writer.writerow(line)
+                
+                
+        # z update
+        with open(self.cwd + '/log/' + prefix + 'z_update_times.csv', mode = mode) as csvfile:
+            writer = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            writer.writerow(first_line)
+            for i in range(horizon_num_original):
+                horizon_num = int(i * self.vehicles[0].n_intermediate_ADMM + self.vehicles[0].n_intermediate_ADMM - 1)
+                line = []
+                worst = 0
+                sum_ = 0
+                for vehicle in self.vehicles:
+                    sol_time = vehicle.variable_history["z_update_time"][horizon_num]
+                    line += [sol_time]
+                    worst = worst * (worst > sol_time) + sol_time * (sol_time > worst)
+                    sum_ += sol_time
+                line += [worst, sum_, worst * 4]
+                writer.writerow(line)
+                
+                
+        # combined update
+        first_line = ["worst x", "worst z", "(worst x + worst z) * 4"]
+        with open(self.cwd + '/log/' + prefix + 'combined_update_times.csv', mode = mode) as csvfile:
+            writer = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            writer.writerow(first_line)
+            for i in range(horizon_num_original):
+                horizon_num = int(i * self.vehicles[0].n_intermediate_ADMM + self.vehicles[0].n_intermediate_ADMM - 1)
+                line = []
+                worst_x = 0
+                worst_z = 0
+                for vehicle in self.vehicles:
+                    sol_time = vehicle.variable_history["x_update_time"][horizon_num]
+                    sol_time_z = vehicle.variable_history["z_update_time"][horizon_num]
+                    worst_x = worst_x * (worst_x > sol_time) + sol_time * (sol_time > worst_x)
+                    worst_z = worst_z * (worst_z > sol_time_z) + sol_time_z * (sol_time_z > worst_z)
+                line += [worst_x, worst_z, (worst_x + worst_z) * 4]
+                writer.writerow(line)
+                # writer.writerow(['{:3.4e}'.format(x) for x in line])
+                
+                
 
+    def compare_iteration_times(self):            
+        mode = 'r'
+        with open(self.cwd + '/log/' + 'single_core_combined_update_times.csv', mode = mode) as csvfile:
+            csvreader = csv.reader(csvfile)
+            header = next(csvreader)
+            rows = []
+            for row in csvreader:
+                row_numeric = [float(value) for value in row]
+                rows.append(row_numeric)
+                
+                
+        with open(self.cwd + '/log/' + 'multi_core_combined_update_times.csv', mode = mode) as csvfile:
+            csvreader = csv.reader(csvfile)
+            header = next(csvreader)
+            rows_m = []
+            for row in csvreader:
+                row_numeric = [float(value) for value in row]
+                rows_m.append(row_numeric)
+                
+        divident = [multi[-1] - single[-1] for single, multi in zip(rows, rows_m)]    
+        single = [single[-1] for single in rows]
+        multi = [multi[-1] for multi in rows_m]
+        return [single, multi, divident]
 
 
 
