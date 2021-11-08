@@ -1662,7 +1662,7 @@ class Group(Environment):
 
     def write_iteration_times(self, prefix = ''):
         # first_line = "vehicle 1; vehicle 2; vehicle 3; vehicle 4; worst; sum"
-        first_line = ["vehicle 1", "vehicle 2", "vehicle 3", "vehicle 4", "worst", "sum", "worst * 4"]
+        first_line = ["vehicle 1", "vehicle 2", "vehicle 3", "vehicle 4", "worst", "best", "worst - best", "sum", "worst * 4"]
         mode = 'w'
         n_steps = math.floor(1 / self.vehicles[0].t_step)
         horizon_num = n_steps
@@ -1676,13 +1676,15 @@ class Group(Environment):
                 horizon_num = int(i * self.vehicles[0].n_intermediate_ADMM + self.vehicles[0].n_intermediate_ADMM - 1)
                 line = []
                 worst = 0
+                best = 1e6
                 sum_ = 0
                 for vehicle in self.vehicles:
                     sol_time = vehicle.variable_history["x_update_time"][horizon_num]
                     line += [sol_time]
                     worst = worst * (worst > sol_time) + sol_time * (sol_time > worst)
+                    best = best * (best < sol_time) + sol_time * (sol_time < best)
                     sum_ += sol_time
-                line += [worst, sum_, worst * 4]
+                line += [worst, best, worst - best, sum_, worst * 4]
                 writer.writerow(line)
                 
                 
@@ -1694,13 +1696,15 @@ class Group(Environment):
                 horizon_num = int(i * self.vehicles[0].n_intermediate_ADMM + self.vehicles[0].n_intermediate_ADMM - 1)
                 line = []
                 worst = 0
+                best = 1e6
                 sum_ = 0
                 for vehicle in self.vehicles:
                     sol_time = vehicle.variable_history["z_update_time"][horizon_num]
                     line += [sol_time]
                     worst = worst * (worst > sol_time) + sol_time * (sol_time > worst)
+                    best = best * (best < sol_time) + sol_time * (sol_time < best)
                     sum_ += sol_time
-                line += [worst, sum_, worst * 4]
+                line += [worst, best, worst - best, sum_, worst * 4]
                 writer.writerow(line)
                 
                 
