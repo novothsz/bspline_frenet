@@ -8,6 +8,9 @@ import yaml
 from numpy import interp
 import time
 import csv
+import random
+
+from .obstacle import Obstacle
 
 class Group(Environment):
     def __init__(self, n_vehicles : int, start_position = [-0.8, 0, 0], goal_position = [0.8, 0, 0], stage = 0):
@@ -253,7 +256,8 @@ class Group(Environment):
             for i, obstacle in enumerate(self.vehicles[0].obstacles):
                 idx = np.arange(len(self.vehicles)*i,len(self.vehicles)*i+len(self.vehicles)) 
                 idx = np.arange(4*i,4*i+4) # bacuse calculated with danger zone, where values are obst0->[corner 0, c1, c2, c3]; o1->[c0, c1, c2, c3]; ...
-                is_collision = any(np.array(all_collisions)[idx].tolist())
+                # is_collision = any(np.array(all_collisions)[idx].tolist())
+                is_collision = all_collisions[i] # no more corners indexing :)
                 if is_collision:
                     # It's okay, that we check if the obstacle enters into the danger zone, but 
                     # when looking for the obstacle ID, we should find the one, with which we will collide!!
@@ -291,7 +295,19 @@ class Group(Environment):
                     all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, np.array(self.get_scaled_obstacle_corners(t_danger_end))[obstacle_idx].tolist())
                     if collision == False:
                         # this is the t_danger_end we were looking for
+                        self.check_danger_zone_with_obstacles(vehicle_positions, np.array(self.get_scaled_obstacle_corners(t_danger_end))[obstacle_idx].tolist())
                         break
+                    
+                    # fig = plt.figure()
+                    # ax = fig.add_subplot(111)
+                    # for pos in np.array(self.get_scaled_obstacle_corners(t_danger_end))[obstacle_idx].tolist()[0]:
+                    #     plt.plot(pos[0], pos[1], 'ro')
+                        
+                    # s_danger = 0.6988905493709299    
+                    # circle = plt.Circle((0, 0), s_danger, color='r', alpha=0.5, zorder = 0)
+                    # ax.add_patch(circle)
+                    # ax.set_aspect('equal', adjustable='box')
+                    # plt.show()
                     
                 # Step 3: Find the right formation configuration for t \in [t_danger_start, t_danger_end]
                 # Form t_zizz
@@ -1138,6 +1154,12 @@ class Group(Environment):
         
         return (a1 * math.cos(angle) - a2 * math.sin(angle), \
                         a1 * math.sin(angle) + a2 * math.cos(angle))
+            
+    def shift_vector(self, vector1, vector2):
+        a1, a2 = vector1[0], vector1[1]
+        b1, b2 = vector2[0], vector2[1]
+        
+        return [a1 + b1, a2 + b2]
         
         
     def scale_vector(self, vector, scaling_factor):
@@ -1159,22 +1181,115 @@ class Group(Environment):
         # Check if any of the obstacles are in the danger zone
         any_inside = []
         corner_inside = []
+        
+        "Old, foolish code:"
+        # for corners in obstacle_corners:
+        #     for corner in corners:
+        #         corner_distance_from_origo = np.sqrt((0-corner[0])**2 + (0-corner[1])**2)
+        #         if corner_distance_from_origo <= s_danger: # is inside the danger zone?
+        #             corner_inside += [True]
+        #         else:
+        #             corner_inside += [False]
+            
+            
+        # from sympy import Point, Polygon, Circle
+        # d_zone = Circle(Point(0, 0), s_danger)
+        # for corners in obstacle_corners:
+        #     poly_corners = [(corner) for corner in corners]
+        #     poly_obstacle = Polygon(*poly_corners)
+        #     # poly_obstacle = Polygon(poly_corners[0], poly_corners[1], poly_corners[2], poly_corners[3])
+        #     isIntersection = d_zone.intersection(poly_obstacle)
+            
+        "New, highly professional code"
         for corners in obstacle_corners:
-            # corner_inside = []
-            for corner in corners:
-                corner_distance_from_origo = np.sqrt((0-corner[0])**2 + (0-corner[1])**2)
-                if corner_distance_from_origo <= s_danger: # is inside the danger zone?
-                    corner_inside += [True]
-                else:
-                    corner_inside += [False]
-            # if any(corner_inside):
-            #     any_inside += [True]
-            # else:
-            #     any_inside += [False]
-                
-                        
+            # 1. Obtain obstacle center
+            obst_center = self.get_obstacle_center(corners)
+            
+            # 2. Transform obstacle & circle
+            corners = [ [corner[0] - obst_center[0], corner[1] - obst_center[1]] for corner in corners  ]
+            d_zone_center = [-obst_center[0], -obst_center[1]]
+            # 3. calculate angle of obstacle
+            obst_angle = self.get_obstacle_angle(corners)
+            # 4. rotate obstacle & circle
+            new_corners = self.rotate_formation(corners, -obst_angle)
+            new_d_zone_center = self.rotate_formation([d_zone_center], obst_angle)
+            # 5. check intersection
+            is_intersection = self.intersects([list(new_d_zone_center[0]), s_danger], new_corners)
+            corner_inside += [is_intersection]
+            
+        # return corner_inside, is_intersection
         return corner_inside, any(corner_inside)
         
+    def get_obstacle_center(self, corners):
+        mean_x = np.array([])
+        mean_y = np.array([])
+        
+        for corner in corners:
+            mean_x = np.append(mean_x, corner[0])
+            mean_y = np.append(mean_y, corner[1])
+            
+        return [np.mean(mean_x), np.mean(mean_y)]
+    
+    def get_obstacle_angle(self, corners):
+        corners = corners + [corners[0]]
+        
+        edge_vectors = [ [p2[0] - p1[0], p2[1] - p1[1]]  for p1, p2 in zip(corners[:-1], corners[1:])]
+        
+        angles = [math.atan2(vector[1], vector[0]) for vector in edge_vectors]
+        
+        angles = np.array([])
+        for vector in edge_vectors:
+            vector = np.array(vector)
+            x_axis = np.array([1, 0])
+            alpha = math.acos( np.dot(vector, x_axis) / (np.linalg.norm(vector) * 1))
+            angles = np.append(angles, alpha)
+        angles_degree = angles / math.pi * 180
+        min_rot_angle = max(angles)
+        for angle in angles:
+            min_rot_angle = min_rot_angle * (angle < 0 or angle > min_rot_angle) + angle * (not(angle < 0 or angle > min_rot_angle))
+        
+        return min_rot_angle
+    
+    
+    # fig, ax = plt.subplots()
+    # for pos in corners:
+    #     ax.plot(pos[0], pos[1], 'bo')
+    # for pos in new_corners:
+    #     ax.plot(pos[0], pos[1], 'go')
+        
+    # ax.set_aspect('equal', adjustable='box')
+    # plt.show()
+        
+    
+    # def rotate_formation(self, formation):
+    #     return "Done already :)"
+    
+    def intersects(self, circle, rect):
+        # https://stackoverflow.com/questions/401847/circle-rectangle-collision-detection-intersection
+    
+        circle_x = circle[0][0]
+        circle_y = circle[0][1]
+        circle_radious = circle[1]
+        rect_x, rect_y = self.get_obstacle_center(rect)
+        rect_width = abs(rect[0][0] * 2)
+        rect_height = abs(rect[0][1] * 2)
+        circleDistance_x = abs(circle_x - rect_x);
+        circleDistance_y = abs(circle_y - rect_y);
+    
+        if (circleDistance_x > (rect_width/2 + circle_radious)):
+            return False
+        if (circleDistance_y > (rect_height/2 + circle_radious)):
+            return False
+    
+        if (circleDistance_x <= (rect_width/2)):
+            return True
+        if (circleDistance_y <= (rect_height/2)):
+            return True
+    
+        cornerDistance_sq = (circleDistance_x - rect_width/2)**2 + \
+                             (circleDistance_y - rect_height/2)**2
+    
+        return cornerDistance_sq <= circle_radious**2
     
     # def check_danger_zone_with_obstacle(self, vehicle_pos, obstacle_corners):
     #     import matplotlib.path as mpltPath
@@ -1336,7 +1451,16 @@ class Group(Environment):
                 positions[i][:2] = self.rotate_vector(pos[:2], ellipse_rotation)
                 
         if ellipse_rotation != 0 and centerpoint[:2] != [0.0, 0.0]:
-            raise NotImplementedError("Please set the centerpoint to [0, 0]")
+            # raise NotImplementedError("Please set the centerpoint to [0, 0]")
+            # Actually, not an error... We can still rotate around (0, 0) and then shift the 
+            # corners with the centerpoint vector.
+            
+            for i, pos in enumerate(positions):
+                positions[i][:2] = self.rotate_vector(pos[:2], ellipse_rotation)
+                positions[i][:2] = self.shift_vector(positions[i][:2], centerpoint[:2])
+                
+            
+            
             
         
         return positions
@@ -1605,7 +1729,7 @@ class Group(Environment):
         for i in range(len(self.vehicles)):
             self.vehicles[i].x_update_posterior()
             
-        # self.plot_frenet_view()
+        self.plot_frenet_view()
 
 
         """
@@ -1709,7 +1833,7 @@ class Group(Environment):
                 
                 
         # combined update
-        first_line = ["worst x", "worst z", "(worst x + worst z) * 4"]
+        first_line = ["worst x", "worst z", "(worst x + worst z)", "(worst x + worst z) * 4"]
         with open(self.cwd + '/log/' + prefix + 'combined_update_times.csv', mode = mode) as csvfile:
             writer = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             writer.writerow(first_line)
@@ -1723,7 +1847,7 @@ class Group(Environment):
                     sol_time_z = vehicle.variable_history["z_update_time"][horizon_num]
                     worst_x = worst_x * (worst_x > sol_time) + sol_time * (sol_time > worst_x)
                     worst_z = worst_z * (worst_z > sol_time_z) + sol_time_z * (sol_time_z > worst_z)
-                line += [worst_x, worst_z, (worst_x + worst_z) * 4]
+                line += [worst_x, worst_z, worst_x + worst_z, (worst_x + worst_z) * 4]
                 writer.writerow(line)
                 # writer.writerow(['{:3.4e}'.format(x) for x in line])
                 
@@ -1754,7 +1878,82 @@ class Group(Environment):
         return [single, multi, divident]
 
 
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
+    ###########################################################################
 
+    def generate_obstacles(self, seed : int = 42):
+        # There are the following types of obstacles:
+            # - obstacles on the path: these obstacles are created using the ellipse generator algorithm.
+            # It's centerpoint, alpha, a, b is a random number in the Frenet frame (all of which in a defined bound).
+            # Then, the corners are transformed from Frenet to Inertial.
+            # - gates: two corners of each obstacle, that form a gate are generated with the 
+            # ellipse generator algorithm. However alpha is always zero and b has a minimum value.
+            # (both of these constarints ensure, that there is a tunner, kinda parallel with the Frenet path so that 
+            # the DFG algorithm will be able to find a solution.)
+            # The corners are transformed from Frenet to Inertial and extended to the environment limits.
+            # - wall on one side: same as the gate, but drops one of the obstacle, that forms a gate.
+        
+        # Spacing of the obstacles:
+            # randomly, but at least t_spacing between each obstacle.
+            # no obstacle is allowed at the end
+            
+        # Ellipse generator input:
+            # def ellipse_generator(self, centerpoint : list, n_positions : int, a : float, b : float, 
+            #                       ellipse_rotation : float = 0, vehicles_rotation : float = math.pi / 4,
+            #                       ellipse_scale_x : float = 1, ellipse_scale_y : float = 1):
+             
+                
+        # variables
+        t_spacing = 0.2
+        t_free_begin = 0.2
+        t_free_end = 0.2
+        
+        
+        n_obst_along = 4
+        random.seed(seed)
+        centerpoint_x_bound = [-0.1, 0.1]
+        centerpoint_y_bound = [-0.1, 0.1]
+        
+        a_bound = [0.1, 0.7]
+        b_bound = [0.1, 1.5]
+        
+        alpha_bound = [-math.pi/2, math.pi/2]
+        
+        
+        
+        obstacles = []
+        t_bound = []
+        t_tmp = [0.2, 0.4, 0.6, 0.8]
+        for i in range(n_obst_along):
+            centerpoint = [random.uniform(centerpoint_x_bound[0], centerpoint_x_bound[1]), \
+                           random.uniform(centerpoint_y_bound[0], centerpoint_y_bound[1]), 0 ]
+                
+            a = random.uniform(a_bound[0], a_bound[1])
+            b = random.uniform(b_bound[0], b_bound[1])
+            alpha = random.uniform(alpha_bound[0], alpha_bound[1])
+            ellipse_corners = self.ellipse_generator( centerpoint = centerpoint, n_positions = 4, a = a, b = b, 
+                                                      ellipse_rotation = alpha, vehicles_rotation = math.pi / 4)
+            
+            obstacle_corners = [corner[:2] for corner in ellipse_corners]
+            t = random.uniform(a_bound[0], a_bound[1])
+            # we need to 
+            obstacle_corners = [self.fp.frenet_to_inertial(corner[0], corner[1], t_tmp[i]) for corner in obstacle_corners]
+            obstacles += [Obstacle(ID = i, corners = obstacle_corners)]
+            
+        
+        # plt.figure()
+        # for pos in ellipse_corners:
+        #     plt.plot(pos[0], pos[1], 'ro')
+        # plt.show()
+            
+        
+        
+        return obstacles
 
     ###########################################################################
     ###########################################################################

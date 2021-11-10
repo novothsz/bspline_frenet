@@ -54,7 +54,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     seed = 64
     print("Seed was:", 64)
 
-    
+    """
     "Obstacles"
     obstacles = []
     # Obstacle 1
@@ -121,7 +121,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
               [2.474-dx, 1+dy])
     
     # obstacles += [Obstacle(ID = 5, corners = tmp_obs)]
-    
+    """
     
             
     # Create group
@@ -130,12 +130,17 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         position=group.start_position,targetHeight = targetHeight, position_type='initial')
     group.set_group_position(
         position=group.goal_position, targetHeight = targetHeight, position_type='final')
+    
+    # obstacles = group.generate_obstacles()
+    # group.add_obstacles(obstacles)
+    
+    obstacles = group.generate_obstacles(42)
     group.add_obstacles(obstacles)
     group.organise_neighbours()
     
     
     
-    n_intermediate_ADMM = 1
+    n_intermediate_ADMM = 5
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
     # n_steps = 10
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})

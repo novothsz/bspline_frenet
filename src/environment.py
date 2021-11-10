@@ -43,6 +43,9 @@ class Environment():
         self.TOL = 1e-7
         
         
+
+    
+        
     def define_knots(self, degree = 3, **kwargs):
         """This function defines the knots and creates the
         B-spline basis function with the prescribed degree.

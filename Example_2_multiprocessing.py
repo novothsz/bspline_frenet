@@ -53,6 +53,7 @@ print("Seed was:", 64)
 
 
 "Obstacles"
+"""
 obstacles = []
 # Obstacle 1
 corners = ([0.0, -0.3], [0.5,-0.3], [0.5, 0.3], [0.0, 0.3])
@@ -119,7 +120,7 @@ tmp_obs = ([2.474-dx, 1-dy],
 
 # obstacles += [Obstacle(ID = 5, corners = tmp_obs)]
 
-# """    
+"""    
 group_stages = []
 corners_list = []
 min_iterations = 2
@@ -133,10 +134,16 @@ goal_position = [0.0, 0.0, 0.0]
         
 # Create group
 group = Group(n_vehicles=4, start_position = start_position, goal_position = goal_position, stage = stage)
+
+
+
+
 group.set_group_position(
     position=group.start_position,targetHeight = targetHeight, position_type='initial')
 group.set_group_position(
     position=group.goal_position, targetHeight = targetHeight, position_type='final')
+
+obstacles = group.generate_obstacles(seed = 7)
 group.add_obstacles(obstacles)
 group.organise_neighbours()
 
@@ -236,55 +243,57 @@ if __name__ == '__main__':
             
             # vehicles = [vehicle for vehicle in group.vehicles]
             group.set_var({'stage': i})
+            for j in range(n_intermediate_ADMM):
             
-            "x update"
-            for i in range(4):
-                group.vehicles[i] = group.vehicles[i].x_update_prior()
-            args = [vehicle.arg for vehicle in group.vehicles]
+                "x update"
+                for i in range(4):
+                    group.vehicles[i] = group.vehicles[i].x_update_prior()
+                args = [vehicle.arg for vehicle in group.vehicles]
+                    
+                futures = [pool.submit(target_function, [arg, j]) for j, arg in enumerate(args)]
+                res = [f.result() for f in as_completed(futures)]
                 
-            futures = [pool.submit(target_function, [arg, j]) for j, arg in enumerate(args)]
-            res = [f.result() for f in as_completed(futures)]
-            
-            # we need to combine the list into a dictionary
-            res_dicitonary = {}
-            for res_ in res:
-                res_dicitonary.update(res_)
-            
-            for i in range(4):
-                group.vehicles[i].solution = res_dicitonary[i][0]
-                group.vehicles[i].variable_history["x_update_time"] += [res_dicitonary[i][1]]
+                # we need to combine the list into a dictionary
+                res_dicitonary = {}
+                for res_ in res:
+                    res_dicitonary.update(res_)
                 
-            for i in range(4):
-                group.vehicles[i] = group.vehicles[i].x_update_posterior()
+                for i in range(4):
+                    group.vehicles[i].solution = res_dicitonary[i][0]
+                    group.vehicles[i].variable_history["x_update_time"] += [res_dicitonary[i][1]]
+                    
+                for i in range(4):
+                    group.vehicles[i] = group.vehicles[i].x_update_posterior()
+                    
+                "data exchange x"
+                group = group.data_exchange_x()
                 
-            "data exchange x"
-            group = group.data_exchange_x()
-            
-            "z update"
-            for i in range(4):
-                group.vehicles[i] = group.vehicles[i].z_update_prior()
-            args = [vehicle.arg_z for vehicle in group.vehicles]
+                "z update"
+                for i in range(4):
+                    group.vehicles[i] = group.vehicles[i].z_update_prior()
+                args = [vehicle.arg_z for vehicle in group.vehicles]
+                    
+                    
+                futures = [pool.submit(target_function_z, [arg, j]) for j, arg in enumerate(args)]
+                res = [f.result() for f in as_completed(futures)]
                 
+                # we need to combine the list into a dictionary
+                res_dicitonary = {}
+                for res_ in res:
+                    res_dicitonary.update(res_)
                 
-            futures = [pool.submit(target_function_z, [arg, j]) for j, arg in enumerate(args)]
-            res = [f.result() for f in as_completed(futures)]
-            
-            # we need to combine the list into a dictionary
-            res_dicitonary = {}
-            for res_ in res:
-                res_dicitonary.update(res_)
-            
-            for i in range(4):
-                group.vehicles[i].solution_z = res_dicitonary[i][0]
-                group.vehicles[i].variable_history["z_update_time"] += [res_dicitonary[i][1]]
+                for i in range(4):
+                    group.vehicles[i].solution_z = res_dicitonary[i][0]
+                    group.vehicles[i].variable_history["z_update_time"] += [res_dicitonary[i][1]]
+                    
+                for i in range(4):
+                    group.vehicles[i] = group.vehicles[i].z_update_posterior()
+                    
+                "lambda update, data exchange z"
+                group = group.lambda_update_data_exchange_z()
                 
-            for i in range(4):
-                group.vehicles[i] = group.vehicles[i].z_update_posterior()
-                
-            "lambda update, data exchange z"
-            group = group.lambda_update_data_exchange_z()
-            
-            # group.solve()
+                # group.solve()
+                group.set_simulation(False)
             
             print(str(time.time() - t_iter) + " seconds")
             iteration_times += [time.time() - t_iter]
@@ -295,7 +304,7 @@ if __name__ == '__main__':
             group.simulation_step()
             
     group.write_iteration_times(prefix = 'multi_core_')
-
+    group.plot_moovie_frames(n_steps, iternum=0, seed=0)
 
 
 

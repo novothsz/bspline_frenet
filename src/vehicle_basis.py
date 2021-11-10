@@ -100,8 +100,8 @@ class VehicleBasis(Environment):
         # Constraints on decision variables
         # self.y_min = [self.border_x[0], self.border_y[0]]
         # self.y_max = [self.border_x[1], self.border_y[1]]
-        self.y_min = [-1, -1, -math.pi]
-        self.y_max = [1, 1, math.pi]
+        self.y_min = [-2, -2, -math.pi * 2]
+        self.y_max = [2, 2, math.pi * 2]
         # self.y_min = [-1, -1, -1, -1]
         # self.y_max = [1, 1, 1, 1]
         

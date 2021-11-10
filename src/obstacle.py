@@ -74,19 +74,19 @@ class Obstacle(Environment):
     
     def spline_position_in_frenet(self):
         
-        try:
-            basis = self.fitter.define_knots(degree = 3, knot_intervals = self.fitter.knot_intervals)
-            import pickle
-            pickle_in = open("obst_" + str(int(self.ID)) + "_coeffs.pickle", "rb")
-            coeffs = pickle.load(pickle_in)
+        # try:
+        #     basis = self.fitter.define_knots(degree = 3, knot_intervals = self.fitter.knot_intervals)
+        #     import pickle
+        #     pickle_in = open("obst_" + str(int(self.ID)) + "_coeffs.pickle", "rb")
+        #     coeffs = pickle.load(pickle_in)
     
-            for i in range(len(self.corners)):
-                self.corners_spline += [  [BSpline(basis, coeffs_) for coeffs_ in coeffs["corners_spline_coeffs"][i]]  ]
-                self.scaled_corners_spline += [  [BSpline(basis, coeffs_) for coeffs_ in coeffs["scaled_corners_spline_coeffs"][i]]  ]
-            return self
+        #     for i in range(len(self.corners)):
+        #         self.corners_spline += [  [BSpline(basis, coeffs_) for coeffs_ in coeffs["corners_spline_coeffs"][i]]  ]
+        #         self.scaled_corners_spline += [  [BSpline(basis, coeffs_) for coeffs_ in coeffs["scaled_corners_spline_coeffs"][i]]  ]
+        #     return self
         
-        except:
-            pass
+        # except:
+        #     pass
         
         
         "Regular corners"
