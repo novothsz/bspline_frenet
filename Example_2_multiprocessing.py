@@ -143,7 +143,7 @@ group.set_group_position(
 group.set_group_position(
     position=group.goal_position, targetHeight = targetHeight, position_type='final')
 
-obstacles = group.generate_obstacles(seed = 7)
+obstacles = group.generate_obstacles(seed = 42)
 group.add_obstacles(obstacles)
 group.organise_neighbours()
 
@@ -153,7 +153,7 @@ n_intermediate_ADMM = 1
 "n_steps = math.floor(1 / group.vehicles[0].t_step)"
 # n_steps = 10
 group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
-group.set_var({'t_step': 0.04})
+group.set_var({'t_step': 0.01})
 group.set_var({'t_window_size': 0.2})
 group.set_var({'t_end': 0 + 0.2})
 group.set_var({'knot_intervals': 5})

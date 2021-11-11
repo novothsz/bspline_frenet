@@ -278,9 +278,13 @@ class Group(Environment):
                         # If we collide with an obstacle, we save its index
                         obstacle_idx += [i]
                         
-            if (t_end >= 1 - self.TOL and t_end <= 1 + self.TOL) == True:
-                obstacle_idx = [0]
+            # if (t_end >= 1 - self.TOL and t_end <= 1 + self.TOL) == True:
+                # obstacle_idx = [0]
+                # TODO: what was the above code doing??
                 # print("Setting original configuration")
+            # if t_end >= t_sweep_end - t_step:
+            #     kappa = True
+            #     all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, self.get_scaled_obstacle_corners(t_end))
             # Step 2: If collision has been found, find t_danger_end time.
             if obstacle_idx != []:
                 
@@ -1212,7 +1216,7 @@ class Group(Environment):
             obst_angle = self.get_obstacle_angle(corners)
             # 4. rotate obstacle & circle
             new_corners = self.rotate_formation(corners, -obst_angle)
-            new_d_zone_center = self.rotate_formation([d_zone_center], obst_angle)
+            new_d_zone_center = self.rotate_formation([d_zone_center], -obst_angle)
             # 5. check intersection
             is_intersection = self.intersects([list(new_d_zone_center[0]), s_danger], new_corners)
             corner_inside += [is_intersection]
@@ -1256,6 +1260,12 @@ class Group(Environment):
     #     ax.plot(pos[0], pos[1], 'bo')
     # for pos in new_corners:
     #     ax.plot(pos[0], pos[1], 'go')
+        
+    #     circle = plt.Circle(new_d_zone_center[0], s_danger, color='k', alpha=0.5, zorder = 10)
+    #     ax.add_patch(circle)
+        
+    # for pos in vehicle_positions:
+    #     ax.plot(pos[0], pos[1], 'ro')
         
     # ax.set_aspect('equal', adjustable='box')
     # plt.show()
@@ -1914,7 +1924,7 @@ class Group(Environment):
         t_free_end = 0.2
         
         
-        n_obst_along = 4
+        n_obst_along = 3
         random.seed(seed)
         centerpoint_x_bound = [-0.1, 0.1]
         centerpoint_y_bound = [-0.1, 0.1]
@@ -1928,7 +1938,7 @@ class Group(Environment):
         
         obstacles = []
         t_bound = []
-        t_tmp = [0.2, 0.4, 0.6, 0.8]
+        t_tmp = [0.4, 0.6, 0.8]
         for i in range(n_obst_along):
             centerpoint = [random.uniform(centerpoint_x_bound[0], centerpoint_x_bound[1]), \
                            random.uniform(centerpoint_y_bound[0], centerpoint_y_bound[1]), 0 ]
@@ -1941,9 +1951,40 @@ class Group(Environment):
             
             obstacle_corners = [corner[:2] for corner in ellipse_corners]
             t = random.uniform(a_bound[0], a_bound[1])
-            # we need to 
+            # we need to place them at random location along the path
+            # this is done by converting their frenet coordinates to the inertial frame at random times
             obstacle_corners = [self.fp.frenet_to_inertial(corner[0], corner[1], t_tmp[i]) for corner in obstacle_corners]
             obstacles += [Obstacle(ID = i, corners = obstacle_corners)]
+            
+        # Okay. We have generated obstacles along the way.
+        # Let's generate gates now! :)
+        n_obst_gate = 3
+        gate_gap_bound = [3.5 * self.vehicles[0].radious, 10 * self.vehicles[0].radious]
+        gate_length_bound = 0.3
+        
+        
+        # obstacles = []
+        t_tmp = [0.3, 0.5, 0.7]
+        for i in range(n_obst_gate):
+            gate_points_tmp = random.uniform(gate_gap_bound[0], gate_gap_bound[1])
+            # The lower part of the gate
+            # corners = [top-right, top_left]
+            gate1_inside_corners = [ [gate_length_bound / 2, -gate_points_tmp], \
+                                     [-gate_length_bound / 2, -gate_points_tmp] ]
+            
+            # corners = [bottom-left, bottom-right]
+            gate2_inside_corners = [ [gate_length_bound / 2, gate_points_tmp], \
+                                     [-gate_length_bound / 2, gate_points_tmp] ]
+                
+            # transforming the frenet coordinates to inertial frame at random times
+            g1 = [list(self.fp.frenet_to_inertial(corner[0], corner[1], t_tmp[i])) for corner in gate1_inside_corners]
+            g2 = [list(self.fp.frenet_to_inertial(corner[0], corner[1], t_tmp[i])) for corner in gate2_inside_corners]
+            
+            # Extending till the edge of the environment
+            g1 = g1 + [[g1[-1][0], -6]] + [[g1[0][0], -6]]
+            g2 = g2 + [[g2[-1][0],  6]] + [[g2[0][0],  6]]
+            obstacles += [Obstacle(ID = 3+i*2, corners = g1)]
+            # obstacles += [Obstacle(ID = i*2 + 1, corners = g2)]
             
         
         # plt.figure()
@@ -1952,7 +1993,7 @@ class Group(Environment):
         # plt.show()
             
         
-        
+        # [print(obst.corners) for obst in obstacles]
         return obstacles
 
     ###########################################################################
