@@ -468,14 +468,23 @@ class Vehicle(VehicleBasis):
                     # Cost on p directional velocity
                     # self.J += self.rho_intermediate * p_dot(t_intermediate)**2
                     # Constraint on q directional velocity (on the LAST intermediate position)
-                    self.define_constraint([q_dot(t_intermediate)],
-                                            [0],
-                                            [0],
-                                            constraint_type='time',
-                                            name=["q_dot_at_intermediate" + str(i)] * 1)
+                    
+                    # self.define_constraint([q_dot(t_intermediate)],
+                    #                         [0],
+                    #                         [0],
+                    #                         constraint_type='time',
+                    #                         name=["q_dot_at_intermediate" + str(i)] * 1)
+                    
                 
         else:
             raise NotImplementedError()
+            
+            
+        self.define_constraint([q_dot],
+                               [0],
+                               [0],
+                               constraint_type='final',
+                               name=["q_dot_at_intermediate" + str(i)] * 1)
             
         # self.J += self.rho_intermediate * 10000 * (p_dot(t_intermediate)**2 + q_dot(t_intermediate)**2)
         # self.J += self.rho_intermediate * 10000 * (p_dot(1)**2 + q_dot(1)**2)

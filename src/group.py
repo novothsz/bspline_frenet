@@ -1984,7 +1984,7 @@ class Group(Environment):
             g1 = g1 + [[g1[-1][0], -6]] + [[g1[0][0], -6]]
             g2 = g2 + [[g2[-1][0],  6]] + [[g2[0][0],  6]]
             obstacles += [Obstacle(ID = 3+i*2, corners = g1)]
-            # obstacles += [Obstacle(ID = i*2 + 1, corners = g2)]
+            obstacles += [Obstacle(ID = 3+i*2 + 1, corners = g2)]
             
         
         # plt.figure()

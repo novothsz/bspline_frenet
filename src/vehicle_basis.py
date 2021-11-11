@@ -934,8 +934,15 @@ class VehicleBasis(Environment):
                                 lower_bound = [0],
                                 upper_bound = [math.inf],
                                 name = ["d_tau"])
-
-
+        
+        # Okay... What is bad, (because we want to move in the x direction), is if the hyperplane is vertical (because it might block our way).
+        # Therefore we want to punish that case. However, it is okay if it is vertical, when the distance is large. So we weight it with the 
+        # value of b.  (b kinda represents the distance, because b can be large, if the distance is large. However it cannot be large,
+        # if the distance is small. However, this adds additional non-linearity
+        
+        # from casadi import DM
+        # for i in range(a[0].coeffs.shape[0]):
+        #     self.J += dot(  vertcat(a[0].coeffs[i], a[1].coeffs[i]), vertcat(DM(1), DM(0))  )**2
         # ---- Constraint 1
         const1 = a[0]*splines[0] + a[1]*splines[1] - b[0]
         self.define_constraint([const1], lower_bound = [-math.inf], upper_bound = [-radious], name = "eq1")
