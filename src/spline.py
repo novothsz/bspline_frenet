@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
-
+from casadi import vertcat
 import functools
 #import cvxopt
 import numpy as np
@@ -276,7 +276,8 @@ class BSplineBasis(Basis):
         # Consider sparse matrices?
         
         if getattr(type(x), '__module__', '').split('.')[0] == 'casadi':
-            kappa = np.c_[basis[-1]].T
+            # kappa = np.c_[basis[-1]].T
+            kappa = vertcat(*basis[-1])
             return kappa
         else:
             return csr_matrix_alt(np.c_[basis[-1]].T)
@@ -425,6 +426,11 @@ class Spline(object):
         try:
             return self.basis(x).dot(self.coeffs)
         except:
+            try:
+                from casadi import dot
+                return dot(self.basis(x), self.coeffs)
+            except:
+                pass
             return cas.dot(cas.vertcat(*self.basis(x)[0]), self.coeffs)
 
     def __len__(self):
