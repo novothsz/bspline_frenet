@@ -17,6 +17,9 @@ from .vehicle_basis import VehicleBasis
 from .param import ParamValX, ParamValZ, DecisionVarX, DecisionVarZ
 import time
 
+from matplotlib.collections import LineCollection
+from matplotlib.pyplot import cm
+
 class Vehicle(VehicleBasis):
     def __init__(self):
         super().__init__()
@@ -561,7 +564,7 @@ class Vehicle(VehicleBasis):
                 obst_corners += [corner1, corner2, corner3, corner4]
             
                 self.collision_avoidance_hyperplane([p, q], obst_corners,
-                                                    radious=self.radious, name="obst_" + str(i),
+                                                    radious=self.radious * 1, name="obst_" + str(i),
                                                     constraint_type='obstacle')
             
         # Collision avoidance with obstacles (time-sampling based)
@@ -686,7 +689,6 @@ class Vehicle(VehicleBasis):
             kappa = True
     
         def draw_colored_pq(ax, p_, q_, i = -1):
-            from matplotlib.collections import LineCollection
             cols = np.linspace(0,1,len(p_))
             points = np.array([p_, q_]).T.reshape(-1, 1, 2)
             segments = np.concatenate([points[:-1], points[1:]], axis=1)
@@ -714,7 +716,6 @@ class Vehicle(VehicleBasis):
             
             
             # Colors
-            from matplotlib.pyplot import cm
             color=cm.Wistia(np.linspace(0,1,len(t)))
             color=cm.YlOrRd(np.linspace(0,1,len(t)))
             
@@ -810,6 +811,36 @@ class Vehicle(VehicleBasis):
             
             ax.plot(p, q, 'ko',alpha = 0.1)
         
+        if self.ID == 3:
+            # plot hyperplanes
+            a1_coeffs = np.array(DvX.a)[np.arange(0, len(basis))]
+            a2_coeffs = np.array(DvX.a)[np.arange(len(basis), len(basis)*2)]
+            b_coeffs = np.array(DvX.b)[np.arange(0, len(basis))]
+            
+            
+            a1 = BSpline(basis, a1_coeffs)
+            a2 = BSpline(basis, a2_coeffs)
+            b = BSpline(basis, b_coeffs)
+            
+            shrink = 0.01
+            c=cm.brg(np.linspace(0,1,len(t)))
+            for i, t_ in enumerate(t):
+                x1 = np.linspace(-3 + i * shrink, 3 - i * shrink, 100)
+                if a2(t_) == 0:
+                    x2 = x1
+                else:
+                    x2 = (b(t_) - a1(t_) * x1) / a2(t_)
+                # Plot the lines
+                x1 = x1.reshape(-1).tolist()
+                x2 = x2.reshape(-1).tolist()
+                
+                
+                # Plot rectangles
+                ax.plot(x1, x2, c = c[i], zorder = 0)
+            
+        
+        
+        
         # fig.savefig('figures/' + 'cc' + '{:0>1d}'.format(self.stage) +'.pdf', dpi = 200)
         
         return ax
@@ -848,6 +879,8 @@ class Vehicle(VehicleBasis):
         self.variable_history['t_start'] += [self.t_start]
         self.variable_history['t_end'] += [self.t_end]
         self.variable_history['xf'] += [self.xf]
+        self.variable_history['a'] += [list(self.DvX.a)]
+        self.variable_history['b'] += [list(self.DvX.b)]
         return self
     
     
@@ -1136,8 +1169,9 @@ class Vehicle(VehicleBasis):
         return x_new, y_new
     
     def plot_moovie_frames_mooving_horizon(self, ax, horizon_num):
-        
         t_steps = 100     
+        self_ID = 3
+        obst_ID = 6
         horizon_num_original = int(horizon_num)    
         horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
         # Creating the splines
@@ -1165,6 +1199,8 @@ class Vehicle(VehicleBasis):
         # idx = int((self.t_step + t_start) * (100))
         # print("idx_new:" + str(idx))
         
+        # This is so that we can plot the part of the trajectory, which will be covered during the next simulation step, with one color,
+        # and the remainder with a different color. (Black and cornflowerblue respectively.)
         if t_end > t_start:
             a = t_end - t_start
             virtual_idx = self.t_window_size * t_steps / a
@@ -1172,10 +1208,18 @@ class Vehicle(VehicleBasis):
         else:
             idx = t_steps
         
+        # Plotting future trajectories (with two different colors)
         ax.plot(x_t[0:idx], y_t[0:idx], c = 'k',lw=0.8,alpha = 1, zorder = 5)
         # ax.plot(x_t[idx], y_t[idx], c = 'r', marker = 'o', markersize = 1, lxw=1,alpha = 1, zorder = 6)
-        ax.plot(x_t[idx:], y_t[idx:], c = 'cornflowerblue',lw=0.8,alpha = 0.5, zorder = 3)
+        if self.ID != self_ID:
+            ax.plot(x_t[idx:], y_t[idx:], c = 'whitesmoke',lw=0.8,alpha = 0.5, zorder = 3)
+        else:
+            ax.plot(x_t[idx:], y_t[idx:], c = 'cornflowerblue',lw=0.8,alpha = 0.5, zorder = 3)
         # horizon_num_original = horizon_num
+        
+        # Plotting intermediate positions??
+        # why is there two versions down here??
+        # Maybe this is not needed anymore -->
         if self.vehicle_positions_new['vehicle_positions_new'] != []:
             if self.vehicle_positions_new['vehicle_positions_new'][horizon_num_original] != []:
                 # ax.plot(x_t[-1], y_t[-1], 'go', markersize = 1, zorder = 3)
@@ -1200,6 +1244,7 @@ class Vehicle(VehicleBasis):
                         y_
                         , 'go', markersize = 2, zorder = 4)
                 
+        # And perhaps we only use this! -->
         for i in range(len(self.variable_history['t_real_intermediate_list'][horizon_num_original])): 
             idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
             idx = np.arange(3*i,3*i+3)
@@ -1210,13 +1255,79 @@ class Vehicle(VehicleBasis):
                     y_
                     , 'go', markersize = 2, zorder = 4)
         
-        
+        # Also, we plot the current configuration positions
         x_, y_ = self.fp.frenet_to_inertial(np.array([self.variable_history['current_configuration_position'][horizon_num_original]]).reshape(-1)[0], 
                                                 np.array([self.variable_history['current_configuration_position'][horizon_num_original]]).reshape(-1)[1],
                                                 t_start)
         ax.plot(x_,
                 y_
                 , 'bo', markersize = 2, zorder = 4)
+        
+        # Let's now plot the hyperplane (for the last vehicle, because that is where we encountered problems)
+        # TODO: okay, but we also need to choose, which "obstacle's" hyperplane we want to plot...
+        # Oh, and we also need to convert the whole thing to the inertial frame.
+        
+        
+        # Okay... So what is happening here is the following.
+        # There is the global time [t_start, t_end], and there is the local time t \in [0, 1]
+        # We want to plot a line for every time instance in the local time, which is actually associated with a global time. Just like we did
+        # for x, y before. But don't forget, that in that case we plotted dots, and now we plot lines.
+        if self.ID == self_ID:
+            # plot hyperplanes
+            t = np.linspace(0.001, 1-0.001, 100)
+            DvX_a = self.variable_history['a'][horizon_num]
+            DvX_b = self.variable_history['b'][horizon_num]
+            # print(len(DvX_a))
+            # print(np.arange(len(basis)*2*(6 + 0), len(basis)*2*(6 + 1)))
+            a1_coeffs = np.array(DvX_a)[np.arange(len(basis)*2*(obst_ID) + 0, len(basis)*2*(obst_ID) + len(basis))]
+            # print(len(a1_coeffs))
+            # print(len(np.arange(len(basis)*2*(6 + 0), len(basis)*2*(6 + 1))))
+            # print(horizon_num)
+            # print(np.arange(len(basis)*2*(6 + 1), len(basis)*2*(6 + 2)))
+            a2_coeffs = np.array(DvX_a)[np.arange(len(basis)*2*(obst_ID) + len(basis), len(basis)*2*(obst_ID) + len(basis) * 2)]
+            b_coeffs = np.array(DvX_b)[np.arange(len(basis)*1*(obst_ID) + 0, len(basis)*1*(obst_ID) + len(basis))]
+            
+            
+            a1 = BSpline(basis, a1_coeffs)
+            a2 = BSpline(basis, a2_coeffs)
+            b = BSpline(basis, b_coeffs)
+            
+            
+            x_t, y_t, z_t = [], [], []
+            i = 0
+            c=cm.brg(np.linspace(0,1,len(t)))
+            for t_pq, t_frenet in zip(np.linspace(0, 1, t_steps), np.linspace(t_start, t_end, t_steps)):
+                
+                if i == 0 or i == len(t) -1:
+                    # We are in the frenet frame, local time
+                    # a1_, a2_, b_ = a1(t_pq)[0], a2(t_pq)[0], b(t_pq)[0]
+                    shrink = 0.01
+                    x1 = np.linspace(-3 + i * shrink, 3 - i * shrink, 100)
+                    if a2(t_pq) == 0:
+                        x2 = x1
+                    else:
+                        x2 = (b(t_pq) - a1(t_pq) * x1) / a2(t_pq)
+                    # x1_inertial, x2_inertial = x1, x2
+                    # Let's convert all these points to the global frame (at the global time)
+                    x1_inertial, x2_inertial = [], []
+                    for x1_, x2_ in zip(x1, x2):
+                        x1_tmp, x2_tmp = self.fp.frenet_to_inertial(x1_, x2_, t_frenet)
+                        x1_inertial += [x1_tmp]
+                        x2_inertial += [x2_tmp]
+                        
+                    # Nice ;)
+                    # Let us now plot the lines
+                    if i == 0:
+                        ax.plot(x1_inertial, x2_inertial, c = c[i], zorder = 0)
+                        kappa = True
+                i += 1
+            
+            ax.plot(x1_inertial, x2_inertial, c = c[i-1], zorder = 0)
+                  
+                    
+                
+               
+        
         """
         point_x = self.variable_history['x_intermediate_list'][horizon_num][-3]
         # print(point_x)
@@ -1305,25 +1416,26 @@ class Vehicle(VehicleBasis):
         #     print('x_intermediate_len = ' + str(len(self.variable_history['x_intermediate_list'])))
             
         
-        
-        x0, y0 = self.fp.frenet_to_inertial(p_solution(0)[0], q_solution(0)[0], t_start)
-        
-        self.plot_drone(ax, x0 = x0,
-                        y0 = y0,
-                        theta_c = math.atan2(self.fp.fy_d_spline(t_start)[0][0] + q_solution.derivative()(0),
-                                    self.fp.fx_d_spline(t_start)[0][0] + p_solution.derivative()(0)))
+        # Plotting the drone itself
+        if self.ID == self_ID:
+            x0, y0 = self.fp.frenet_to_inertial(p_solution(0)[0], q_solution(0)[0], t_start)
+            
+            self.plot_drone(ax, x0 = x0,
+                            y0 = y0,
+                            theta_c = math.atan2(self.fp.fy_d_spline(t_start)[0][0] + q_solution.derivative()(0),
+                                        self.fp.fx_d_spline(t_start)[0][0] + p_solution.derivative()(0)))
         
         # theta_c = self.fp.fy_d_spline(t_start)[0][0] / self.fp.fx_d_spline(t_start)[0][0] + \
         #                     q_solution.derivative()(0) / p_solution.derivative()(0)
         
         
-        
-        # Plotting the environment
-        ax = self.plot_environment(ax, t_start)
-
-        # Plotting of obstacle
-        for obstacle in self.obstacles:
-            obstacle.plot_obstacle(ax)
+        if self.ID == 0:
+            # Plotting the environment
+            ax = self.plot_environment(ax, t_start)
+    
+            # Plotting of obstacle
+            for obstacle in self.obstacles:
+                obstacle.plot_obstacle(ax)
         
         return t_start, ax
         

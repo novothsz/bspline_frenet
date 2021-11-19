@@ -1935,7 +1935,7 @@ class Group(Environment):
         alpha_bound = [-math.pi/2, math.pi/2]
         
         
-        
+        # Generate obstacles along the way
         obstacles = []
         t_bound = []
         t_tmp = [0.4, 0.6, 0.8]
@@ -1955,7 +1955,8 @@ class Group(Environment):
             # this is done by converting their frenet coordinates to the inertial frame at random times
             obstacle_corners = [self.fp.frenet_to_inertial(corner[0], corner[1], t_tmp[i]) for corner in obstacle_corners]
             obstacles += [Obstacle(ID = i, corners = obstacle_corners)]
-            
+        
+        # Generate gates
         # Okay. We have generated obstacles along the way.
         # Let's generate gates now! :)
         n_obst_gate = 3

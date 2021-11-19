@@ -135,7 +135,9 @@ class VehicleBasis(Environment):
                                   't_real_activation_list' : [],
                                   'current_configuration_position' : [],
                                   'x_update_time' : [],
-                                  'z_update_time' : []
+                                  'z_update_time' : [],
+                                  'a' : [],
+                                  'b' : []
                 }
         self.n_intermediate_ADMM = 1
         self.vehicle_positions_new = {'stage' : [], 'vehicle_positions_new' : []}
@@ -1327,7 +1329,9 @@ class VehicleBasis(Environment):
                                   't_real_activation_list' : [],
                                   'current_configuration_position' : [],
                                   'x_update_time' : [],
-                                  'z_update_time' : []
+                                  'z_update_time' : [],
+                                  'a' : [],
+                                  'b' : []
                 }
         
     def initialize_x(self):
