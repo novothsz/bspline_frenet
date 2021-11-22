@@ -9,6 +9,7 @@ from numpy import interp
 import time
 import csv
 import random
+import copy
 
 from .obstacle import Obstacle
 
@@ -99,8 +100,10 @@ class Group(Environment):
         # We call the function BEFORE the simulation step, therefore to get the correct values for the next iteration, lets add a t_step to the values :)
                 
         # Setting start & end times
-        t_sweep_start = self.vehicles[0].t_start + self.vehicles[0].t_step
-        t_sweep_end = self.vehicles[0].t_end + self.vehicles[0].t_step
+        # t_sweep_start = self.vehicles[0].t_start + self.vehicles[0].t_step
+        # t_sweep_end = self.vehicles[0].t_end + self.vehicles[0].t_step
+        t_sweep_start = self.vehicles[0].t_start
+        t_sweep_end = self.vehicles[0].t_end
         
         
         # Okay, there is actually a little difference compared to the simple sweep:
@@ -109,16 +112,29 @@ class Group(Environment):
             # 3. Update the "current_configuration_position" value so we know with what starting position we want to start the next DFG iteration.
             # 4. We need to replicate (or truncate) the last values of the intermediate list so that the length is consistent. 
 
+        # Clear the history, if this is the first stage still... (because anything we have saved before
+        # is irrelevant)
+        if self.stage == 0:
+            for vehicle in self.vehicles:
+                vehicle.variable_history['x_intermediate_list'] = []
+                # vehicle.variable_history['a_intermediate_list'][-1] = vehicle.a_intermediate_list
+                vehicle.variable_history['t_intermediate_list'] = []
+                vehicle.variable_history['t_real_intermediate_list'] = []
+                
+                
+            
             
         # Step 1: Clear the intermediate lists
         for i, vehicle in enumerate(self.vehicles):
             vehicle.x_intermediate_list = []
+            vehicle.a_intermediate_list = []
             vehicle.t_intermediate_list = []
             vehicle.t_real_intermediate_list = []
             vehicle.t_real_activation_list = []
         
         # Step 2: Sweep
         max_len_x = self.vehicles[0].n_of_saved_waypoints * 3
+        max_len_a = self.vehicles[0].n_of_saved_waypoints * len(self.vehicles[0].obstacles) * 2 
         max_len_t = self.vehicles[0].n_of_saved_waypoints
         
         if self.stage == 13:
@@ -181,33 +197,80 @@ class Group(Environment):
             vehicle.variable_history['current_configuration_position'] += [vehicle.current_configuration_position]
                 
             
+        # Step 3.5: Okay, so we habe the a_intermediate_list
+        # For each obsacle, that is isn't doing any problems for us, put zeros
+        # Otherwise yeah... ;)
+        
+        """
+        for i, vehicle in enumerate(self.vehicles):
+            a_intermediate_list = copy.deepcopy(vehicle.a_intermediate_list)
+            a_intermediate_ID_list = vehicle.a_intermediate_ID_list
+            
+            # Blowing up, just in case :)
+            a_intermediate_list = a_intermediate_list + [0 , 0] * len(self.vehicles[0].obstacles)
+            a_intermediate_ID_list = a_intermediate_ID_list + [0] * len(self.vehicles[0].obstacles)
+            
+            a_intermediate_list_new = []
+            
+            for j in range(len(self.vehicles[0].obstacles)):
+                if j == a_intermediate_ID_list[0]:
+                    a_intermediate_list_new += a_intermediate_list[:2]
+                    a_intermediate_list = a_intermediate_list[2:]
+                    a_intermediate_ID_list = a_intermediate_ID_list[1:]
+                else:
+                    a_intermediate_list_new += [0, 0]
+        """
+                    
+            
+        
+        
+        
         # Step 4: Replication/truncation    
         for i, vehicle in enumerate(self.vehicles):
             x_intermediate_list = vehicle.x_intermediate_list
+            a_intermediate_list = vehicle.a_intermediate_list
             t_intermediate_list = vehicle.t_intermediate_list
             
             current_len_x = len(x_intermediate_list)
+            current_len_a = len(a_intermediate_list)
             current_len_t = len(t_intermediate_list)
             
             # Truncation
             if len(x_intermediate_list) > max_len_x:
                 vehicle.x_intermediate_list = x_intermediate_list[:int((current_len_x-max_len_x)/3)]
+                vehicle.a_intermediate_list = a_intermediate_list[:int((current_len_a-max_len_a)/2)]
                 vehicle.t_intermediate_list = vehicle.t_intermediate_list[:(current_len_t-max_len_t)]
                 vehicle.t_real_intermediate_list = vehicle.t_real_intermediate_list[:(current_len_t-max_len_t)]
                 
             # Replication
             if len(x_intermediate_list) < max_len_x:
                 diff_x = max_len_x - current_len_x
+                diff_a = max_len_a - current_len_a
                 diff_t = max_len_t - current_len_t
                 vehicle.x_intermediate_list = vehicle.x_intermediate_list + vehicle.x_intermediate_list[-3:] * int(diff_x/3)
+                vehicle.a_intermediate_list = vehicle.a_intermediate_list + vehicle.a_intermediate_list[-2:] * int(diff_a/2)
+                
+                
+                if max_len_a != len(vehicle.a_intermediate_list):
+                    kappa = True
+                    print('Baj van főnök!')
+                
+                
                 vehicle.t_intermediate_list = vehicle.t_intermediate_list + [vehicle.t_intermediate_list[-1]] * diff_t
                 vehicle.t_real_intermediate_list = vehicle.t_real_intermediate_list + [vehicle.t_real_intermediate_list[-1]] * diff_t
+                
+                
+            
             
             assert max_len_x == len(vehicle.x_intermediate_list)
+            if max_len_a != len(vehicle.a_intermediate_list):
+                kappa = True
+            # assert max_len_a == len(vehicle.a_intermediate_list)
             assert max_len_t == len(vehicle.t_intermediate_list)
             
             # Updating the intermediate lists with value, that have the correct length.
             vehicle.variable_history['x_intermediate_list'][-1] = vehicle.x_intermediate_list
+            # vehicle.variable_history['a_intermediate_list'][-1] = vehicle.a_intermediate_list
             vehicle.variable_history['t_intermediate_list'][-1] = vehicle.t_intermediate_list
             vehicle.variable_history['t_real_intermediate_list'][-1] = vehicle.t_real_intermediate_list
             # We don't do anything with this... Probably we shouldn't even, because of Step 3.
@@ -299,6 +362,8 @@ class Group(Environment):
                     all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, np.array(self.get_scaled_obstacle_corners(t_danger_end))[obstacle_idx].tolist())
                     if collision == False:
                         # this is the t_danger_end we were looking for
+                        
+                        # This line isn't even doing anything...
                         self.check_danger_zone_with_obstacles(vehicle_positions, np.array(self.get_scaled_obstacle_corners(t_danger_end))[obstacle_idx].tolist())
                         break
                     
@@ -357,6 +422,60 @@ class Group(Environment):
                             vehicle.t_real_intermediate_list += [t]
                             vehicle.t_real_activation_list += [[t_danger_start, t_danger_end]]
                             # vehicle.variable_history['t_intermediate_list'] += [t_local]
+                            
+                            # Okay... So if ACTION_TAKE == "yes", that means, that an obstacle has triggered DFG
+                            # and an intermediate way-point was created.
+                            # We would want to associate a hyperplane direction to this time and obstacle
+                            
+                            if ACTION_TAKEN == "back_transformation":
+                                pass
+                            
+                            if ACTION_TAKEN == "yes":
+                                # assume, that only a single obstacle is causing trouble... (for simplicity)
+                                obst_ID = obstacle_idx[0]
+                                
+                                # - outside or inside the formation?
+                                obstacle_corners = np.array(self.get_scaled_obstacle_corners(t))[obst_ID].tolist()
+                                point = [vehicle_positions[i][0], vehicle_positions[i][1]]
+                                inside = self.check_point_inside(point, obstacle_corners)
+                                
+                                # Okay, so the normal vector of the hyperplane points from the obstacle to 
+                                # the vehicle.
+                                # If the obstacle is inside the formation, that means, that the normal vector
+                                # should point "away" from the from the Frenet center
+                                # Okay, and how do we decide, in which direction? "upward" or "downward"?
+                                # Well, if x_intermediate[0] > 0, then upward, otherwise downward.
+                                if inside:
+                                    if point[1] > 0:
+                                        a = [0, 1]
+                                    elif point[1] < 0:
+                                        a = [0,-1]
+                                    else:
+                                        raise Exception("Azt hogy? :D")
+                                # If the obstacle is outside the formation, then a_n should point "inwards", in the 
+                                # direction of the Frenet center
+                                else:
+                                    if point[1] > 0:
+                                        a = [0, 1]
+                                    elif point[1] < 0:
+                                        a = [0,-1]
+                                    else:
+                                        raise Exception("Azt hogy? :D")
+                                        
+                                        
+                                # Okay. So for this specific obstacle, we add a, and [0, 0] for the others.
+                                for obst_i in range(len(self.vehicles[0].obstacles)):
+                                    if obst_i == obst_ID:
+                                        vehicle.a_intermediate_list += a
+                                        vehicle.a_intermediate_ID_list += [obst_ID]
+                                    else:
+                                        vehicle.a_intermediate_list += [0, 0]
+                                        vehicle.a_intermediate_ID_list += ["[0, 0]"]
+                                        
+                                
+                                    
+                                    
+                                
                         
                     elif self.MPC_version == False or self.MPC_version == True:
                         for i, vehicle in enumerate(self.vehicles):
@@ -388,47 +507,7 @@ class Group(Environment):
         # print(self.vehicles[0].x_intermediate_list)
         
         tmp_len = len(self.vehicles[0].t_intermediate_list)
-        
-        "What the hell is this code below?"
-        """
-        
-        # if we are right at the end OR no intermediate values have been generated during the sweep
-        if t_end >= t_sweep_end - self.TOL or self.vehicles[0].t_intermediate_list == []:
-            
-            
-            # If we are right at the end AND we did generate some intermediate values?
-            if tmp_len > 0:
-                print("If we haven't generated ")
-                # if self.vehicles[0].t_intermediate_list[-1] + 0.1 < t_sweep_end:
-                # If we have put down an intermediate value, but for the next t_wait = 0.5 (half the local horizon)
-                # we haven't put down any more, then we can return to the original formation at the end of the interval.
-                
-                
-                t_wait = 0.5
-                if interp(self.vehicles[0].t_intermediate_list[-1] + t_wait,[0,1], [t_sweep_start,t_sweep_end]) < t_sweep_end:
-                    for i, vehicle in enumerate(self.vehicles):
-                        vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]
-                        # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
-                        t_local = interp(t_sweep_end,[t_sweep_start,t_sweep_end],[0,1])
-                        vehicle.t_intermediate_list += [t_local]
-                        vehicle.t_real_intermediate_list += [t_sweep_end]
-                
-                        
-                        
-                        # vehicle.variable_history['t_intermediate_list'] += [1]
-            # if no intermediate values have been generated during the sweep
-            else:
-                """
-                
-        # if tmp_len != 0:
-        #     # Repeat the last formation configuration at the end of the local time horizon. We can do this, because we can.
-        #     for i, vehicle in enumerate(self.vehicles):
-        #         vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
-        #         # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
-        #         t_local = interp(t_sweep_end,[t_sweep_start,t_sweep_end],[0,1])
-        #         vehicle.t_intermediate_list += [t_local]
-        #         vehicle.t_real_intermediate_list += [t_sweep_end]
-            
+
                 
                 
         if tmp_len == 0:
@@ -436,6 +515,7 @@ class Group(Environment):
             # then we can set the original configuraiton back
             for i, vehicle in enumerate(self.vehicles):
                 vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], self.cum_rotation]
+                vehicle.a_intermediate_list += [0, 0] * len(vehicle.obstacles)
                 # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
                 t_local = interp(t_sweep_end,[t_sweep_start,t_sweep_end],[0,1])
                 vehicle.t_intermediate_list += [t_local]
@@ -1171,6 +1251,29 @@ class Group(Environment):
         
         return scaled_vector
     
+    def check_point_inside(self, point, obstacle_corners):
+        
+        # 1. Obtain obstacle center
+        obst_center = self.get_obstacle_center(obstacle_corners)
+        # 1.5 Moove the point to the center (and also moove the obstacle corners with it)
+        corners = [ [corner[0] - point[0], corner[1] - point[1]] for corner in obstacle_corners  ]
+        # 2. Transform obstacle & circle
+        corners = [ [corner[0] - obst_center[0], corner[1] - obst_center[1]] for corner in corners  ]
+        d_zone_center = [-obst_center[0], -obst_center[1]]
+        # 3. calculate angle of obstacle
+        obst_angle = self.get_obstacle_angle(corners)
+        # 4. rotate obstacle & circle
+        new_corners = self.rotate_formation(corners, -obst_angle)
+        new_d_zone_center = self.rotate_formation([d_zone_center], -obst_angle)
+        # 5. check intersection
+        s_danger = 0.0
+        inside = self.intersects([list(new_d_zone_center[0]), s_danger], new_corners)
+        
+            
+        return inside
+            
+        
+    
     def check_danger_zone_with_obstacles(self, vehicle_positions, obstacle_corners):
         any_inside = []
         
@@ -1208,7 +1311,6 @@ class Group(Environment):
         for corners in obstacle_corners:
             # 1. Obtain obstacle center
             obst_center = self.get_obstacle_center(corners)
-            
             # 2. Transform obstacle & circle
             corners = [ [corner[0] - obst_center[0], corner[1] - obst_center[1]] for corner in corners  ]
             d_zone_center = [-obst_center[0], -obst_center[1]]

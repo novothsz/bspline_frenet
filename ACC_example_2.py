@@ -210,6 +210,8 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         
         group.set_var({'stage': i})
         for j in range(n_intermediate_ADMM):
+            
+            group.ACC_MPC_t_param()
             group.solve()
             # group.frenet_plotter(iternum = j, seed = seed)
             group.set_simulation(False)
@@ -225,14 +227,14 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
               
         # import time
         # t_peni_mpc = time.time()
-        if new_version == False:
-            group.intermediate_position_generator_PENI_MPC()
-        else:
-            # group.ACC_MPC()
-            # print("Stage == " + str(group.stage))
-            # if group.stage == 7:
-            #     kappa = True
-            group.ACC_MPC_t_param()
+        # if new_version == False:
+        #     group.intermediate_position_generator_PENI_MPC()
+        # else:
+        #     # group.ACC_MPC()
+        #     # print("Stage == " + str(group.stage))
+        #     # if group.stage == 7:
+        #     #     kappa = True
+        #     group.ACC_MPC_t_param()
         # print('peni intermediate time: ' + str(time.time() - t_peni_mpc))
         # group.intermediate_position_generator()
         # group.frenet_plotter(iternum = i, seed = seed)

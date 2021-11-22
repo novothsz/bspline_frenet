@@ -349,6 +349,10 @@ class Vehicle(VehicleBasis):
         q_dot = pq_dot[1]
         # phi_dot = pq_dot[2]
         
+        t_intermediate_idx = [] # In this list we save the indices of t_intermediate casadi variables, which are created in one loop 
+        # (for way-points) but which we also want to use in another loop (when we specify the normal vector of the hyperplanes)
+        # The indices are w.r.t to the self.P list.
+        
         
         # Initial position constraint on y
         self.define_constraint(y,
@@ -428,7 +432,7 @@ class Vehicle(VehicleBasis):
                 self.P0 += [np.cos(self.x_intermediate_list[2]).tolist()]
                 self.P0 += [np.sin(self.x_intermediate_list[2]).tolist()]
                 t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += [self.t_intermediate_list[i]]
-                
+                t_intermediate_idx += [len(self.P) - 1]
                 # "Cost-function version"
                 # lambda_ = np.power(np.linspace(1, 0, n), 1)
                 # self.J += self.rho_intermediate * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
@@ -444,7 +448,7 @@ class Vehicle(VehicleBasis):
                                         constraint_type='time',
                                         name=["pq_intermediate" + str(i)] * 2)
                 
-                                # constraint on phi at t_intermediate
+                # constraint on phi at t_intermediate
                 self.define_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
                                         [0], # self.slack, # 
                                         [5 / 360 * math.pi * 2],
@@ -482,7 +486,7 @@ class Vehicle(VehicleBasis):
         else:
             raise NotImplementedError()
             
-            
+        # At the end we should have horizontal speed (or at least no vertical :) )
         self.define_constraint([q_dot],
                                [0],
                                [0],
@@ -563,9 +567,35 @@ class Vehicle(VehicleBasis):
                 
                 obst_corners += [corner1, corner2, corner3, corner4]
             
-                self.collision_avoidance_hyperplane([p, q], obst_corners,
+                a = self.collision_avoidance_hyperplane([p, q], obst_corners,
                                                     radious=self.radious * 1, name="obst_" + str(i),
                                                     constraint_type='obstacle')
+                
+                # Okay boss! Let's implement this hyperplane intermediate suggestion thingy.
+                n = self.n_of_saved_waypoints
+                for i, t_intermediate in enumerate(self.t_intermediate_list):
+                    idx = np.arange(2*i,2*i+2)
+                    # Define the parameter
+                    a_intermediate = MX.sym('a_intermediate', int(2)); self.P += [a_intermediate]; self.P_list += ['a_intermediate'] * int(2);
+                    self.P0 += np.array(self.a_intermediate_list)[:2].tolist()
+                    # t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += [self.t_intermediate_list[i]]
+                    t_intermediate = self.P[t_intermediate_idx[i]]
+                    
+                    # constraint on a at t_intermediate
+                    vec1 = [a[0](t_intermediate), a[1](t_intermediate)]
+                    vec2 = a_intermediate[:2]
+                    
+                    def cross_product(spline1, spline2):
+                        a1, a2 = spline1[0], spline1[1]
+                        b1, b2 = spline2[0], spline2[1]
+                        return a1 * b2 - a2 * b1
+            
+                    cr_product = cross_product(vec1, vec2)
+                    self.define_constraint([cr_product], # if we we don't want the constraint to be active, we can just set the parameters to (0, 0))
+                                            [0 - self.slack],
+                                            [0 + self.slack],
+                                            constraint_type='time',
+                                            name=["a_intermediate" + str(i)] * 1)
             
         # Collision avoidance with obstacles (time-sampling based)
         else:
@@ -1171,7 +1201,7 @@ class Vehicle(VehicleBasis):
     def plot_moovie_frames_mooving_horizon(self, ax, horizon_num):
         t_steps = 100     
         self_ID = 3
-        obst_ID = 6
+        obst_ID = 0
         horizon_num_original = int(horizon_num)    
         horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
         # Creating the splines
@@ -1301,6 +1331,8 @@ class Vehicle(VehicleBasis):
                 if i == 0 or i == len(t) -1:
                     # We are in the frenet frame, local time
                     # a1_, a2_, b_ = a1(t_pq)[0], a2(t_pq)[0], b(t_pq)[0]
+                    
+                    # Here we just shrink the length of the line nothing to worry about :)
                     shrink = 0.01
                     x1 = np.linspace(-3 + i * shrink, 3 - i * shrink, 100)
                     if a2(t_pq) == 0:
@@ -1317,14 +1349,28 @@ class Vehicle(VehicleBasis):
                         
                     # Nice ;)
                     # Let us now plot the lines
+                    # Only plotting the beginning :)
                     if i == 0:
                         ax.plot(x1_inertial, x2_inertial, c = c[i], zorder = 0)
                         kappa = True
                 i += 1
             
+            # Only plotting the end
             ax.plot(x1_inertial, x2_inertial, c = c[i-1], zorder = 0)
                   
-                    
+            t_intermediate = self.variable_history['t_intermediate_list'][horizon_num]
+            t_real_intermediate = self.variable_history['t_real_intermediate_list'][horizon_num]
+            for t_, t_real_ in zip(t_intermediate, t_real_intermediate):
+                # Plotting a specific time
+                x1 = np.linspace(-2, 2, 100)
+                x2 = (b(t_) - a1(t_) * x1) / a2(t_)
+                x1_inertial, x2_inertial = [], []
+                for x1_, x2_ in zip(x1, x2):
+                    # t_global = interp(t,[t_sweep_start,t_sweep_end],[0,1])
+                    x1_tmp, x2_tmp = self.fp.frenet_to_inertial(x1_, x2_, t_real_)
+                    x1_inertial += [x1_tmp]
+                    x2_inertial += [x2_tmp]
+                ax.plot(x1_inertial, x2_inertial, 'k', zorder = 0)
                 
                
         

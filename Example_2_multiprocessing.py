@@ -153,7 +153,7 @@ n_intermediate_ADMM = 1
 "n_steps = math.floor(1 / group.vehicles[0].t_step)"
 # n_steps = 10
 group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
-group.set_var({'t_step': 0.01})
+group.set_var({'t_step': 0.04})
 group.set_var({'t_window_size': 0.2})
 group.set_var({'t_end': 0 + 0.2})
 group.set_var({'knot_intervals': 5})
@@ -245,6 +245,7 @@ if __name__ == '__main__':
             group.set_var({'stage': i})
             for j in range(n_intermediate_ADMM):
             
+                group.ACC_MPC_t_param()
                 "x update"
                 for i in range(4):
                     group.vehicles[i] = group.vehicles[i].x_update_prior()
@@ -300,7 +301,6 @@ if __name__ == '__main__':
             t_iter = time.time()
             
             
-            group.ACC_MPC_t_param()
             group.simulation_step()
             
     group.write_iteration_times(prefix = 'multi_core_')
