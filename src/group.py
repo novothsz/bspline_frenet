@@ -117,7 +117,7 @@ class Group(Environment):
         if self.stage == 0:
             for vehicle in self.vehicles:
                 vehicle.variable_history['x_intermediate_list'] = []
-                # vehicle.variable_history['a_intermediate_list'][-1] = vehicle.a_intermediate_list
+                vehicle.variable_history['a_intermediate_list'] = []
                 vehicle.variable_history['t_intermediate_list'] = []
                 vehicle.variable_history['t_real_intermediate_list'] = []
                 
@@ -235,6 +235,8 @@ class Group(Environment):
             current_len_a = len(a_intermediate_list)
             current_len_t = len(t_intermediate_list)
             
+            single_len_a = len(self.vehicles[0].obstacles) * 2 
+            
             # Truncation
             if len(x_intermediate_list) > max_len_x:
                 vehicle.x_intermediate_list = x_intermediate_list[:int((current_len_x-max_len_x)/3)]
@@ -248,7 +250,7 @@ class Group(Environment):
                 diff_a = max_len_a - current_len_a
                 diff_t = max_len_t - current_len_t
                 vehicle.x_intermediate_list = vehicle.x_intermediate_list + vehicle.x_intermediate_list[-3:] * int(diff_x/3)
-                vehicle.a_intermediate_list = vehicle.a_intermediate_list + vehicle.a_intermediate_list[-2:] * int(diff_a/2)
+                vehicle.a_intermediate_list = vehicle.a_intermediate_list + vehicle.a_intermediate_list[-single_len_a:] * int(diff_a/single_len_a)
                 
                 
                 if max_len_a != len(vehicle.a_intermediate_list):
@@ -270,7 +272,7 @@ class Group(Environment):
             
             # Updating the intermediate lists with value, that have the correct length.
             vehicle.variable_history['x_intermediate_list'][-1] = vehicle.x_intermediate_list
-            # vehicle.variable_history['a_intermediate_list'][-1] = vehicle.a_intermediate_list
+            vehicle.variable_history['a_intermediate_list'][-1] = vehicle.a_intermediate_list
             vehicle.variable_history['t_intermediate_list'][-1] = vehicle.t_intermediate_list
             vehicle.variable_history['t_real_intermediate_list'][-1] = vehicle.t_real_intermediate_list
             # We don't do anything with this... Probably we shouldn't even, because of Step 3.
@@ -432,13 +434,24 @@ class Group(Environment):
                             
                             if ACTION_TAKEN == "yes":
                                 # assume, that only a single obstacle is causing trouble... (for simplicity)
-                                obst_ID = obstacle_idx[0]
+                                obstacle_idx[0]
+                                obst_ID = self.vehicles[0].obstacles[obstacle_idx[0]].ID
+                                
                                 
                                 # - outside or inside the formation?
-                                obstacle_corners = np.array(self.get_scaled_obstacle_corners(t))[obst_ID].tolist()
+                                obstacle_corners = np.array(self.get_obstacle_corners(t))[obstacle_idx[0]].tolist()
                                 point = [vehicle_positions[i][0], vehicle_positions[i][1]]
                                 inside = self.check_point_inside(point, obstacle_corners)
                                 
+                                a_hyp_direction = point[1] - obstacle_corners[0][1]
+                                
+                                if a_hyp_direction > 0:
+                                    a = [0, 1]
+                                else:
+                                    a = [0, -1]
+                                
+                                
+                                """
                                 # Okay, so the normal vector of the hyperplane points from the obstacle to 
                                 # the vehicle.
                                 # If the obstacle is inside the formation, that means, that the normal vector
@@ -456,21 +469,43 @@ class Group(Environment):
                                 # direction of the Frenet center
                                 else:
                                     if point[1] > 0:
-                                        a = [0, 1]
+                                        a = [0, -1]
+                                        # a = [1, 0]
                                     elif point[1] < 0:
-                                        a = [0,-1]
+                                        a = [0, 1]
+                                        # a = [-1,0]
                                     else:
                                         raise Exception("Azt hogy? :D")
+                                """
                                         
+                                # If this is a gate, then it has a pair. Let's get its ID as well
+                                gate_pair_exists = False
+                                gate_pair_ID = []
+                                for obst in self.vehicles[0].obstacles:
+                                    if obst.ID == obst_ID:
+                                        if obst.gate_pair_ID != []:
+                                            gate_pair_exists = True
+                                            gate_pair_ID = obst.gate_pair_ID
+                                        else:
+                                            gate_pair_exists = False
+                                            gate_pair_ID = obst.gate_pair_ID
+                                            
+                                
                                         
                                 # Okay. So for this specific obstacle, we add a, and [0, 0] for the others.
-                                for obst_i in range(len(self.vehicles[0].obstacles)):
-                                    if obst_i == obst_ID:
+                                for obst in self.vehicles[0].obstacles:
+                                    if obst.ID == obst_ID:
                                         vehicle.a_intermediate_list += a
-                                        vehicle.a_intermediate_ID_list += [obst_ID]
+                                        vehicle.a_intermediate_ID_list += [ int(obst_ID * (obst.ID == obst_ID)) + int(obst_ID * (obst.gate_pair_ID == obst_ID))]
+                                    elif (gate_pair_exists and gate_pair_ID == obst.ID):
+                                        vehicle.a_intermediate_list += [-a[0], -a[1]]
+                                        vehicle.a_intermediate_ID_list += [ int(obst_ID * (obst.ID == obst_ID)) + int(obst_ID * (obst.gate_pair_ID == obst_ID))]
                                     else:
                                         vehicle.a_intermediate_list += [0, 0]
                                         vehicle.a_intermediate_ID_list += ["[0, 0]"]
+                                        
+                                        
+                                kappa = True
                                         
                                 
                                     
@@ -526,6 +561,7 @@ class Group(Environment):
         # Saving stuff to the history
         for i, vehicle in enumerate(self.vehicles):
             vehicle.variable_history['x_intermediate_list'] += [vehicle.x_intermediate_list]
+            vehicle.variable_history['a_intermediate_list'] += [vehicle.a_intermediate_list]
             vehicle.variable_history['t_intermediate_list'] += [vehicle.t_intermediate_list]
             vehicle.variable_history['t_real_intermediate_list'] += [vehicle.t_real_intermediate_list]
             vehicle.variable_history['t_real_activation_list'] += [vehicle.t_real_activation_list]
@@ -2026,7 +2062,7 @@ class Group(Environment):
         t_free_end = 0.2
         
         
-        n_obst_along = 3
+        n_obst_along = 0
         random.seed(seed)
         centerpoint_x_bound = [-0.1, 0.1]
         centerpoint_y_bound = [-0.1, 0.1]
@@ -2063,7 +2099,7 @@ class Group(Environment):
         # Let's generate gates now! :)
         n_obst_gate = 3
         gate_gap_bound = [3.5 * self.vehicles[0].radious, 10 * self.vehicles[0].radious]
-        gate_length_bound = 0.3
+        gate_length_bound = 0.3 # 0.3
         
         
         # obstacles = []
@@ -2083,12 +2119,17 @@ class Group(Environment):
             g1 = [list(self.fp.frenet_to_inertial(corner[0], corner[1], t_tmp[i])) for corner in gate1_inside_corners]
             g2 = [list(self.fp.frenet_to_inertial(corner[0], corner[1], t_tmp[i])) for corner in gate2_inside_corners]
             
-            # Extending till the edge of the environment
-            g1 = g1 + [[g1[-1][0], -6]] + [[g1[0][0], -6]]
-            g2 = g2 + [[g2[-1][0],  6]] + [[g2[0][0],  6]]
-            obstacles += [Obstacle(ID = 3+i*2, corners = g1)]
-            obstacles += [Obstacle(ID = 3+i*2 + 1, corners = g2)]
-            
+            if i == 0:
+                pass
+            else:
+                # Extending till the edge of the environment
+                g1 = g1 + [[g1[-1][0], -6]] + [[g1[0][0], -6]]
+                g2 = g2 + [[g2[-1][0],  6]] + [[g2[0][0],  6]]
+                obstacles += [Obstacle(ID = 3+i*2, corners = g1)]
+                obstacles += [Obstacle(ID = 3+i*2 + 1, corners = g2)]
+                # Sharing ID-s between gate pairs
+                obstacles[-2].gate_pair_ID = obstacles[-1].ID
+                obstacles[-1].gate_pair_ID = obstacles[-2].ID
         
         # plt.figure()
         # for pos in ellipse_corners:

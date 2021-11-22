@@ -132,6 +132,7 @@ class VehicleBasis(Environment):
                                   't_end' : [],
                                   'xf': [],
                                   'x_intermediate_list' : [],
+                                  'a_intermediate_list' : [],
                                   't_intermediate_list' : [],
                                   't_real_intermediate_list' : [],
                                   't_real_activation_list' : [],
@@ -926,6 +927,7 @@ class VehicleBasis(Environment):
                                 initial_value = [[1, -1], [0, 0]],
                                 # name = ["a"+ str(i) for i in range(len(splines))])
                                 name = ["a"] * self.n_dimensions_old)
+        # a_idx = [len(self.P) - 2, len(self.P) - 1]
 
         # b
         b = self.define_MX_spline(degree = 3, knot_intervals = self.knot_intervals, n_spl = 1,
@@ -1327,6 +1329,7 @@ class VehicleBasis(Environment):
                                   't_end' : [],
                                   'xf': [],
                                   'x_intermediate_list' : [],
+                                  'a_intermediate_list' : [],
                                   't_intermediate_list' : [],
                                   't_real_intermediate_list' : [],
                                   't_real_activation_list' : [],

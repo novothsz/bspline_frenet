@@ -377,16 +377,16 @@ class Vehicle(VehicleBasis):
                 self.define_constraint([p(t_intermediate) - x_intermediate[0],
                                         q(t_intermediate) - x_intermediate[1],
                                         phi(t_intermediate) - x_intermediate[2]],
-                                        [0.0 - self.radious * 1, 0.0 - self.radious * 1, 0.0 - 0.1],
-                                        [0.0 + self.radious * 1, 0.0 + self.radious * 1, 0.0 + 0.1],
+                                        [0.0 - self.radious * 2, 0.0 - self.radious * 2, 0.0 - 0.1],
+                                        [0.0 + self.radious * 2, 0.0 + self.radious * 2, 0.0 + 0.1],
                                         constraint_type='time',
                                         name=["guidence" + str(i)] * 1)
                 if t_intermediate == 1:
                     self.define_constraint([p(t_intermediate) - x_intermediate[0],
                                             q(t_intermediate) - x_intermediate[1],
                                             phi(t_intermediate) - x_intermediate[2]],
-                                            [0.0 - self.slack, 0.0 - self.slack, 0.0 - self.slack],
-                                            [0.0 + self.slack, 0.0 + self.slack, 0.0 + self.slack],
+                                            [0.0 - self.radious * 2, 0.0 - self.radious * 2, 0.0 - 0.1],
+                                            [0.0 + self.radious * 2, 0.0 + self.radious * 2, 0.0 + 0.1],
                                             constraint_type='time',
                                             name=["guidence" + str(i)] * 1)
                     
@@ -538,6 +538,7 @@ class Vehicle(VehicleBasis):
                                     constraint_type='time',
                                     name=["q_dot_max"])
             
+        a_list = []
         # Collision avoidance with obstacles (coefficient based)
         if self.MPC_version == 'MPC_param':
             # We have a different collision-avoidance constraint if we are using the MPC_param version.
@@ -567,35 +568,11 @@ class Vehicle(VehicleBasis):
                 
                 obst_corners += [corner1, corner2, corner3, corner4]
             
-                a = self.collision_avoidance_hyperplane([p, q], obst_corners,
+                tmp_a = self.collision_avoidance_hyperplane([p, q], obst_corners,
                                                     radious=self.radious * 1, name="obst_" + str(i),
                                                     constraint_type='obstacle')
+                a_list += [tmp_a]
                 
-                # Okay boss! Let's implement this hyperplane intermediate suggestion thingy.
-                n = self.n_of_saved_waypoints
-                for i, t_intermediate in enumerate(self.t_intermediate_list):
-                    idx = np.arange(2*i,2*i+2)
-                    # Define the parameter
-                    a_intermediate = MX.sym('a_intermediate', int(2)); self.P += [a_intermediate]; self.P_list += ['a_intermediate'] * int(2);
-                    self.P0 += np.array(self.a_intermediate_list)[:2].tolist()
-                    # t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += [self.t_intermediate_list[i]]
-                    t_intermediate = self.P[t_intermediate_idx[i]]
-                    
-                    # constraint on a at t_intermediate
-                    vec1 = [a[0](t_intermediate), a[1](t_intermediate)]
-                    vec2 = a_intermediate[:2]
-                    
-                    def cross_product(spline1, spline2):
-                        a1, a2 = spline1[0], spline1[1]
-                        b1, b2 = spline2[0], spline2[1]
-                        return a1 * b2 - a2 * b1
-            
-                    cr_product = cross_product(vec1, vec2)
-                    self.define_constraint([cr_product], # if we we don't want the constraint to be active, we can just set the parameters to (0, 0))
-                                            [0 - self.slack],
-                                            [0 + self.slack],
-                                            constraint_type='time',
-                                            name=["a_intermediate" + str(i)] * 1)
             
         # Collision avoidance with obstacles (time-sampling based)
         else:
@@ -612,6 +589,34 @@ class Vehicle(VehicleBasis):
                                                     radious=self.radious, name="obst_" + str(i),
                                                     constraint_type='spline_obstacle_param',
                                                     n_samples=self.t_resolution_length)
+                
+        
+        # Okay boss! Let's implement this hyperplane intermediate suggestion thingy.
+        n = self.n_of_saved_waypoints
+        for i, t_intermediate in enumerate(self.t_intermediate_list):
+            for j, obstacle in enumerate(self.obstacles):
+            # idx = np.arange(2*i,2*i+2)
+            # Define the parameter
+                a_intermediate = MX.sym('a_intermediate', int(2)); self.P += [a_intermediate]; self.P_list += ['a_intermediate_obst_' + str(j) + 't_idx_' + str(i)] * int(2);
+                self.P0 += np.array(self.a_intermediate_list)[:2].tolist()
+                # t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += [self.t_intermediate_list[i]]
+                t_intermediate = self.P[t_intermediate_idx[i]]
+                a = a_list[j]
+                # constraint on a at t_intermediate
+                vec1 = [a[0](t_intermediate), a[1](t_intermediate)]
+                vec2 = a_intermediate[:2]
+                
+                def cross_product(spline1, spline2):
+                    a1, a2 = spline1[0], spline1[1]
+                    b1, b2 = spline2[0], spline2[1]
+                    return a1 * b2 - a2 * b1
+        
+                cr_product = cross_product(vec1, vec2)
+                self.define_constraint([cr_product], # if we we don't want the constraint to be active, we can just set the parameters to (0, 0))
+                                        [0 - self.slack],
+                                        [0 + self.slack],
+                                        constraint_type='time',
+                                        name=["a_intermediate" + str(i)] * 1)
             
         # Cost for extra acceleration in the frenet frame
         cost = 0
@@ -714,6 +719,8 @@ class Vehicle(VehicleBasis):
         DvX = self.DvX
         PvX = self.PvX
         
+        self_ID = 2
+        obst_IDX = 1
         
         if self.stage == 4:
             kappa = True
@@ -742,7 +749,7 @@ class Vehicle(VehicleBasis):
         p = BSpline(basis, np.zeros(len(basis)))
         q = BSpline(basis, np.zeros(len(basis)))
         t = np.linspace(0.001, 1-0.001, 100)
-        if self.ID == 0:    
+        if self.ID == self_ID:    
             
             
             # Colors
@@ -841,11 +848,16 @@ class Vehicle(VehicleBasis):
             
             ax.plot(p, q, 'ko',alpha = 0.1)
         
-        if self.ID == 3:
+        if self.ID == self_ID:
             # plot hyperplanes
-            a1_coeffs = np.array(DvX.a)[np.arange(0, len(basis))]
-            a2_coeffs = np.array(DvX.a)[np.arange(len(basis), len(basis)*2)]
-            b_coeffs = np.array(DvX.b)[np.arange(0, len(basis))]
+            
+            a1_coeffs = np.array(DvX.a)[np.arange(len(basis)*2*(obst_IDX) + 0, len(basis)*2*(obst_IDX) + len(basis))]
+            a2_coeffs = np.array(DvX.a)[np.arange(len(basis)*2*(obst_IDX) + len(basis), len(basis)*2*(obst_IDX) + len(basis) * 2)]
+            b_coeffs = np.array(DvX.b)[np.arange(len(basis)*1*(obst_IDX) + 0, len(basis)*1*(obst_IDX) + len(basis))]
+            
+            # a1_coeffs = np.array(DvX.a)[np.arange(0, len(basis))]
+            # a2_coeffs = np.array(DvX.a)[np.arange(len(basis), len(basis)*2)]
+            # b_coeffs = np.array(DvX.b)[np.arange(0, len(basis))]
             
             
             a1 = BSpline(basis, a1_coeffs)
@@ -1200,8 +1212,8 @@ class Vehicle(VehicleBasis):
     
     def plot_moovie_frames_mooving_horizon(self, ax, horizon_num):
         t_steps = 100     
-        self_ID = 3
-        obst_ID = 0
+        self_ID = 0
+        obst_IDX = 1
         horizon_num_original = int(horizon_num)    
         horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
         # Creating the splines
@@ -1222,12 +1234,6 @@ class Vehicle(VehicleBasis):
             
             
         assert not((self.t_step * 100) % 1)
-        # idx = int(100 * self.t_step * 1 / self.t_window_size + 1) # int(1 / self.t_step - 1)
-        # print("idx_old:" + str(idx))
-        # idx = int(100 - abs(self.t_step - t_start) / (t_end - t_start))
-        # print("idx_new:" + str(idx))
-        # idx = int((self.t_step + t_start) * (100))
-        # print("idx_new:" + str(idx))
         
         # This is so that we can plot the part of the trajectory, which will be covered during the next simulation step, with one color,
         # and the remainder with a different color. (Black and cornflowerblue respectively.)
@@ -1247,34 +1253,7 @@ class Vehicle(VehicleBasis):
             ax.plot(x_t[idx:], y_t[idx:], c = 'cornflowerblue',lw=0.8,alpha = 0.5, zorder = 3)
         # horizon_num_original = horizon_num
         
-        # Plotting intermediate positions??
-        # why is there two versions down here??
-        # Maybe this is not needed anymore -->
-        if self.vehicle_positions_new['vehicle_positions_new'] != []:
-            if self.vehicle_positions_new['vehicle_positions_new'][horizon_num_original] != []:
-                # ax.plot(x_t[-1], y_t[-1], 'go', markersize = 1, zorder = 3)
-                # print(horizon_num_original)
-                
-                x_, y_ = self.fp.frenet_to_inertial(self.vehicle_positions_new['vehicle_positions_new'][horizon_num_original][0], 
-                                                    self.vehicle_positions_new['vehicle_positions_new'][horizon_num_original][1],
-                                                    t_end)
-                ax.plot(x_,
-                        y_,
-                        'ro', markersize = 2, zorder = 4)
-            else:
-                # ax.plot(x_t[-1], y_t[-1], 'ro', markersize = 1, zorder = 3)
-                # ax.plot(self.xf[0], self.xf[1], 'go', markersize = 1, zorder = 3)
-                # x_, y_ = self.fp.frenet_to_inertial(self.variable_history['xf'][horizon_num_original][0], 
-                #                                     self.variable_history['xf'][horizon_num_original][1],
-                #                                     t_end)
-                x_, y_ = self.fp.frenet_to_inertial(self.variable_history['xf'][horizon_num][0], 
-                                                    self.variable_history['xf'][horizon_num][1],
-                                                    t_end)
-                ax.plot(x_,
-                        y_
-                        , 'go', markersize = 2, zorder = 4)
-                
-        # And perhaps we only use this! -->
+        # Plotting intermediate positions
         for i in range(len(self.variable_history['t_real_intermediate_list'][horizon_num_original])): 
             idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
             idx = np.arange(3*i,3*i+3)
@@ -1307,15 +1286,9 @@ class Vehicle(VehicleBasis):
             t = np.linspace(0.001, 1-0.001, 100)
             DvX_a = self.variable_history['a'][horizon_num]
             DvX_b = self.variable_history['b'][horizon_num]
-            # print(len(DvX_a))
-            # print(np.arange(len(basis)*2*(6 + 0), len(basis)*2*(6 + 1)))
-            a1_coeffs = np.array(DvX_a)[np.arange(len(basis)*2*(obst_ID) + 0, len(basis)*2*(obst_ID) + len(basis))]
-            # print(len(a1_coeffs))
-            # print(len(np.arange(len(basis)*2*(6 + 0), len(basis)*2*(6 + 1))))
-            # print(horizon_num)
-            # print(np.arange(len(basis)*2*(6 + 1), len(basis)*2*(6 + 2)))
-            a2_coeffs = np.array(DvX_a)[np.arange(len(basis)*2*(obst_ID) + len(basis), len(basis)*2*(obst_ID) + len(basis) * 2)]
-            b_coeffs = np.array(DvX_b)[np.arange(len(basis)*1*(obst_ID) + 0, len(basis)*1*(obst_ID) + len(basis))]
+            a1_coeffs = np.array(DvX_a)[np.arange(len(basis)*2*(obst_IDX) + 0, len(basis)*2*(obst_IDX) + len(basis))]
+            a2_coeffs = np.array(DvX_a)[np.arange(len(basis)*2*(obst_IDX) + len(basis), len(basis)*2*(obst_IDX) + len(basis) * 2)]
+            b_coeffs = np.array(DvX_b)[np.arange(len(basis)*1*(obst_IDX) + 0, len(basis)*1*(obst_IDX) + len(basis))]
             
             
             a1 = BSpline(basis, a1_coeffs)
@@ -1328,7 +1301,8 @@ class Vehicle(VehicleBasis):
             c=cm.brg(np.linspace(0,1,len(t)))
             for t_pq, t_frenet in zip(np.linspace(0, 1, t_steps), np.linspace(t_start, t_end, t_steps)):
                 
-                if i == 0 or i == len(t) -1:
+                if i == 0 or i == len(t) - 1:
+                # if True:
                     # We are in the frenet frame, local time
                     # a1_, a2_, b_ = a1(t_pq)[0], a2(t_pq)[0], b(t_pq)[0]
                     
@@ -1337,6 +1311,7 @@ class Vehicle(VehicleBasis):
                     x1 = np.linspace(-3 + i * shrink, 3 - i * shrink, 100)
                     if a2(t_pq) == 0:
                         x2 = x1
+                        print("Hoppácska, zero divide")
                     else:
                         x2 = (b(t_pq) - a1(t_pq) * x1) / a2(t_pq)
                     # x1_inertial, x2_inertial = x1, x2
@@ -1351,6 +1326,7 @@ class Vehicle(VehicleBasis):
                     # Let us now plot the lines
                     # Only plotting the beginning :)
                     if i == 0:
+                    # if True:
                         ax.plot(x1_inertial, x2_inertial, c = c[i], zorder = 0)
                         kappa = True
                 i += 1
@@ -1362,7 +1338,7 @@ class Vehicle(VehicleBasis):
             t_real_intermediate = self.variable_history['t_real_intermediate_list'][horizon_num]
             for t_, t_real_ in zip(t_intermediate, t_real_intermediate):
                 # Plotting a specific time
-                x1 = np.linspace(-2, 2, 100)
+                x1 = np.linspace(-1, 1, 100)
                 x2 = (b(t_) - a1(t_) * x1) / a2(t_)
                 x1_inertial, x2_inertial = [], []
                 for x1_, x2_ in zip(x1, x2):
@@ -1372,96 +1348,6 @@ class Vehicle(VehicleBasis):
                     x2_inertial += [x2_tmp]
                 ax.plot(x1_inertial, x2_inertial, 'k', zorder = 0)
                 
-               
-        
-        """
-        point_x = self.variable_history['x_intermediate_list'][horizon_num][-3]
-        # print(point_x)
-        point_y = self.variable_history['x_intermediate_list'][horizon_num][-2]
-        
-        x_, y_ = self.fp.frenet_to_inertial(point_x, 
-                                                point_y,
-                                                t_end)
-        if self.ID == 0:
-            ax.plot(x_,
-                        y_
-                        , 'r*', markersize = 2, zorder = 3) """
-        # t_intermediate_real = np.linspace(t_end - self.t_window_size + t_start + self.t_step, t_end, self.n_of_saved_waypoints)
-        t_intermediate_real = np.linspace(t_start + self.t_step, t_end, self.n_of_saved_waypoints)
-        # if self.ID == 0:
-        #     print(t_start, t_end, t_intermediate_real)
-        # print(t_intermediate_real)
-        # print(t_intermediate_real)
-        # assert 0
-        
-        t = t_end
-        # point_x = self.variable_history['x_intermediate_list'][horizon_num][-3]
-        # point_y = self.variable_history['x_intermediate_list'][horizon_num][-2]
-        
-        """
-        i = 0
-        t = t_intermediate_real[i]
-        idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-        point_x = np.array(self.variable_history['x_intermediate_list'][horizon_num])[idx].tolist()[0]
-        point_y = np.array(self.variable_history['x_intermediate_list'][horizon_num])[idx].tolist()[1]
-            
-            
-            
-        x_, y_ = self.fp.frenet_to_inertial(point_x, 
-                                                point_y,
-                                                t)
-        if self.ID == 0:
-            ax.plot(x_,
-                        y_
-                        , 'b*', markersize = 2, zorder = 3)
-        else:
-            ax.plot(x_,
-                        y_
-                        , 'ko', markersize = 2, zorder = 3)"""
-        
-        
-        "Plotting all the intermediate points"
-        # for i, t in enumerate(t_intermediate_real):
-        #     idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-        #     point_x = np.array(self.variable_history['x_intermediate_list'][horizon_num_original])[idx].tolist()[0]
-        #     point_y = np.array(self.variable_history['x_intermediate_list'][horizon_num_original])[idx].tolist()[1]
-        #     x_, y_ = self.fp.frenet_to_inertial(point_x, 
-        #                                             point_y,
-        #                                             t)
-        #     if self.ID == 0:
-        #         ax.plot(x_,
-        #                     y_
-        #                     , 'b*', markersize = 2, zorder = 3)
-        #     else:
-        #         ax.plot(x_,
-        #                     y_
-        #                     , 'ko', markersize = 2, zorder = 3)
-        "Plotting all the intermediate points END"
-            # except:
-            #     pass
-        # try:
-        #     for i, t in enumerate(t_intermediate_real):
-        #         idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-        #         print(idx)
-        #         point_x = np.array(self.variable_history['x_intermediate_list'][horizon_num])[idx].tolist()
-        #         point_y = np.array(self.variable_history['x_intermediate_list'][horizon_num])[idx].tolist()
-                
-        #         x_, y_ = self.fp.frenet_to_inertial(point_x, 
-        #                                                 point_y,
-        #                                                 t)
-        #         if self.ID == 0:
-        #             ax.plot(x_,
-        #                         y_
-        #                         , 'ro', markersize = 2, zorder = 3)
-        #         else:
-        #             ax.plot(x_,
-        #                         y_
-        #                         , 'go', markersize = 2, zorder = 3)
-        # except:
-        #     print('Something is not working :/')
-        #     print('x_intermediate_len = ' + str(len(self.variable_history['x_intermediate_list'])))
-            
-        
         # Plotting the drone itself
         if self.ID == self_ID:
             x0, y0 = self.fp.frenet_to_inertial(p_solution(0)[0], q_solution(0)[0], t_start)
@@ -1470,10 +1356,6 @@ class Vehicle(VehicleBasis):
                             y0 = y0,
                             theta_c = math.atan2(self.fp.fy_d_spline(t_start)[0][0] + q_solution.derivative()(0),
                                         self.fp.fx_d_spline(t_start)[0][0] + p_solution.derivative()(0)))
-        
-        # theta_c = self.fp.fy_d_spline(t_start)[0][0] / self.fp.fx_d_spline(t_start)[0][0] + \
-        #                     q_solution.derivative()(0) / p_solution.derivative()(0)
-        
         
         if self.ID == 0:
             # Plotting the environment
