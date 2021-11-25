@@ -153,7 +153,7 @@ n_intermediate_ADMM = 1
 "n_steps = math.floor(1 / group.vehicles[0].t_step)"
 # n_steps = 10
 group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
-group.set_var({'t_step': 0.04})
+group.set_var({'t_step': 0.01})
 group.set_var({'t_window_size': 0.2})
 group.set_var({'t_end': 0 + 0.2})
 group.set_var({'knot_intervals': 5})
@@ -218,7 +218,7 @@ def target_function(list_):
     res = group.vehicles[idx].solver.call(args)
     final_time = time.time()
     update_time = final_time - start_time
-    return {idx: [res, update_time]}
+    return {idx: [res, update_time, group.vehicles[idx].solver.stats()]}
 
 def target_function_z(list_):
     args, idx = list_
@@ -262,6 +262,7 @@ if __name__ == '__main__':
                 for i in range(4):
                     group.vehicles[i].solution = res_dicitonary[i][0]
                     group.vehicles[i].variable_history["x_update_time"] += [res_dicitonary[i][1]]
+                    group.vehicles[i].variable_history["solver_stats"] += [res_dicitonary[i][2]]
                     
                 for i in range(4):
                     group.vehicles[i] = group.vehicles[i].x_update_posterior()
@@ -298,14 +299,38 @@ if __name__ == '__main__':
             
             print(str(time.time() - t_iter) + " seconds")
             iteration_times += [time.time() - t_iter]
-            t_iter = time.time()
+            t_iter = time.time()    
             
             
             group.simulation_step()
             
     group.write_iteration_times(prefix = 'multi_core_')
     group.plot_moovie_frames(n_steps, iternum=0, seed=0)
-
+    
+    vehicle_stats = []
+    for vehicle in group.vehicles:
+        vehicle_stats += [vehicle.variable_history["feasibility_dict"]]
+        
+        
+    len_ = 100
+    veh = 3
+    for veh in range(4):
+        print("")
+        print("vehicle " + str(veh) + "---------------------")
+        a_fes = group.vehicles[veh].variable_history["feasibility_dict"]
+        success = [group.vehicles[veh].variable_history["feasibility_dict"][i]["IPOPT_SUCCESS"] for i in range(len_)]
+        
+        
+        status = [group.vehicles[veh].variable_history["feasibility_dict"][i]["IPOPT_RETURN_STATUS"] for i in range(len_)]
+        first_time = [group.vehicles[veh].variable_history["first_time_success"][i] for i in range(len_)]
+        
+        for i, (stat, first) in enumerate(zip(status, first_time)):
+            if first == False and stat == "Solve_Succeeded":
+                print(str(i) +" - helped")
+            elif first == False and stat != "Solve_Succeeded":
+                print(str(i) +" - Did not help")
+    
+    a_fes = group.vehicles[1].variable_history["feasibility_dict"][18]
 
 
 

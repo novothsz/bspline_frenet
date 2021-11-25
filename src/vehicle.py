@@ -19,6 +19,7 @@ import time
 
 from matplotlib.collections import LineCollection
 from matplotlib.pyplot import cm
+import copy
 
 class Vehicle(VehicleBasis):
     def __init__(self):
@@ -317,6 +318,122 @@ class Vehicle(VehicleBasis):
         self.DvZ.extract(self.solution_z)
         return self
     
+    def check_feasibility_of_solution_x(self):
+        "Reconstructing all the equations, constraints and checking where the indeasibility happens"
+        PvX = copy.deepcopy(self.PvX)
+        DvX = copy.deepcopy(self.DvX)
+        
+        feasibility_dict = {}
+        
+        basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
+        # p, q, phi
+        coeffs = [DvX.y[len(basis)*i:len(basis)*(i+1)] for i in range(self.n_dimensions)]
+        y = [BSpline(basis, np.array(coeffs_)) for coeffs_ in coeffs]
+        y_dot = [y_.derivative() for y_ in y]
+        
+        p, q, phi = y[0], y[1], y[2]
+        # Check initial constraint
+        x0 = PvX.x0
+        
+        feasibility_dict = {}
+        key, value = self.check_constraint(y,
+                                x0[:self.n_dimensions],
+                                x0[:self.n_dimensions],
+                                constraint_type='initial',
+                                name="y0")
+        feasibility_dict[key] = value
+        
+        key, value = self.check_constraint(y_dot,
+                                x0[self.n_dimensions:self.n_dimensions*2],
+                                x0[self.n_dimensions:self.n_dimensions*2],
+                                constraint_type='initial',
+                                name="dy0")
+        feasibility_dict[key] = value
+        
+        if self.MPC_version == False:
+            raise NotImplementedError()
+        elif self.MPC_version == True:
+            raise NotImplementedError()
+        elif self.MPC_version == 'MPC_param':
+            n = self.n_of_saved_waypoints
+            for i, t_intermediate in enumerate(PvX.t_intermediate):
+                idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
+                x_intermediate = PvX.x_intermediate
+                
+                key, value = self.check_constraint([(p(t_intermediate) - x_intermediate[0])**2, (q(t_intermediate) - x_intermediate[1])**2],
+                                        [0, 0],
+                                        [(self.radious*1)**2, (self.radious*1)**2],
+                                        constraint_type='time',
+                                        name="pq_intermediate" + str(i))
+                feasibility_dict[key] = value
+        
+                key, value = self.check_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
+                                        [0], # self.slack, # 
+                                        [5 / 360 * math.pi * 2],
+                                        constraint_type='time',
+                                        name="phi_intermediate" + str(i))
+                feasibility_dict[key] = value
+                
+                
+                
+        # Vertical speed should be zero
+        key, value = self.check_constraint([y_dot[1]],
+                               [0],
+                               [0],
+                               constraint_type='final',
+                               name="q_dot_final" + str(i))
+        feasibility_dict[key] = value
+        
+        # a_list = []
+        # Collision avoidance with obstacles (coefficient based)
+        if self.MPC_version == 'MPC_param':
+            # We have a different collision-avoidance constraint if we are using the MPC_param version.
+            for i, obstacle in enumerate(self.obstacles):
+                # corner1, 2, 3, 4
+                basis = self.define_knots(degree = self.n_obstacle_cropped_degree, knot_intervals = self.n_obstacle_cropped_knot_intervals)
+                search_length = len(basis) * 2 * 4 # 2, because x, y, 'splines' and 4, because each has 4 corners
+                idx_current_obst = np.arange(search_length*i,search_length*i+search_length)
+                obst_corners = []
+                for j in range(4):
+                    search_length = len(basis) * 2 # because x, y 'splines'
+                    idx_current_corner = np.arange(search_length*j,search_length*j+search_length)
+                    obst_corner_coeffs = np.array(PvX.obst)[idx_current_obst][idx_current_corner].reshape(-1).tolist()
+                    coeffs = [obst_corner_coeffs[len(basis) * k :len(basis)*(k+1)] for k in range(2)]
+                    obst_corners += [[BSpline(basis, np.array(coeffs_)) for coeffs_ in coeffs]]
+                
+                # hyperplane a
+                basis = self.define_knots(degree = 3, knot_intervals = self.knot_intervals)
+                search_length = len(basis) * (2)
+                idx = np.arange(search_length*i,search_length*i+search_length)
+                a_coeffs = np.array(DvX.a)[idx].reshape(-1).tolist()
+                a_coeffs = [a_coeffs[0:len(basis)]] + [a_coeffs[len(basis):len(basis)*2]]
+                a = [BSpline(basis, np.array(coeffs_)) for coeffs_ in a_coeffs]
+                # hyperplane b
+                search_length = len(basis) * (1)
+                idx = np.arange(search_length*i,search_length*i+search_length)
+                b_coeffs = np.array(DvX.b)[idx].reshape(-1).tolist()
+                b = [BSpline(basis, np.array(b_coeffs))]
+                # hyperplane d_tau
+                search_length = len(basis) * (1)
+                idx = np.arange(search_length*i,search_length*i+search_length)
+                d_tau_coeffs = np.array(DvX.d_tau)[idx].reshape(-1).tolist()
+                d_tau = [BSpline(basis, np.array(d_tau_coeffs))]
+                hyperplane = [a, b, d_tau]
+                key, value = self.check_collision_avoidance_hyperplane([p, q], obst_corners, hyperplane,
+                                                    radious=self.radious * 0, name="avoidance_obst_" + str(i) + '_',
+                                                    constraint_type='obstacle')
+                feasibility_dict[key] = value
+                # a_list += [tmp_a]
+        
+        
+        # NOTE!, that some constraints are ignored. These are:
+        # upper & lower limits on y_dot, y_dotdot
+        # upper & lower limits on a, b, d_tau
+            
+        return feasibility_dict
+    
+
+    
     def setup_x_update(self):
         self.w, self.lbw, self.ubw = [], [], []
         self.g, self.lbg, self.ubg = [], [], []
@@ -377,16 +494,16 @@ class Vehicle(VehicleBasis):
                 self.define_constraint([p(t_intermediate) - x_intermediate[0],
                                         q(t_intermediate) - x_intermediate[1],
                                         phi(t_intermediate) - x_intermediate[2]],
-                                        [0.0 - self.radious * 2, 0.0 - self.radious * 2, 0.0 - 0.1],
-                                        [0.0 + self.radious * 2, 0.0 + self.radious * 2, 0.0 + 0.1],
+                                        [0.0 - self.radious * 10, 0.0 - self.radious * 10, 0.0 - 0.1],
+                                        [0.0 + self.radious * 10, 0.0 + self.radious * 10, 0.0 + 0.1],
                                         constraint_type='time',
                                         name=["guidence" + str(i)] * 1)
                 if t_intermediate == 1:
                     self.define_constraint([p(t_intermediate) - x_intermediate[0],
                                             q(t_intermediate) - x_intermediate[1],
                                             phi(t_intermediate) - x_intermediate[2]],
-                                            [0.0 - self.radious * 2, 0.0 - self.radious * 2, 0.0 - 0.1],
-                                            [0.0 + self.radious * 2, 0.0 + self.radious * 2, 0.0 + 0.1],
+                                            [0.0 - self.radious * 10, 0.0 - self.radious * 10, 0.0 - 0.1],
+                                            [0.0 + self.radious * 10, 0.0 + self.radious * 10, 0.0 + 0.1],
                                             constraint_type='time',
                                             name=["guidence" + str(i)] * 1)
                     
@@ -428,6 +545,7 @@ class Vehicle(VehicleBasis):
                 # self.P0 += np.array(self.x_intermediate_list)[idx].tolist()
                 # the above line has to be changed, because x_intermediate_list actually holds only 3 values
                 # the last one is phi, from which 2 values will be generated --> cos_phi, sin_phi
+                # TODO: We don't use this cos, sin anymore, right?
                 self.P0 += np.array(self.x_intermediate_list)[:2].tolist()
                 self.P0 += [np.cos(self.x_intermediate_list[2]).tolist()]
                 self.P0 += [np.sin(self.x_intermediate_list[2]).tolist()]
@@ -491,12 +609,13 @@ class Vehicle(VehicleBasis):
                                [0],
                                [0],
                                constraint_type='final',
-                               name=["q_dot_at_intermediate" + str(i)] * 1)
+                               name=["q_dot_final" + str(i)] * 1)
             
         # self.J += self.rho_intermediate * 10000 * (p_dot(t_intermediate)**2 + q_dot(t_intermediate)**2)
         # self.J += self.rho_intermediate * 10000 * (p_dot(1)**2 + q_dot(1)**2)
         
         # Min-max state constraints
+        """
         v_s = MX.sym('v_s', self.t_resolution_length); self.P += [v_s]; self.P_list += ['v_s'] * self.t_resolution_length; self.P0 += [0] * self.t_resolution_length
         curvature = MX.sym('curvature', self.t_resolution_length); self.P += [curvature]; self.P_list += ['curvature'] * self.t_resolution_length; self.P0 += [0] * self.t_resolution_length
         equation_min_p = MX.sym('equation_min_p', self.t_resolution_length); self.P += [equation_min_p]; self.P_list += ['equation_min_p'] * self.t_resolution_length; self.P0 += [0] * self.t_resolution_length
@@ -537,7 +656,7 @@ class Vehicle(VehicleBasis):
                                     [math.inf],
                                     constraint_type='time',
                                     name=["q_dot_max"])
-            
+        """    
         a_list = []
         # Collision avoidance with obstacles (coefficient based)
         if self.MPC_version == 'MPC_param':
@@ -569,7 +688,7 @@ class Vehicle(VehicleBasis):
                 obst_corners += [corner1, corner2, corner3, corner4]
             
                 tmp_a = self.collision_avoidance_hyperplane([p, q], obst_corners,
-                                                    radious=self.radious * 1, name="obst_" + str(i),
+                                                    radious=self.radious * 0, name="obst_" + str(i),
                                                     constraint_type='obstacle')
                 a_list += [tmp_a]
                 
@@ -590,7 +709,7 @@ class Vehicle(VehicleBasis):
                                                     constraint_type='spline_obstacle_param',
                                                     n_samples=self.t_resolution_length)
                 
-        
+        """
         # Okay boss! Let's implement this hyperplane intermediate suggestion thingy.
         n = self.n_of_saved_waypoints
         for i, t_intermediate in enumerate(self.t_intermediate_list):
@@ -617,6 +736,7 @@ class Vehicle(VehicleBasis):
                                         [0 + self.slack],
                                         constraint_type='time',
                                         name=["a_intermediate" + str(i)] * 1)
+            """
             
         # Cost for extra acceleration in the frenet frame
         cost = 0
@@ -706,7 +826,7 @@ class Vehicle(VehicleBasis):
 
         return 
     
-    def visualize_x_problem(self, ax):
+    def visualize_x_problem(self, ax, stage):
         """This function visualizes the arguments of the x-optimizer. This is to check, if 
         everything looks okay.
         Elements, defining parameters will be plotted with filled colors.
@@ -848,7 +968,7 @@ class Vehicle(VehicleBasis):
             
             ax.plot(p, q, 'ko',alpha = 0.1)
         
-        if self.ID == self_ID:
+        if self.ID == "Dont plot hyperplanes": # self_ID:
             # plot hyperplanes
             
             a1_coeffs = np.array(DvX.a)[np.arange(len(basis)*2*(obst_IDX) + 0, len(basis)*2*(obst_IDX) + len(basis))]
@@ -911,12 +1031,33 @@ class Vehicle(VehicleBasis):
         start_time = time.time()
         self.solution = self.solver.call(self.arg)
         final_time = time.time()
+        
+        if self.solver.stats()['return_status'] == 'Solve_Succeeded':
+            self.variable_history['first_time_success'] += [True]
+        else:
+            self.variable_history['first_time_success'] += [False]
+            self.arg['x0'] = self.solution["x"]
+            self.solution = self.solver.call(self.arg)
+            
+            if self.solver.stats()['return_status'] != 'Solve_Succeeded':
+                self.arg['x0'] = self.solution["x"]
+                self.solution = self.solver.call(self.arg)
+            
+            
+            
         self.variable_history["x_update_time"] += [final_time - start_time]
+        self.variable_history["solution"] += [self.solution]
+        self.variable_history["solver_stats"] += [self.solver.stats()]
+        
         return self
     
     def x_update_posterior(self):
         # Extracting the solution
         self.DvX.extract(self.solution)
+        feasibility_dict = self.check_feasibility_of_solution_x()
+        feasibility_dict["IPOPT_SUCCESS"] = self.solver.stats()['success']
+        feasibility_dict["IPOPT_RETURN_STATUS"] = self.solver.stats()['return_status']
+        self.variable_history["feasibility_dict"] += [feasibility_dict]
         self.variable_history['y'] += [self.DvX.y]
         self.variable_history['t_start'] += [self.t_start]
         self.variable_history['t_end'] += [self.t_end]
@@ -1212,8 +1353,8 @@ class Vehicle(VehicleBasis):
     
     def plot_moovie_frames_mooving_horizon(self, ax, horizon_num):
         t_steps = 100     
-        self_ID = 0
-        obst_IDX = 1
+        self_ID = 3
+        obst_IDX = 6
         horizon_num_original = int(horizon_num)    
         horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
         # Creating the splines
@@ -1339,7 +1480,11 @@ class Vehicle(VehicleBasis):
             for t_, t_real_ in zip(t_intermediate, t_real_intermediate):
                 # Plotting a specific time
                 x1 = np.linspace(-1, 1, 100)
-                x2 = (b(t_) - a1(t_) * x1) / a2(t_)
+                # x2 = (b(t_) - a1(t_) * x1) / a2(t_)
+                idx = np.arange(2*obst_IDX,2*obst_IDX+2)
+                a1_ = np.array(self.variable_history['a_intermediate_list'][horizon_num])[idx][0]
+                a2_ = np.array(self.variable_history['a_intermediate_list'][horizon_num])[idx][1]
+                x2 = (0 - a1_ * x1) / a2_
                 x1_inertial, x2_inertial = [], []
                 for x1_, x2_ in zip(x1, x2):
                     # t_global = interp(t,[t_sweep_start,t_sweep_end],[0,1])

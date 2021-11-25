@@ -449,6 +449,7 @@ class Group(Environment):
                                     a = [0, 1]
                                 else:
                                     a = [0, -1]
+                                a = [0, 0]
                                 
                                 
                                 """
@@ -505,7 +506,6 @@ class Group(Environment):
                                         vehicle.a_intermediate_ID_list += ["[0, 0]"]
                                         
                                         
-                                kappa = True
                                         
                                 
                                     
@@ -2062,7 +2062,7 @@ class Group(Environment):
         t_free_end = 0.2
         
         
-        n_obst_along = 0
+        n_obst_along = 3
         random.seed(seed)
         centerpoint_x_bound = [-0.1, 0.1]
         centerpoint_y_bound = [-0.1, 0.1]
@@ -2119,7 +2119,7 @@ class Group(Environment):
             g1 = [list(self.fp.frenet_to_inertial(corner[0], corner[1], t_tmp[i])) for corner in gate1_inside_corners]
             g2 = [list(self.fp.frenet_to_inertial(corner[0], corner[1], t_tmp[i])) for corner in gate2_inside_corners]
             
-            if i == 0:
+            if i == -1:
                 pass
             else:
                 # Extending till the edge of the environment

@@ -81,6 +81,7 @@ class VehicleBasis(Environment):
 
         # Test hyperparam
         self.slack = 0.00001
+        self.feasibility_slack = 0.001
         # Hyperparams
         self.rho = 50# /5 # /50
         # self.rho_formation = 100# /5 # /50
@@ -140,7 +141,11 @@ class VehicleBasis(Environment):
                                   'x_update_time' : [],
                                   'z_update_time' : [],
                                   'a' : [],
-                                  'b' : []
+                                  'b' : [],
+                                  'solution' : [],
+                                  'solver_stats' : [],
+                                  'feasibility_dict' : [],
+                                  'first_time_success' : []
                 }
         self.n_intermediate_ADMM = 1
         self.vehicle_positions_new = {'stage' : [], 'vehicle_positions_new' : []}
@@ -816,6 +821,38 @@ class VehicleBasis(Environment):
                     self.ubw += [upper_bound[i]]
 
         return np.array(splines)
+    
+    def check_constraint(self, constraint, lower_bound, upper_bound, constraint_type = 'overall', name = ''):
+        """Sisten function of "define_constraint". Instead of creating the constraint, it checks its
+        /teljesülés/
+        """
+        feasibility = []
+        if constraint_type == 'overall':
+            for i in range(len(constraint)):
+                for j in range(constraint[i].coeffs.shape[0]):
+                    feasibility += [lower_bound[i] - self.feasibility_slack <= constraint[i].coeffs[j] and constraint[i].coeffs[j] <= upper_bound[i] + self.feasibility_slack]
+            return name, feasibility
+        
+        elif constraint_type == 'time':
+            for i in range(len(constraint)):
+                for j in range(constraint[i].shape[0]):
+                    feasibility += [lower_bound[i] - self.feasibility_slack <= constraint[i].reshape(-1).tolist()[0] and constraint[i].reshape(-1).tolist()[0] <= upper_bound[i] + self.feasibility_slack]
+            return name, feasibility
+            
+        elif constraint_type == 'initial':
+            for i in range(len(constraint)):
+                feasibility += [lower_bound[i] - self.feasibility_slack <= constraint[i].coeffs[0] and constraint[i].coeffs[0] <= upper_bound[i] + self.feasibility_slack]
+            return name, feasibility
+        elif constraint_type == 'final':
+            for i in range(len(constraint)):
+                feasibility += [lower_bound[i] - self.feasibility_slack <= constraint[i].coeffs[-1] and constraint[i].coeffs[-1] <= upper_bound[i] + self.feasibility_slack]
+            return name, feasibility
+                
+                    
+        elif constraint_type == 'initial_param':
+            raise NotImplementedError()
+        elif constraint_type == 'final_param':
+            raise NotImplementedError()
 
     def define_constraint(self, constraint, lower_bound, upper_bound, constraint_type = 'overall', name = ''):
         """This function defines constraint on the b_spline coefficients
@@ -913,6 +950,43 @@ class VehicleBasis(Environment):
         constraint = (splines[0] - center[0])**2 + (splines[1] - center[1])**2
         self.define_constraint([constraint], lower_bound = [radious**2], upper_bound = [math.inf], name = name)
 
+    def check_collision_avoidance_hyperplane(self, splines, points, hyperplane, radious, name, constraint_type='obstacle', n_samples = 10):
+        obst_feasibility_dict = {}
+        any_ = [False]
+        
+        a, b, d_tau = hyperplane
+        const1 = a[0]*splines[0] + a[1]*splines[1] - b[0]
+        key, value = self.check_constraint([const1], lower_bound = [-math.inf], upper_bound = [-radious], name = "eq1")
+        obst_feasibility_dict[key] = value
+        if any(value):
+            any_[0] = True
+            any_ += ["eq1"]
+        
+        # ---- Constraint 2 (various versions)
+        const2 = []
+        if constraint_type == 'obstacle':
+            for point in points:
+                const2 += [a[0] * point[0] + a[1] * point[1] - b[0]  - d_tau[0] ]
+            # ----
+            for i in range(len(points)):
+                key, value = self.check_constraint([const2[i]], lower_bound = [0], upper_bound = [math.inf], name = "eq2" + "_corn_" + str(i))
+                obst_feasibility_dict[key] = value
+                if any(value):
+                    any_[0] = True
+                    any_ += ["eq2" + "_corn_" + str(i)]
+        else:
+            raise NotImplementedError()
+            
+        # ---- Constraint 3
+        const3 = a[0] * a[0] + a[1] * a[1]
+        key, value = self.check_constraint([const3], lower_bound = [0.0], upper_bound = [1.0], name = "eq3")
+        obst_feasibility_dict[key] = value
+        if any(value):
+            any_[0] = True
+            any_ += ["eq3"]
+        
+        return name, obst_feasibility_dict
+        
     def collision_avoidance_hyperplane(self, splines, points, radious, name, constraint_type='obstacle', n_samples = 10):
         """Collision avoidance using the separating hyperplane theorem"""
 
@@ -1337,7 +1411,11 @@ class VehicleBasis(Environment):
                                   'x_update_time' : [],
                                   'z_update_time' : [],
                                   'a' : [],
-                                  'b' : []
+                                  'b' : [],
+                                  'solution' : [],
+                                  'solver_stats' : [],
+                                  'feasibility_dict' : [],
+                                  'first_time_success' : []
                 }
         
     def initialize_x(self):
