@@ -1826,7 +1826,7 @@ class Group(Environment):
             self.vehicles[i].shift_enabled = simulation
         
     def data_exchange_x(self):
-        self.plot_frenet_view()
+        # self.plot_frenet_view()
         """
         2) data_exchange_x(), where these values are shared between agents.
         """
@@ -1877,7 +1877,7 @@ class Group(Environment):
         for i in range(len(self.vehicles)):
             self.vehicles[i].x_update_posterior()
             
-        self.plot_frenet_view()
+        # self.plot_frenet_view()
 
 
         """
@@ -2373,12 +2373,14 @@ class Group(Environment):
     
     def plot_frenet_view(self):
         fig, ax = self.figures["figures"]
-        ax.clear()
         
-        for vehicle in self.vehicles:
-            ax = vehicle.visualize_x_problem(ax)
+        for i in range(self.stage):
+            ax.clear()
             
-        fig.savefig(self.cwd + '/figures/frenet_view_' + '{:0>2d}'.format(self.vehicles[0].stage) +'.png', dpi = 200)
+            for vehicle in self.vehicles:
+                ax = vehicle.visualize_x_problem(ax, i)
+                
+            fig.savefig(self.cwd + '/figures/frenet_view_' + '{:0>2d}'.format(i) +'.png', dpi = 200)
     
     def plot_moovie_frames(self, n_frames, iternum : int = 0, seed = ''):
         fig, ax = self.figures["figures"]

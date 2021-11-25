@@ -836,8 +836,10 @@ class Vehicle(VehicleBasis):
         # fig = plt.figure()
         # ax = fig.add_subplot(111)
         
-        DvX = self.DvX
-        PvX = self.PvX
+        # DvX = self.DvX
+        # PvX = self.PvX
+        DvX = self.variable_history["DvX_posterior"][stage]
+        PvX = self.variable_history["PvX"][stage]
         
         self_ID = 2
         obst_IDX = 1
@@ -1024,6 +1026,8 @@ class Vehicle(VehicleBasis):
         # Updating the necessary arguments for the solver
         self.arg['x0'] = self.DvX.assemble()
         self.arg['p'] = self.PvX.assemble()
+        self.variable_history["DvX_prior"] += [copy.deepcopy(self.DvX)]
+        self.variable_history["PvX"] += [copy.deepcopy(self.PvX)]
         return self
     
     def x_update(self):
@@ -1054,6 +1058,7 @@ class Vehicle(VehicleBasis):
     def x_update_posterior(self):
         # Extracting the solution
         self.DvX.extract(self.solution)
+        self.variable_history["DvX_posterior"] += [copy.deepcopy(self.DvX)]
         feasibility_dict = self.check_feasibility_of_solution_x()
         feasibility_dict["IPOPT_SUCCESS"] = self.solver.stats()['success']
         feasibility_dict["IPOPT_RETURN_STATUS"] = self.solver.stats()['return_status']

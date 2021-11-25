@@ -153,7 +153,7 @@ n_intermediate_ADMM = 1
 "n_steps = math.floor(1 / group.vehicles[0].t_step)"
 # n_steps = 10
 group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
-group.set_var({'t_step': 0.01})
+group.set_var({'t_step': 0.04})
 group.set_var({'t_window_size': 0.2})
 group.set_var({'t_end': 0 + 0.2})
 group.set_var({'knot_intervals': 5})
@@ -213,12 +213,24 @@ target_function = group.vehicles[0].distributed_x_update
 target_function_z = group.vehicles[0].distributed_z_update
 
 def target_function(list_):
-    args, idx = list_
+    args, args_history, idx = list_
     start_time = time.time()
     res = group.vehicles[idx].solver.call(args)
     final_time = time.time()
     update_time = final_time - start_time
-    return {idx: [res, update_time, group.vehicles[idx].solver.stats()]}
+    
+    if group.vehicles[idx].solver.stats()['return_status'] == 'Solve_Succeeded':
+        args_history['first_time_success'] += [True]
+    else:
+        args_history['first_time_success'] += [False]
+        args['x0'] = res["x"]
+        res = group.vehicles[idx].solver.call(args)
+        
+        if group.vehicles[idx].solver.stats()['return_status'] != 'Solve_Succeeded':
+            args['x0'] = res["x"]
+            res= group.vehicles[idx].solver.call(args)
+            
+    return {idx: [res, args_history, update_time, group.vehicles[idx].solver.stats()]}
 
 def target_function_z(list_):
     args, idx = list_
@@ -250,8 +262,9 @@ if __name__ == '__main__':
                 for i in range(4):
                     group.vehicles[i] = group.vehicles[i].x_update_prior()
                 args = [vehicle.arg for vehicle in group.vehicles]
+                args_history = [vehicle.variable_history for vehicle in group.vehicles]
                     
-                futures = [pool.submit(target_function, [arg, j]) for j, arg in enumerate(args)]
+                futures = [pool.submit(target_function, [arg, arg_history, j]) for j, (arg, arg_history) in enumerate(zip(args, args_history))]
                 res = [f.result() for f in as_completed(futures)]
                 
                 # we need to combine the list into a dictionary
@@ -261,8 +274,9 @@ if __name__ == '__main__':
                 
                 for i in range(4):
                     group.vehicles[i].solution = res_dicitonary[i][0]
-                    group.vehicles[i].variable_history["x_update_time"] += [res_dicitonary[i][1]]
-                    group.vehicles[i].variable_history["solver_stats"] += [res_dicitonary[i][2]]
+                    group.vehicles[i].variable_history = res_dicitonary[i][1]
+                    group.vehicles[i].variable_history["x_update_time"] += [res_dicitonary[i][2]]
+                    group.vehicles[i].variable_history["solver_stats"] += [res_dicitonary[i][3]]
                     
                 for i in range(4):
                     group.vehicles[i] = group.vehicles[i].x_update_posterior()
@@ -306,14 +320,17 @@ if __name__ == '__main__':
             
     group.write_iteration_times(prefix = 'multi_core_')
     group.plot_moovie_frames(n_steps, iternum=0, seed=0)
+    group.plot_frenet_view()
+    
+    
     
     vehicle_stats = []
     for vehicle in group.vehicles:
         vehicle_stats += [vehicle.variable_history["feasibility_dict"]]
         
         
-    len_ = 100
     veh = 3
+    len_ = len(group.vehicles[veh].variable_history['y'])
     for veh in range(4):
         print("")
         print("vehicle " + str(veh) + "---------------------")

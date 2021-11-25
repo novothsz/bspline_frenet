@@ -262,6 +262,7 @@ n_steps, group, iteration_times = run_optimizaiton(corners_list, start_position,
 
 group.write_iteration_times(prefix = 'single_core_')
 group.plot_moovie_frames(n_steps, iternum=0, seed=0)
+group.plot_frenet_view()
 # group.plot_moovie_frames_old(iternum=0, seed=0)
 
 # """

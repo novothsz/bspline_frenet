@@ -145,7 +145,10 @@ class VehicleBasis(Environment):
                                   'solution' : [],
                                   'solver_stats' : [],
                                   'feasibility_dict' : [],
-                                  'first_time_success' : []
+                                  'first_time_success' : [],
+                                  'DvX_prior' : [],
+                                  'DvX_posterior' : [],
+                                  'PvX' : []
                 }
         self.n_intermediate_ADMM = 1
         self.vehicle_positions_new = {'stage' : [], 'vehicle_positions_new' : []}
@@ -937,7 +940,7 @@ class VehicleBasis(Environment):
             raise NotImplementedError()
 
     def collision_avoidance_circular(self, splines, center, radious, name):
-        """This function defines constraints on the splines to avoid the space arodund
+        """This function defines constraints on the splines to avoid the space around
         a certaint point with a given radious.
         Input:
             splines (list): a spline on which we want to set final constraint
@@ -985,6 +988,7 @@ class VehicleBasis(Environment):
             any_[0] = True
             any_ += ["eq3"]
         
+        obst_feasibility_dict["any"] = any_
         return name, obst_feasibility_dict
         
     def collision_avoidance_hyperplane(self, splines, points, radious, name, constraint_type='obstacle', n_samples = 10):
@@ -1020,10 +1024,17 @@ class VehicleBasis(Environment):
         # Therefore we want to punish that case. However, it is okay if it is vertical, when the distance is large. So we weight it with the 
         # value of b.  (b kinda represents the distance, because b can be large, if the distance is large. However it cannot be large,
         # if the distance is small. However, this adds additional non-linearity
+        # This might not give us the result we want, because it will just find a with small components, which is not helpfull...
         
         # from casadi import DM
         # for i in range(a[0].coeffs.shape[0]):
-        #     self.J += dot(  vertcat(a[0].coeffs[i], a[1].coeffs[i]), vertcat(DM(1), DM(0))  )**2
+        #     self.J += 1000 * dot(  vertcat(a[0].coeffs[i], a[1].coeffs[i]), vertcat(DM(1), DM(0))  )**2 /  \
+        #         (definite_integral(a[0], 0, 1)**2 + definite_integral(a[1], 0, 1)**2)
+        # This is not good, makes it ridiculously slow.
+        
+        
+            
+            
         # ---- Constraint 1
         const1 = a[0]*splines[0] + a[1]*splines[1] - b[0]
         self.define_constraint([const1], lower_bound = [-math.inf], upper_bound = [-radious], name = "eq1")
@@ -1415,7 +1426,10 @@ class VehicleBasis(Environment):
                                   'solution' : [],
                                   'solver_stats' : [],
                                   'feasibility_dict' : [],
-                                  'first_time_success' : []
+                                  'first_time_success' : [],
+                                  'DvX_prior' : [],
+                                  'DvX_posterior' : [],
+                                  'PvX' : []
                 }
         
     def initialize_x(self):

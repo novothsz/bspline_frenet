@@ -24,6 +24,7 @@ class Obstacle(Environment):
         center += [np.mean(np.array(points)[:, 1]).tolist()]
         # center += [0.1]
         self.center = center
+        self.max_dist_from_center = max([np.linalg.norm(np.array([self.center]) - np.array([corn])) for corn in self.corners])
         self.scaled_corners = self.scaled_corners(size = 0.03)    
         self.corners_spline = [] # these will be splines defined in the frenet frame.
         self.corners_t = [] # sampling of the corner positions in the mooving frenet frame. They represent
@@ -89,9 +90,8 @@ class Obstacle(Environment):
         #     pass
         
         
-        "Regular corners"
+        # ---- Regular corners
         corners_spline_coeffs = []
-        scaled_corners_spline_coeffs = []
         t = np.linspace(0, 1, 100)
         self.fitter.knot_intervals = 10
         for i in range(len(self.corners)):
@@ -111,7 +111,8 @@ class Obstacle(Environment):
             corners_spline_coeffs += [ [sp.coeffs for sp in fitted_splines] ]
             self.corners_t += [corner_]
             
-        "Scaled corners"
+        # ---- Scaled corners
+        scaled_corners_spline_coeffs = []
         t = np.linspace(0, 1, 100)
         self.fitter.knot_intervals = 10
         for i in range(len(self.scaled_corners)):
@@ -132,14 +133,36 @@ class Obstacle(Environment):
             self.scaled_corners_t += [corner_]
         # self.plot_corners_spline()
         
+        # ---- Virtual center "corner/circle" with virtual "radious"
+        center_spline_coeffs = []
+        t = np.linspace(0, 1, 100)
+        self.fitter.knot_intervals = 10
+        center = self.center
+        corner_ = np.array([self.fp.inertial_to_frenet(center[0], center[1], t_) for t_ in t])
+        p_ = corner_[:, 0].tolist()
+        q_ = corner_[:, 1].tolist()
+        corner_ = [p_, q_]
+        fitted_splines = self.fitter.fitting_single(corner_,
+                                             y_min = [-20, -20],
+                                             y_max = [20, 20]
+                                             )
+        self.center_spline += [fitted_splines]
+        center_spline_coeffs += [ [sp.coeffs for sp in fitted_splines] ]
+        # self.scaled_corners_t += [corner_]
+        
+        
+        # ---- Collecting all the coeffs and writing it to file
         coeffs = {
                 "corners_spline_coeffs" : corners_spline_coeffs,
-                "scaled_corners_spline_coeffs" : scaled_corners_spline_coeffs
+                "scaled_corners_spline_coeffs" : scaled_corners_spline_coeffs,
+                "center_spline_coeffs" : center_spline_coeffs
                 }
         import pickle
         pickle_out = open("obst_" + str(int(self.ID)) + "_coeffs.pickle", "wb")
         pickle.dump(coeffs, pickle_out)
         pickle_out.close()
+        
+        
             
             
         return self
