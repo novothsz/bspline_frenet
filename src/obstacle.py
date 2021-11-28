@@ -25,8 +25,11 @@ class Obstacle(Environment):
         # center += [0.1]
         self.center = center
         self.max_dist_from_center = max([np.linalg.norm(np.array([self.center]) - np.array([corn])) for corn in self.corners])
+        # self.max_dist_from_center = min(self.max_dist_from_center, 1)
+        
         self.scaled_corners = self.scaled_corners(size = 0.03)    
         self.corners_spline = [] # these will be splines defined in the frenet frame.
+        self.center_spline = []
         self.corners_t = [] # sampling of the corner positions in the mooving frenet frame. They represent
         # the true value at time t and can be used measure if we have correctly fitted the spline.
         
@@ -70,6 +73,22 @@ class Obstacle(Environment):
             cropped_corners += [cropped_corner]
             
         return cropped_corners
+    
+    def cropped_center_trajectories(self, default_basis, t_start, t_end):
+        cropped_center = []
+        for xy in self.center_spline:
+            xy = crop_spline(xy, t_start, t_end)
+            xy = xy.scale(1, -t_start)
+            xy = xy.scale(  1 * 1 / (t_end - t_start), 0  )
+            eps = 1e-5
+            xy.basis.knots[0:default_basis.degree] = 0.0
+            xy.basis.knots[0] = 0.0 - eps
+            xy.basis.knots[-default_basis.degree:] = 1.0
+            xy.basis.knots[-1] = 1.0 + eps
+            new_coeffs = default_basis.transform(xy.basis).dot(xy.coeffs)
+            cropped_center += [BSpline(default_basis, new_coeffs)]
+            
+        return cropped_center
             
     
     
@@ -146,7 +165,7 @@ class Obstacle(Environment):
                                              y_min = [-20, -20],
                                              y_max = [20, 20]
                                              )
-        self.center_spline += [fitted_splines]
+        self.center_spline += fitted_splines
         center_spline_coeffs += [ [sp.coeffs for sp in fitted_splines] ]
         # self.scaled_corners_t += [corner_]
         
@@ -201,6 +220,300 @@ class Obstacle(Environment):
     
     
     
+    # def plot_corners_spline(self):
+    #     import matplotlib.pyplot as plt
+    #     fig, ax = plt.subplots()
+    #     t = np.linspace(0, 1, 100)
+        
+        
+    #     from matplotlib.pyplot import cm
+    #     color=cm.Wistia(np.linspace(0,1,len(t)))
+    #     color=cm.YlOrRd(np.linspace(0,1,len(t)))
+        
+    #     transparency = np.logspace(-9, -5, base=2, num=len(t))
+    #     transparency = np.logspace(-1, 0, base=2, num=len(t))
+        
+    #     p = self.corners_spline[0][0]
+    #     cropped_corners = self.cropped_corner_trajectories(p.basis, 0.4, 0.6)
+        
+    #     for i, corner in enumerate(self.corners_spline):
+            
+            
+            
+            
+    #         # corner2 = cropped_corners[i]
+    #         # p = corner2[0]
+    #         # q = corner2[1]
+    #         # p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
+    #         # q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
+            
+            
+            
+            
+    #         # from matplotlib.collections import LineCollection
+    #         # cols = np.linspace(0,1,len(p_))
+    #         # points = np.array([p_, q_]).T.reshape(-1, 1, 2)
+    #         # segments = np.concatenate([points[:-1], points[1:]], axis=1)
+    #         # lc = LineCollection(segments, cmap='viridis')
+    #         # lc = LineCollection(segments, cmap='Wistia')
+    #         # lc = LineCollection(segments, cmap='hot')
+    #         # if i == 0:
+    #         #     lc = LineCollection(segments, cmap='brg', label='corner trajectory', linewidths = 2)
+    #         # else:
+    #         #     lc = LineCollection(segments, cmap='brg', linewidths = 2)
+    #         # line = ax.add_collection(lc)
+    #         # lc.set_array(cols)
+    #         # lc.set_linewidth(2)
+            
+            
+    #         p = corner[0]
+    #         q = corner[1]
+    #         from .spline_extra import shift_over_knot
+            
+    #         # p.coeffs = shift_knot1_fwd(p.coeffs, p.basis, 0.4)
+    #         # q.coeffs = shift_knot1_fwd(q.coeffs, q.basis, 0.4)
+    #         # p.coeffs = shift_knot1_fwd(p.coeffs, p.basis, 0.4)
+    #         # q.coeffs = shift_knot1_fwd(q.coeffs, q.basis, 0.4)
+            
+    #         """ shift over knot
+    #         # # Just for testing:
+    #         import matplotlib.pyplot as plt
+    #         t = np.linspace(0, 1, 100)
+    #         plt.figure()
+    #         plt.plot(t, q(t))
+    #         plt.plot(q.basis.knots[2:-2], q.coeffs, 'ro')
+            
+            
+    #         kappa, p.coeffs = shift_over_knot(p.coeffs, p.basis)
+    #         kappa, q.coeffs = shift_over_knot(q.coeffs, q.basis)
+            
+    #         # p.basis, p.coeffs = shift_spline(p.coeffs, 0.05, p.basis)
+    #         # p = p.scale(1, -0.05)
+    #         plt.plot(np.linspace(0.1, 1.1, 100), q(t), 'k')
+    #         plt.plot(q.basis.knots[2:-2], p.coeffs, 'ko')
+    #         plt.show()
+    #         """
+            
+            
+    #         def shift_spline_v2(spline, t_shift):
+    #             """This is the second version of our infamous spline-shifting technology.
+    #             What we do is as follows. We 1) extrapolate over a knot interval.
+    #             Then we 2) crop the spline and lastly we 3) transform the spline to its original basis.
+    #             This version avoids having singularities due to increased knot number.
+    #             """
+    #             default_basis = self.define_knots(degree = spline.basis.degree, knots = spline.basis.knots)
+    #             # Step 1: extrapolation
+    #             spline.basis, spline.coeffs = extrapolate(spline.coeffs, t_shift, spline.basis)
+    #             # Step 3: cropping
+    #             spline.basis, spline.coeffs = shift_spline(spline.coeffs, t_shift, spline.basis)
+    #             spline = spline.scale(1, -t_shift)
+    #             # Step 4: transforming back
+    #             new_coeffs = default_basis.transform(spline.basis).dot(spline.coeffs)
+    #             new_spline = BSpline(default_basis, new_coeffs)
+            
+    #             return new_spline
+            
+            
+            
+    #         plt.figure()
+    #         plt.plot(t, q(t), 'k')
+    #         plt.plot(q.basis.knots[2:-2], q.coeffs, 'ko')
+            
+    #         "Trying new shift"
+    #         # t_shift = 0.01
+    #         # q = shift_spline_v2(q, t_shift)
+    #         # plt.plot(np.linspace(t_shift, 1 + t_shift, 100), q(t), 'b:')
+    #         # plt.plot(q.basis.knots[2:-2] + t_shift, q.coeffs, 'b*')
+    #         # plt.show()
+            
+    #         "Working shift"
+    #         # q = q.insert_knots((q.basis.knots+ 0.05)[:-4] )
+    #         # plt.plot(t, q(t), 'b:')
+    #         # plt.plot(q.basis.knots[2:-2], q.coeffs, 'b*')
+            
+    #         # kappa, q.coeffs = shift_over_knot(q.coeffs, q.basis)
+    #         # plt.plot(np.linspace(0.05, 1 + 0.05, 100), q(t), 'r')
+    #         # plt.plot(q.basis.knots[2:-2] + 0.05, q.coeffs, 'ro')
+            
+    #         # default_basis = p.basis
+    #         # new_coeffs = default_basis.transform(q.basis).dot(q.coeffs)
+    #         # q.coeffs = new_coeffs
+    #         # q.basis = default_basis
+            
+    #         # t_shift = 0.01
+    #         # plt.plot(np.linspace(t_shift, 1 + t_shift, 100), q(t), 'g')
+    #         # plt.plot(q.basis.knots[2:-2] + t_shift, q.coeffs, 'g.')
+            
+    #         plt.figure()
+    #         for t_shift in np.linspace(0, 9, 10):
+    #             t_evaluation = np.linspace(0, 1/10, 100) + t_shift / 10
+    #             print(t_evaluation[0], t_evaluation[-1])
+    #             cropped_corners = self.cropped_corner_trajectories(self.obstacle_cropped_basis, t_evaluation[0], t_evaluation[-1])
+    #             for corner in cropped_corners:
+    #                 plt.plot(corner[0](t), corner[1](t))
+    #             plt.show()
+    #             kappa = True
+                    
+    #         plt.show()
+            
+    #         # p = corner[0]
+    #         # q = corner[1]
+    #         p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
+    #         q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
+    #         from matplotlib.collections import LineCollection
+    #         cols = np.linspace(0,1,len(p_))
+    #         points = np.array([p_, q_]).T.reshape(-1, 1, 2)
+    #         segments = np.concatenate([points[:-1], points[1:]], axis=1)
+    #         lc = LineCollection(segments, cmap='viridis')
+    #         lc = LineCollection(segments, cmap='Wistia')
+    #         lc = LineCollection(segments, cmap='hot')
+    #         if i == 0:
+    #             lc = LineCollection(segments, cmap='brg', label='corner trajectory')
+    #         else:
+    #             lc = LineCollection(segments, cmap='brg')
+    #         line = ax.add_collection(lc)
+    #         lc.set_array(cols)
+    #         lc.set_linewidth(2)
+            
+    #         """
+    #         from .spline_extra import crop_spline
+            
+    #         p = corner[0]
+    #         q = corner[1]
+    #         p = crop_spline(p, 0.4, 0.6)
+    #         q = crop_spline(q, 0.4, 0.6)
+    #         p = p.scale(1, -0.4)
+    #         q = q.scale(1, -0.4)
+    #         p = p.scale(5.01, 0)
+    #         q = q.scale(5.01, 0)
+            
+    #         kappa = True
+    #         """
+            
+    #         # print(p.basis.knots)
+    #         # p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
+    #         # q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
+            
+    #         """
+    #         # Step 1: shift the spline to t = 0.4
+    #         p = corner[0]
+    #         p.basis, p.coeffs = shift_spline(p.coeffs, 0.4, p.basis)
+    #         q = corner[1]
+    #         q.basis, q.coeffs = shift_spline(q.coeffs, 0.4, q.basis)
+    #         # # Step 2: scale back by shifting t_shift = -0.4 
+    #         # p = p.scale(1, -0.4)
+    #         # q = q.scale(1, -0.4)
+    #         # # Step 3: scaling back to the right size [0, 1]
+    #         # p = p.scale(1 * 1 / (1 - 0.4), 0)
+    #         # q = q.scale(1 * 1 / (1 - 0.4), 0)
+    #         # # Step 4: plotting
+    #         # p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
+    #         # q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
+            
+    #         # Step 5: assume the knots are symmetrically arranged.
+    #         from .spline_extra import crop_spline2
+    #         p.basis, p.coeffs = crop_spline2(p.coeffs, 0.4, 0.6, p.basis)
+    #         q.basis, q.coeffs = crop_spline2(q.coeffs, 0.4, 0.6, q.basis)
+    #         p = p.scale(1, -0.4)
+    #         q = q.scale(1, -0.4)
+    #         p = p.scale(5.01, 0)
+    #         q = q.scale(5.01, 0)
+    #         """
+            
+    #         # print(p.basis.knots)
+            
+        
+            
+    #         """
+    #         p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
+    #         q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
+            
+            
+    #         # p_ = np.array([corner[0](t_)[0] for t_ in t]).reshape(-1)
+    #         # q_ = np.array([corner[1](t_)[0] for t_ in t]).reshape(-1)
+            
+    #         # ax.plot(p_, q_, c = 'cornflowerblue',lw=1.0,alpha = 0.9, zorder = 7)
+    #         # k = 0
+    #         # for p__, q__ in zip(p_, q_):
+    #         #     ax.plot(p__, q__, '.',  c = color[k], alpha = transparency[k], zorder = 7)
+    #         #     k += 1
+            
+    #         # https://www.py4u.net/discuss/258067
+    #         # another option: https://www.tutorialspoint.com/how-to-plot-a-gradient-color-line-in-matplotlib
+    #         from matplotlib.collections import LineCollection
+    #         cols = np.linspace(0,1,len(p_))
+    #         points = np.array([p_, q_]).T.reshape(-1, 1, 2)
+    #         segments = np.concatenate([points[:-1], points[1:]], axis=1)
+    #         lc = LineCollection(segments, cmap='viridis')
+    #         lc = LineCollection(segments, cmap='Wistia')
+    #         lc = LineCollection(segments, cmap='hot')
+    #         if i == 0:
+    #             lc = LineCollection(segments, cmap='brg', label='corner trajectory')
+    #         else:
+    #             lc = LineCollection(segments, cmap='brg')
+    #         line = ax.add_collection(lc)
+    #         lc.set_array(cols)
+    #         lc.set_linewidth(2)
+    #         """
+            
+            
+            
+            
+            
+    #     import math
+    #     x_min = math.inf
+    #     x_max = -math.inf
+    #     y_min = math.inf
+    #     y_max = -math.inf
+    #     for corner in self.corners_t:
+    #         # ax.plot(corner[0], corner[1], 'k.')
+    #         x_min = min(x_min, min(corner[0]))
+    #         x_max = max(x_max, max(corner[0]))
+    #         y_min = min(y_min, min(corner[1]))
+    #         y_max = max(y_max, max(corner[1]))
+    #     # print(corner[0])
+    #     # ax.set_xlim(x_min * 1.1, x_max * 1.1)
+    #     # ax.set_ylim(y_min * 1.1, y_max * 1.1)
+            
+    #     # t = np.linspace(0, 1, 6)
+    #     # for corner in self.corners_spline:
+    #     #     p_ = np.array([corner[0](t_)[0] for t_ in t]).reshape(-1)
+    #     #     q_ = np.array([corner[1](t_)[0] for t_ in t]).reshape(-1)
+    #     #     ax.plot(p_, q_, 'yo')
+            
+    #     numera = 7
+    #     color=cm.brg(np.linspace(0,1,numera))
+    #     c = color
+    #     for i in range(numera):
+    #         corners = np.array(self.corners)
+    #         corners = np.vstack((corners, corners[0, :]))
+    #         p, q = [], []
+    #         for j in range(corners.shape[0]):
+    #             p_corn, q_corn = self.fp.inertial_to_frenet(x = corners[j, 0], y = corners[j, 1], t = interp(i,[0,numera-1],[0,1]))
+    #             p = np.append(p, p_corn)
+    #             q = np.append(q, q_corn)
+    #         ax.plot(p,
+    #                 q,
+    #                 c = c[i])
+    #     ax.set_title(r'Obstacle position in the Frenet frame w.r.t time $t \in [0; 1]$')
+    #     ax.set_xlabel("p")  
+    #     ax.set_ylabel("q")  
+    #     ax.legend(fontsize = 'x-small')
+            
+            
+    #     s_danger = 0.6988905493709299    
+    #     # circle = plt.Circle((0, 0), 1, color='k', alpha=0.5, zorder = 10)
+    #     circle = plt.Circle((0, 0), s_danger, color='r', alpha=0.5, zorder = 10)
+    #     ax.add_patch(circle)
+    #     ax.legend([circle, line], ['collision radious', 'corner trajectory'])
+    #     ax.set_aspect('equal', adjustable='box')
+    #     fig.colorbar(line,ax=ax, orientation="horizontal")
+        
+        
+    #     plt.savefig('obstacle_corners_' + str(self.ID) + '.pdf')
+    #     plt.show()
+    #     return ax
+    
     def plot_corners_spline(self):
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
@@ -214,204 +527,10 @@ class Obstacle(Environment):
         transparency = np.logspace(-9, -5, base=2, num=len(t))
         transparency = np.logspace(-1, 0, base=2, num=len(t))
         
-        p = self.corners_spline[0][0]
-        cropped_corners = self.cropped_corner_trajectories(p.basis, 0.4, 0.6)
         
         for i, corner in enumerate(self.corners_spline):
-            
-            
-            
-            
-            # corner2 = cropped_corners[i]
-            # p = corner2[0]
-            # q = corner2[1]
-            # p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
-            # q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
-            
-            
-            
-            
-            # from matplotlib.collections import LineCollection
-            # cols = np.linspace(0,1,len(p_))
-            # points = np.array([p_, q_]).T.reshape(-1, 1, 2)
-            # segments = np.concatenate([points[:-1], points[1:]], axis=1)
-            # lc = LineCollection(segments, cmap='viridis')
-            # lc = LineCollection(segments, cmap='Wistia')
-            # lc = LineCollection(segments, cmap='hot')
-            # if i == 0:
-            #     lc = LineCollection(segments, cmap='brg', label='corner trajectory', linewidths = 2)
-            # else:
-            #     lc = LineCollection(segments, cmap='brg', linewidths = 2)
-            # line = ax.add_collection(lc)
-            # lc.set_array(cols)
-            # lc.set_linewidth(2)
-            
-            
-            p = corner[0]
-            q = corner[1]
-            from .spline_extra import shift_over_knot
-            
-            # p.coeffs = shift_knot1_fwd(p.coeffs, p.basis, 0.4)
-            # q.coeffs = shift_knot1_fwd(q.coeffs, q.basis, 0.4)
-            # p.coeffs = shift_knot1_fwd(p.coeffs, p.basis, 0.4)
-            # q.coeffs = shift_knot1_fwd(q.coeffs, q.basis, 0.4)
-            
-            """ shift over knot
-            # # Just for testing:
-            import matplotlib.pyplot as plt
-            t = np.linspace(0, 1, 100)
-            plt.figure()
-            plt.plot(t, q(t))
-            plt.plot(q.basis.knots[2:-2], q.coeffs, 'ro')
-            
-            
-            kappa, p.coeffs = shift_over_knot(p.coeffs, p.basis)
-            kappa, q.coeffs = shift_over_knot(q.coeffs, q.basis)
-            
-            # p.basis, p.coeffs = shift_spline(p.coeffs, 0.05, p.basis)
-            # p = p.scale(1, -0.05)
-            plt.plot(np.linspace(0.1, 1.1, 100), q(t), 'k')
-            plt.plot(q.basis.knots[2:-2], p.coeffs, 'ko')
-            plt.show()
-            """
-            
-            
-            def shift_spline_v2(spline, t_shift):
-                """This is the second version of our infamous spline-shifting technology.
-                What we do is as follows. We 1) extrapolate over a knot interval.
-                Then we 2) crop the spline and lastly we 3) transform the spline to its original basis.
-                This version avoids having singularities due to increased knot number.
-                """
-                default_basis = self.define_knots(degree = spline.basis.degree, knots = spline.basis.knots)
-                # Step 1: extrapolation
-                spline.basis, spline.coeffs = extrapolate(spline.coeffs, t_shift, spline.basis)
-                # Step 3: cropping
-                spline.basis, spline.coeffs = shift_spline(spline.coeffs, t_shift, spline.basis)
-                spline = spline.scale(1, -t_shift)
-                # Step 4: transforming back
-                new_coeffs = default_basis.transform(spline.basis).dot(spline.coeffs)
-                new_spline = BSpline(default_basis, new_coeffs)
-            
-                return new_spline
-            
-            
-            
-            plt.figure()
-            plt.plot(t, q(t), 'k')
-            plt.plot(q.basis.knots[2:-2], q.coeffs, 'ko')
-            
-            "Trying new shift"
-            # t_shift = 0.01
-            # q = shift_spline_v2(q, t_shift)
-            # plt.plot(np.linspace(t_shift, 1 + t_shift, 100), q(t), 'b:')
-            # plt.plot(q.basis.knots[2:-2] + t_shift, q.coeffs, 'b*')
-            # plt.show()
-            
-            "Working shift"
-            # q = q.insert_knots((q.basis.knots+ 0.05)[:-4] )
-            # plt.plot(t, q(t), 'b:')
-            # plt.plot(q.basis.knots[2:-2], q.coeffs, 'b*')
-            
-            # kappa, q.coeffs = shift_over_knot(q.coeffs, q.basis)
-            # plt.plot(np.linspace(0.05, 1 + 0.05, 100), q(t), 'r')
-            # plt.plot(q.basis.knots[2:-2] + 0.05, q.coeffs, 'ro')
-            
-            # default_basis = p.basis
-            # new_coeffs = default_basis.transform(q.basis).dot(q.coeffs)
-            # q.coeffs = new_coeffs
-            # q.basis = default_basis
-            
-            # t_shift = 0.01
-            # plt.plot(np.linspace(t_shift, 1 + t_shift, 100), q(t), 'g')
-            # plt.plot(q.basis.knots[2:-2] + t_shift, q.coeffs, 'g.')
-            
-            plt.figure()
-            for t_shift in np.linspace(0, 9, 10):
-                t_evaluation = np.linspace(0, 1/10, 100) + t_shift / 10
-                print(t_evaluation[0], t_evaluation[-1])
-                cropped_corners = self.cropped_corner_trajectories(self.obstacle_cropped_basis, t_evaluation[0], t_evaluation[-1])
-                for corner in cropped_corners:
-                    plt.plot(corner[0](t), corner[1](t))
-                plt.show()
-                kappa = True
-                    
-            plt.show()
-            
-            # p = corner[0]
-            # q = corner[1]
-            p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
-            q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
-            from matplotlib.collections import LineCollection
-            cols = np.linspace(0,1,len(p_))
-            points = np.array([p_, q_]).T.reshape(-1, 1, 2)
-            segments = np.concatenate([points[:-1], points[1:]], axis=1)
-            lc = LineCollection(segments, cmap='viridis')
-            lc = LineCollection(segments, cmap='Wistia')
-            lc = LineCollection(segments, cmap='hot')
-            if i == 0:
-                lc = LineCollection(segments, cmap='brg', label='corner trajectory')
-            else:
-                lc = LineCollection(segments, cmap='brg')
-            line = ax.add_collection(lc)
-            lc.set_array(cols)
-            lc.set_linewidth(2)
-            
-            """
-            from .spline_extra import crop_spline
-            
-            p = corner[0]
-            q = corner[1]
-            p = crop_spline(p, 0.4, 0.6)
-            q = crop_spline(q, 0.4, 0.6)
-            p = p.scale(1, -0.4)
-            q = q.scale(1, -0.4)
-            p = p.scale(5.01, 0)
-            q = q.scale(5.01, 0)
-            
-            kappa = True
-            """
-            
-            # print(p.basis.knots)
-            # p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
-            # q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
-            
-            """
-            # Step 1: shift the spline to t = 0.4
-            p = corner[0]
-            p.basis, p.coeffs = shift_spline(p.coeffs, 0.4, p.basis)
-            q = corner[1]
-            q.basis, q.coeffs = shift_spline(q.coeffs, 0.4, q.basis)
-            # # Step 2: scale back by shifting t_shift = -0.4 
-            # p = p.scale(1, -0.4)
-            # q = q.scale(1, -0.4)
-            # # Step 3: scaling back to the right size [0, 1]
-            # p = p.scale(1 * 1 / (1 - 0.4), 0)
-            # q = q.scale(1 * 1 / (1 - 0.4), 0)
-            # # Step 4: plotting
-            # p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
-            # q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
-            
-            # Step 5: assume the knots are symmetrically arranged.
-            from .spline_extra import crop_spline2
-            p.basis, p.coeffs = crop_spline2(p.coeffs, 0.4, 0.6, p.basis)
-            q.basis, q.coeffs = crop_spline2(q.coeffs, 0.4, 0.6, q.basis)
-            p = p.scale(1, -0.4)
-            q = q.scale(1, -0.4)
-            p = p.scale(5.01, 0)
-            q = q.scale(5.01, 0)
-            """
-            
-            # print(p.basis.knots)
-            
-        
-            
-            """
-            p_ = np.array([p(t_)[0] for t_ in t]).reshape(-1)
-            q_ = np.array([q(t_)[0] for t_ in t]).reshape(-1)
-            
-            
-            # p_ = np.array([corner[0](t_)[0] for t_ in t]).reshape(-1)
-            # q_ = np.array([corner[1](t_)[0] for t_ in t]).reshape(-1)
+            p_ = np.array([corner[0](t_)[0] for t_ in t]).reshape(-1)
+            q_ = np.array([corner[1](t_)[0] for t_ in t]).reshape(-1)
             
             # ax.plot(p_, q_, c = 'cornflowerblue',lw=1.0,alpha = 0.9, zorder = 7)
             # k = 0
@@ -420,7 +539,6 @@ class Obstacle(Environment):
             #     k += 1
             
             # https://www.py4u.net/discuss/258067
-            # another option: https://www.tutorialspoint.com/how-to-plot-a-gradient-color-line-in-matplotlib
             from matplotlib.collections import LineCollection
             cols = np.linspace(0,1,len(p_))
             points = np.array([p_, q_]).T.reshape(-1, 1, 2)
@@ -435,10 +553,21 @@ class Obstacle(Environment):
             line = ax.add_collection(lc)
             lc.set_array(cols)
             lc.set_linewidth(2)
-            """
             
             
+        # Center
+        p_ = np.array([self.center_spline[0](t_)[0] for t_ in t]).reshape(-1)
+        q_ = np.array([self.center_spline[1](t_)[0] for t_ in t]).reshape(-1)
+        ax.plot(p_, q_, 'k.')
             
+        s_danger = self.max_dist_from_center * 0.9    
+        # circle = plt.Circle((0, 0), 1, color='k', alpha=0.5, zorder = 10)
+        for p__, q__ in zip(p_, q_):
+            circle = plt.Circle((p__, q__), s_danger, color='r', alpha=0.1, zorder = 10)
+            ax.add_patch(circle)
+            ax.legend([circle, line], ['collision radious', 'corner trajectory'])
+            ax.set_aspect('equal', adjustable='box')
+            # fig.colorbar(line,ax=ax)
             
             
         import math
@@ -452,9 +581,9 @@ class Obstacle(Environment):
             x_max = max(x_max, max(corner[0]))
             y_min = min(y_min, min(corner[1]))
             y_max = max(y_max, max(corner[1]))
-        # print(corner[0])
-        # ax.set_xlim(x_min * 1.1, x_max * 1.1)
-        # ax.set_ylim(y_min * 1.1, y_max * 1.1)
+        
+        ax.set_xlim(x_min * 1.1, x_max * 1.1)
+        ax.set_ylim(y_min * 1.1, y_max * 1.1)
             
         # t = np.linspace(0, 1, 6)
         # for corner in self.corners_spline:
@@ -476,7 +605,7 @@ class Obstacle(Environment):
             ax.plot(p,
                     q,
                     c = c[i])
-        ax.set_title(r'Obstacle position in the Frenet frame w.r.t time $t \in [0; 1]$')
+        ax.set_title("Obstacle position in the Frenet frame")
         ax.set_xlabel("p")  
         ax.set_ylabel("q")  
         ax.legend(fontsize = 'x-small')
@@ -488,12 +617,12 @@ class Obstacle(Environment):
         ax.add_patch(circle)
         ax.legend([circle, line], ['collision radious', 'corner trajectory'])
         ax.set_aspect('equal', adjustable='box')
-        fig.colorbar(line,ax=ax, orientation="horizontal")
+        fig.colorbar(line,ax=ax)
         
         
-        plt.savefig('obstacle_corners_' + str(self.ID) + '.pdf')
+        plt.savefig('b_' + str(self.ID) + '.png')
         plt.show()
-        return ax
+        return self
             
     def random_placement(self, x_limits, y_limits):
         import random

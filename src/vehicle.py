@@ -25,6 +25,13 @@ class Vehicle(VehicleBasis):
     def __init__(self):
         super().__init__()
         
+        
+        
+        
+        self.plot_self_ID = 2
+        self.plot_obst_IDX = 0 # 4
+        self.plot_stage = 5
+        
         self.t_start = 0.0
         self.t_step = 0.04 # 0.04 # Changed in simulation_step() upon first call
         self.t_window_size = 0.2
@@ -358,7 +365,7 @@ class Vehicle(VehicleBasis):
             n = self.n_of_saved_waypoints
             for i, t_intermediate in enumerate(PvX.t_intermediate):
                 idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-                x_intermediate = PvX.x_intermediate
+                x_intermediate = np.array(PvX.x_intermediate)[idx].reshape(-1).tolist()
                 
                 key, value = self.check_constraint([(p(t_intermediate) - x_intermediate[0])**2, (q(t_intermediate) - x_intermediate[1])**2],
                                         [0, 0],
@@ -419,9 +426,18 @@ class Vehicle(VehicleBasis):
                 d_tau_coeffs = np.array(DvX.d_tau)[idx].reshape(-1).tolist()
                 d_tau = [BSpline(basis, np.array(d_tau_coeffs))]
                 hyperplane = [a, b, d_tau]
+                
+                # obst center
+                search_length = len(basis) * 2
+                idx_center = np.arange(search_length*i,search_length*i+search_length)
+                obst_center_coeffs = np.array(PvX.obst_center)[idx_center].reshape(-1).tolist()
+                coeffs = [obst_center_coeffs[len(basis) * k :len(basis)*(k+1)] for k in range(2)]
+                obst_center = [BSpline(basis, np.array(coeffs_)) for coeffs_ in coeffs]
+                center_circle = [obst_center, self.obstacles[i].max_dist_from_center]
                 key, value = self.check_collision_avoidance_hyperplane([p, q], obst_corners, hyperplane,
                                                     radious=self.radious * 0, name="avoidance_obst_" + str(i) + '_',
-                                                    constraint_type='obstacle')
+                                                    constraint_type='obstacle',
+                                                    center_circle = center_circle)
                 feasibility_dict[key] = value
                 # a_list += [tmp_a]
         
@@ -686,10 +702,21 @@ class Vehicle(VehicleBasis):
                            category = 'parameter')
                 
                 obst_corners += [corner1, corner2, corner3, corner4]
+                
+                # Let's put a circle inside the obstacle as well. The same hyperplane must be between this circle and the vehicle, 
+                # that also separates the vehicle and the obstacle as well.
+                center = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knot_intervals, n_spl = 2,
+                           lower_bound = [], upper_bound = [],
+                           name = ['obst_center'] * 2,
+                           category = 'parameter')
+                # This circle also has a radious, defined by the half of the maximum extension of the obstacle
+                circle_rad = obstacle.max_dist_from_center * 0.8
+                center_circle = [center, circle_rad]
             
                 tmp_a = self.collision_avoidance_hyperplane([p, q], obst_corners,
-                                                    radious=self.radious * 0, name="obst_" + str(i),
-                                                    constraint_type='obstacle')
+                                                    radious=self.radious * 0.001, name="obst_" + str(i),
+                                                    constraint_type='obstacle',
+                                                    center_circle = center_circle)
                 a_list += [tmp_a]
                 
             
@@ -841,8 +868,9 @@ class Vehicle(VehicleBasis):
         DvX = self.variable_history["DvX_posterior"][stage]
         PvX = self.variable_history["PvX"][stage]
         
+        self_ID = self.plot_self_ID
         self_ID = 2
-        obst_IDX = 1
+        obst_IDX = self.plot_obst_IDX
         
         if self.stage == 4:
             kappa = True
@@ -961,8 +989,8 @@ class Vehicle(VehicleBasis):
         # plot trajectory suggestions
         # plot intermediate positions
         basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
-        x = np.array(self.x_intermediate_list)
-        for i in range(len(self.t_intermediate_list)):
+        x = np.array(PvX.x_intermediate)
+        for i in range(len(PvX.t_intermediate)):
             idx = np.arange(3*int(1)*i,3*int(1)*i+3*int(1))
             p = x[idx[0]]
             q = x[idx[1]]
@@ -970,7 +998,8 @@ class Vehicle(VehicleBasis):
             
             ax.plot(p, q, 'ko',alpha = 0.1)
         
-        if self.ID == "Dont plot hyperplanes": # self_ID:
+        if self.ID == "Dont plot hyperplanes":
+        # if self.ID == self_ID:
             # plot hyperplanes
             
             a1_coeffs = np.array(DvX.a)[np.arange(len(basis)*2*(obst_IDX) + 0, len(basis)*2*(obst_IDX) + len(basis))]
@@ -989,20 +1018,50 @@ class Vehicle(VehicleBasis):
             shrink = 0.01
             c=cm.brg(np.linspace(0,1,len(t)))
             for i, t_ in enumerate(t):
-                x1 = np.linspace(-3 + i * shrink, 3 - i * shrink, 100)
-                if a2(t_) == 0:
-                    x2 = x1
-                else:
-                    x2 = (b(t_) - a1(t_) * x1) / a2(t_)
-                # Plot the lines
-                x1 = x1.reshape(-1).tolist()
-                x2 = x2.reshape(-1).tolist()
+                if True:
+                # if not(i%2) or (i == len(t) - 1):
+                    x1 = np.linspace(-3 + i * shrink, 3 - i * shrink, 100)
+                    if a2(t_) == 0:
+                        x2 = x1
+                    else:
+                        x2 = (b(t_) - a1(t_) * x1) / a2(t_)
+                    # Plot the lines
+                    x1 = x1.reshape(-1).tolist()
+                    x2 = x2.reshape(-1).tolist()
+                    
+                    
+                    # Plot
+                    ax.plot(x1, x2, c = c[i], zorder = 0)
                 
                 
-                # Plot rectangles
-                ax.plot(x1, x2, c = c[i], zorder = 0)
+            self.plot_drone(ax, x0 = x0[0],
+                            y0 = x0[1],
+                            theta_c = 0)
+                
+        for i, obst in enumerate(self.obstacles):
+            if i == obst_IDX:
+                search_length = len(self.obstacle_cropped_basis) * 2 # len(basis) * 2
+                idx_center = np.arange(search_length*i,search_length*i+search_length)
+                obst_center_coeffs = np.array(PvX.obst_center)[idx_center].reshape(-1).tolist()
+                coeffs = [obst_center_coeffs[len(self.obstacle_cropped_basis) * k :len(self.obstacle_cropped_basis)*(k+1)] for k in range(2)]
+                obst_center = [BSpline(basis, np.array(coeffs_)) for coeffs_ in coeffs]
+                center_circle = [obst_center, self.obstacles[i].max_dist_from_center]
+                
+                p, q = obst_center
+                p_ = p(t).reshape(-1).tolist()
+                q_ = q(t).reshape(-1).tolist()
+                # ax.plot(p_, q_, c = 'cornflowerblue',lw=0.8,alpha = 0.5, zorder = 3)
+                ax, line = draw_colored_pq(ax, p_, q_, -1)
+                
+                s_danger = obst.max_dist_from_center * 0.9    
+                for j, (p__, q__) in enumerate(zip(p_, q_)):
+                    if not(j%10):
+                        circle = plt.Circle((p__, q__), s_danger, color='r', alpha=0.1, zorder = 10)
+                        ax.add_patch(circle)
+                        ax.legend([circle, line], ['collision radious', 'corner trajectory'])
+                        ax.set_aspect('equal', adjustable='box')
+                    # fig.colorbar(line,ax=ax)
             
-        
         
         
         # fig.savefig('figures/' + 'cc' + '{:0>1d}'.format(self.stage) +'.pdf', dpi = 200)
@@ -1019,6 +1078,12 @@ class Vehicle(VehicleBasis):
         
 
     def x_update_prior(self):
+        
+        
+        if self.stage == self.plot_stage and self.ID == self.plot_self_ID:
+            kappa = True
+        
+        
         self.update_PvX()
         if self.shift_enabled == True:
             self.shift_DvX()
@@ -1036,16 +1101,25 @@ class Vehicle(VehicleBasis):
         self.solution = self.solver.call(self.arg)
         final_time = time.time()
         
+        
+        if self.stage == self.plot_stage and self.ID == self.plot_self_ID:
+            kappa = True
+            feasibility_dict_posterior = self.check_feasibility_of_solution_x()
+            feasibility_dict_posterior = self.check_feasibility_of_solution_x()
+            feasibility_dict_posterior = self.check_feasibility_of_solution_x()
+        
         if self.solver.stats()['return_status'] == 'Solve_Succeeded':
             self.variable_history['first_time_success'] += [True]
         else:
             self.variable_history['first_time_success'] += [False]
+            # """
             self.arg['x0'] = self.solution["x"]
             self.solution = self.solver.call(self.arg)
             
             if self.solver.stats()['return_status'] != 'Solve_Succeeded':
                 self.arg['x0'] = self.solution["x"]
-                self.solution = self.solver.call(self.arg)
+                self.solution = self.solver.call(self.arg) 
+                # """
             
             
             
@@ -1058,6 +1132,8 @@ class Vehicle(VehicleBasis):
     def x_update_posterior(self):
         # Extracting the solution
         self.DvX.extract(self.solution)
+        if self.stage == 6 and self.ID == 2:
+            kappa = True
         self.variable_history["DvX_posterior"] += [copy.deepcopy(self.DvX)]
         feasibility_dict = self.check_feasibility_of_solution_x()
         feasibility_dict["IPOPT_SUCCESS"] = self.solver.stats()['success']
@@ -1358,8 +1434,10 @@ class Vehicle(VehicleBasis):
     
     def plot_moovie_frames_mooving_horizon(self, ax, horizon_num):
         t_steps = 100     
-        self_ID = 3
-        obst_IDX = 6
+        self_ID = self.ID
+        self_ID = self.plot_self_ID
+        self_ID = 2
+        obst_IDX = self.plot_obst_IDX
         horizon_num_original = int(horizon_num)    
         horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
         # Creating the splines
@@ -1428,6 +1506,7 @@ class Vehicle(VehicleBasis):
         # We want to plot a line for every time instance in the local time, which is actually associated with a global time. Just like we did
         # for x, y before. But don't forget, that in that case we plotted dots, and now we plot lines.
         if self.ID == self_ID:
+            
             # plot hyperplanes
             t = np.linspace(0.001, 1-0.001, 100)
             DvX_a = self.variable_history['a'][horizon_num]

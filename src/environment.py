@@ -12,7 +12,6 @@ from .spline import BSpline, BSplineBasis
 class Environment():
     def __init__(self):
         
-        
         # self.start_position = [-0.8, 0]
         # self.goal_position = [0.8, 0]
         # 0 in the frenet frame :)

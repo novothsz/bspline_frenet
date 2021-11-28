@@ -17,6 +17,8 @@ class ParamValX():
         self.equation_min_q = []
         self.equation_max_q = []
         self.obst = []
+        self.obst_center = []
+        # self.obst_center_rad = []
         
         self.z_i = []
         self.z_ji = []
@@ -58,6 +60,8 @@ class ParamValX():
         idx_equation_min_q = list(locate(assemble_list, lambda a: a == 'equation_min_q'))
         idx_equation_max_q = list(locate(assemble_list, lambda a: a == 'equation_max_q'))
         idx_obst = list(locate(assemble_list, lambda a: a == 'obst'))
+        idx_obst_center = list(locate(assemble_list, lambda a: a == 'obst_center'))
+        # idx_obst_center_rad = list(locate(assemble_list, lambda a: a == 'obst_center_rad'))
         
         idx_z_i = list(locate(assemble_list, lambda a: a == 'z_i'))
         idx_z_ji = list(locate(assemble_list, lambda a: a == 'z_ji'))
@@ -103,6 +107,11 @@ class ParamValX():
             for i, idx in enumerate(idx_obst):
                 P0_assemble[idx] = self.obst[i]
                 
+            for i, idx in enumerate(idx_obst_center):
+                P0_assemble[idx] = self.obst_center[i]
+            # for i, idx in enumerate(idx_obst_center_rad):
+                # P0_assemble[idx] = self.obst_center_rad[i]
+                
                 
             for i, idx in enumerate(idx_z_i):
                 P0_assemble[idx] = self.z_i[i]
@@ -138,6 +147,8 @@ class ParamValX():
             self.equation_min_q = np.zeros((1, len(idx_equation_min_q))).tolist()[0]
             self.equation_max_q = np.zeros((1, len(idx_equation_max_q))).tolist()[0]
             self.obst = np.zeros((1, len(idx_obst))).tolist()[0]
+            self.obst_center = np.zeros((1, len(idx_obst_center))).tolist()[0]
+            # self.obst_center_rad = np.zeros((1, len(idx_obst_center_rad))).tolist()[0]
         
             self.z_i = np.zeros((1, len(idx_z_i))).tolist()[0]
             self.z_ji = np.zeros((1, len(idx_z_ji))).tolist()[0]

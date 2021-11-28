@@ -25,6 +25,10 @@ class Group(Environment):
         self.goal_position = goal_position
         self.stage = stage
         super().__init__()
+        
+        
+        
+        self.plot_stage = 5
 
         # Create figures for plotting
         self.figures = {}
@@ -137,8 +141,9 @@ class Group(Environment):
         max_len_a = self.vehicles[0].n_of_saved_waypoints * len(self.vehicles[0].obstacles) * 2 
         max_len_t = self.vehicles[0].n_of_saved_waypoints
         
-        if self.stage == 13:
-            kappa = True
+        
+        # if self.stage == self.plot_stage:
+        #     kappa = True
             
         # the cummulative values hold the relative formation rotation  scaling w.r.t. the original formation configuration
         cum_rotation_old = self.cum_rotation
@@ -2076,7 +2081,7 @@ class Group(Environment):
         # Generate obstacles along the way
         obstacles = []
         t_bound = []
-        t_tmp = [0.4, 0.6, 0.8]
+        t_tmp = [0.3, 0.5, 0.8]
         for i in range(n_obst_along):
             centerpoint = [random.uniform(centerpoint_x_bound[0], centerpoint_x_bound[1]), \
                            random.uniform(centerpoint_y_bound[0], centerpoint_y_bound[1]), 0 ]
@@ -2103,7 +2108,7 @@ class Group(Environment):
         
         
         # obstacles = []
-        t_tmp = [0.3, 0.5, 0.7]
+        t_tmp = [0.2, 0.4, 0.6]
         for i in range(n_obst_gate):
             gate_points_tmp = random.uniform(gate_gap_bound[0], gate_gap_bound[1])
             # The lower part of the gate
@@ -2401,6 +2406,8 @@ class Group(Environment):
             ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
             ax.set_xlim(self.vehicles[0].fp.fx_spline(t_start)[0][0] - 2, self.vehicles[0].fp.fx_spline(t_start)[0][0] + 2*3)
             ax.set_ylim(self.vehicles[0].fp.fy_spline(t_start)[0][0] - 2.5, self.vehicles[0].fp.fy_spline(t_start)[0][0] + 2.5)
+            # ax.set_xlim(self.vehicles[0].fp.fx_spline(t_start)[0][0] - 5, self.vehicles[0].fp.fx_spline(t_start)[0][0] + 10)
+            # ax.set_ylim(self.vehicles[0].fp.fy_spline(t_start)[0][0] - 7.5, self.vehicles[0].fp.fy_spline(t_start)[0][0] + 7.5)
             # ax.set_xlabel("x axis")
             # ax.set_ylabel("y axis")
             ax.set_aspect('equal', adjustable='box')

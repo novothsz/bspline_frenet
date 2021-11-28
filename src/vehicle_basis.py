@@ -277,6 +277,7 @@ class VehicleBasis(Environment):
         self.PvX.equation_min_q = [self.fp.equation_min_q(t_).tolist()[0][0] for t_ in t_evaluation]
         self.PvX.equation_max_q = [self.fp.equation_max_q(t_).tolist()[0][0] for t_ in t_evaluation]
         self.PvX.obst = []
+        self.PvX.obst_center = []
         
         
         # In this case we fill it up with the coefficients
@@ -287,6 +288,11 @@ class VehicleBasis(Environment):
                 cropped_corners = obstacle.cropped_corner_trajectories(self.obstacle_cropped_basis, t_evaluation[0], val)
                 for corner in cropped_corners:
                     self.PvX.obst += corner[0].coeffs.reshape(-1).tolist() + corner[1].coeffs.reshape(-1).tolist()
+                    
+                cropped_center = obstacle.cropped_center_trajectories(self.obstacle_cropped_basis, t_evaluation[0], val)
+                self.PvX.obst_center += cropped_center[0].coeffs.reshape(-1).tolist() + cropped_center[1].coeffs.reshape(-1).tolist()
+                    
+                    
                     
         # In this version we are filling it up with positions at prescribed time points
         else: 
@@ -838,8 +844,9 @@ class VehicleBasis(Environment):
         
         elif constraint_type == 'time':
             for i in range(len(constraint)):
-                for j in range(constraint[i].shape[0]):
-                    feasibility += [lower_bound[i] - self.feasibility_slack <= constraint[i].reshape(-1).tolist()[0] and constraint[i].reshape(-1).tolist()[0] <= upper_bound[i] + self.feasibility_slack]
+                # for j in range(constraint[i].shape[0]):
+                #     print(j)
+                feasibility += [lower_bound[i] - self.feasibility_slack <= constraint[i].reshape(-1).tolist()[0] and constraint[i].reshape(-1).tolist()[0] <= upper_bound[i] + self.feasibility_slack]
             return name, feasibility
             
         elif constraint_type == 'initial':
@@ -953,7 +960,7 @@ class VehicleBasis(Environment):
         constraint = (splines[0] - center[0])**2 + (splines[1] - center[1])**2
         self.define_constraint([constraint], lower_bound = [radious**2], upper_bound = [math.inf], name = name)
 
-    def check_collision_avoidance_hyperplane(self, splines, points, hyperplane, radious, name, constraint_type='obstacle', n_samples = 10):
+    def check_collision_avoidance_hyperplane(self, splines, points, hyperplane, radious, name, constraint_type='obstacle', n_samples = 10, center_circle = []):
         obst_feasibility_dict = {}
         any_ = [False]
         
@@ -961,9 +968,16 @@ class VehicleBasis(Environment):
         const1 = a[0]*splines[0] + a[1]*splines[1] - b[0]
         key, value = self.check_constraint([const1], lower_bound = [-math.inf], upper_bound = [-radious], name = "eq1")
         obst_feasibility_dict[key] = value
-        if any(value):
+        if not all(value):
             any_[0] = True
             any_ += ["eq1"]
+            
+        # Center circle stuff
+        key, value = self.check_constraint([const1], lower_bound = [-math.inf], upper_bound = [-center_circle[1]], name = "eq1_center_circle")
+        obst_feasibility_dict[key] = value
+        if not all(value):
+            any_[0] = True
+            any_ += ["eq1_center_circle"]
         
         # ---- Constraint 2 (various versions)
         const2 = []
@@ -974,9 +988,18 @@ class VehicleBasis(Environment):
             for i in range(len(points)):
                 key, value = self.check_constraint([const2[i]], lower_bound = [0], upper_bound = [math.inf], name = "eq2" + "_corn_" + str(i))
                 obst_feasibility_dict[key] = value
-                if any(value):
+                if not all(value):
                     any_[0] = True
                     any_ += ["eq2" + "_corn_" + str(i)]
+                    
+            # Center circle stuff
+            const2_center_circle = a[0] * center_circle[0][0] + a[1] * center_circle[0][1] - b[0]  - d_tau[0]
+            key, value = self.check_constraint([const2_center_circle], lower_bound = [0], upper_bound = [math.inf], name = "eq2_center_circle")
+            obst_feasibility_dict[key] = value
+            if not all(value):
+                any_[0] = True
+                any_ += ["eq2_center_circle"]
+            
         else:
             raise NotImplementedError()
             
@@ -984,14 +1007,14 @@ class VehicleBasis(Environment):
         const3 = a[0] * a[0] + a[1] * a[1]
         key, value = self.check_constraint([const3], lower_bound = [0.0], upper_bound = [1.0], name = "eq3")
         obst_feasibility_dict[key] = value
-        if any(value):
+        if not all(value):
             any_[0] = True
             any_ += ["eq3"]
         
         obst_feasibility_dict["any"] = any_
         return name, obst_feasibility_dict
         
-    def collision_avoidance_hyperplane(self, splines, points, radious, name, constraint_type='obstacle', n_samples = 10):
+    def collision_avoidance_hyperplane(self, splines, points, radious, name, constraint_type='obstacle', n_samples = 10, center_circle = []):
         """Collision avoidance using the separating hyperplane theorem"""
 
         # a
@@ -1038,14 +1061,18 @@ class VehicleBasis(Environment):
         # ---- Constraint 1
         const1 = a[0]*splines[0] + a[1]*splines[1] - b[0]
         self.define_constraint([const1], lower_bound = [-math.inf], upper_bound = [-radious], name = "eq1")
+        self.define_constraint([const1], lower_bound = [-math.inf], upper_bound = [center_circle[1]], name = "eq1")
 
         # ---- Constraint 2 (various versions)
         const2 = []
         if constraint_type == 'obstacle':
             for point in points:
                 const2 += [a[0] * point[0] + a[1] * point[1] - b[0]  - d_tau[0] ]
+                
+            # We allso add here the center circle
+            const2 += [a[0] * center_circle[0][0] + a[1] * center_circle[0][1] - b[0]  - d_tau[0] ]
             # ----
-            for i in range(len(points)):
+            for i in range(len(const2)):
                 self.define_constraint([const2[i]], lower_bound = [0], upper_bound = [math.inf], name = "eq2" + "_corn_" + str(i))
 
         elif constraint_type == 'spline_obstacle_t':
