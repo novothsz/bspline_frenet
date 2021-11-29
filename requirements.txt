@@ -1,5 +1,6 @@
 casadi
 matplotlib
+futures
 autograd
 pyyaml
 scipy

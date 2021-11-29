@@ -10,6 +10,7 @@ import time
 import csv
 import random
 import copy
+import os
 
 from .obstacle import Obstacle
 
@@ -29,6 +30,7 @@ class Group(Environment):
         
         
         self.plot_stage = 5
+        self.seed = []
 
         # Create figures for plotting
         self.figures = {}
@@ -261,6 +263,7 @@ class Group(Environment):
                 if max_len_a != len(vehicle.a_intermediate_list):
                     kappa = True
                     print('Baj van főnök!')
+                    vehicle.a_intermediate_list = np.zeros(max_len_a).tolist()
                 
                 
                 vehicle.t_intermediate_list = vehicle.t_intermediate_list + [vehicle.t_intermediate_list[-1]] * diff_t
@@ -426,7 +429,8 @@ class Group(Environment):
                             vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
                             # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
                             vehicle.t_intermediate_list += [t_local]
-                            vehicle.t_real_intermediate_list += [t]
+                            t_cropped = t * (t <= t_sweep_end) + t_sweep_end * ( t > t_sweep_end )
+                            vehicle.t_real_intermediate_list += [t_cropped]
                             vehicle.t_real_activation_list += [[t_danger_start, t_danger_end]]
                             # vehicle.variable_history['t_intermediate_list'] += [t_local]
                             
@@ -2060,20 +2064,25 @@ class Group(Environment):
             #                       ellipse_rotation : float = 0, vehicles_rotation : float = math.pi / 4,
             #                       ellipse_scale_x : float = 1, ellipse_scale_y : float = 1):
              
-                
+              
+        self.seed = seed
+        os.system("mkdir " + str(self.cwd) + '/video/' + str(self.seed))
+        os.system("mkdir " + str(self.cwd) + '/figures/' + str(self.seed))
+        
+        
         # variables
-        t_spacing = 0.2
-        t_free_begin = 0.2
-        t_free_end = 0.2
+        # t_spacing = 0.2
+        # t_free_begin = 0.2
+        # t_free_end = 0.2
         
         
-        n_obst_along = 3
+        n_obst_along = 2
         random.seed(seed)
         centerpoint_x_bound = [-0.1, 0.1]
         centerpoint_y_bound = [-0.1, 0.1]
         
         a_bound = [0.1, 0.7]
-        b_bound = [0.1, 1.5]
+        b_bound = [0.1, 0.7] # 1.5]
         
         alpha_bound = [-math.pi/2, math.pi/2]
         
@@ -2081,7 +2090,7 @@ class Group(Environment):
         # Generate obstacles along the way
         obstacles = []
         t_bound = []
-        t_tmp = [0.3, 0.5, 0.8]
+        t_tmp = [0.35, 0.65]
         for i in range(n_obst_along):
             centerpoint = [random.uniform(centerpoint_x_bound[0], centerpoint_x_bound[1]), \
                            random.uniform(centerpoint_y_bound[0], centerpoint_y_bound[1]), 0 ]
@@ -2108,7 +2117,7 @@ class Group(Environment):
         
         
         # obstacles = []
-        t_tmp = [0.2, 0.4, 0.6]
+        t_tmp = [0.2, 0.5, 0.8]
         for i in range(n_obst_gate):
             gate_points_tmp = random.uniform(gate_gap_bound[0], gate_gap_bound[1])
             # The lower part of the gate
@@ -2385,7 +2394,7 @@ class Group(Environment):
             for vehicle in self.vehicles:
                 ax = vehicle.visualize_x_problem(ax, i)
                 
-            fig.savefig(self.cwd + '/figures/frenet_view_' + '{:0>2d}'.format(i) +'.png', dpi = 200)
+            fig.savefig(self.cwd + '/figures/' + str(self.seed) + '/frenet_view_' + '{:0>2d}'.format(i) +'.png', dpi = 200)
     
     def plot_moovie_frames(self, n_frames, iternum : int = 0, seed = ''):
         fig, ax = self.figures["figures"]
@@ -2416,7 +2425,7 @@ class Group(Environment):
             ax.axes.yaxis.set_visible(False)
             # Saving figure to folder
             # fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
-            fig.savefig(self.cwd + '/video/' + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
+            fig.savefig(self.cwd + '/video/' + str(self.seed) + '/' + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
             ax.clear()
             frame_num += 1
             # print('t_start, fx(t_start)' + str(t_start) + ',' + str(self.vehicles[0].fp.fx_spline(t_start)[0][0]))

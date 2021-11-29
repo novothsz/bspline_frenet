@@ -13,7 +13,7 @@ import numpy as np
 import random
 import sys
 import math
-from concurrent.futures import ProcessPoolExecutor, as_completed
+
 import os
 os.system("mkdir log")
 os.system("mkdir urdf")
@@ -25,9 +25,14 @@ os.system("mkdir yaml")
 
 
 
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
-def run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage):
 
+
+def run_optimizaiton(seed):
+
+    start_position = [0.0, 0.0, 0.0]
+    goal_position = [0.0, 0.0, 0.0]
 
     def writing_parameters_to_file(iteration_times):
         """
@@ -50,9 +55,6 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     obstacles = []
     
     plt.close('all')
-    random.seed(64)
-    seed = 64
-    print("Seed was:", 64)
 
     """
     "Obstacles"
@@ -125,7 +127,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
             
     # Create group
-    group = Group(n_vehicles=4, start_position = start_position, goal_position = goal_position, stage = stage)
+    group = Group(n_vehicles=4, start_position = start_position, goal_position = goal_position, stage = 0)
     group.set_group_position(
         position=group.start_position,targetHeight = targetHeight, position_type='initial')
     group.set_group_position(
@@ -134,7 +136,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     # obstacles = group.generate_obstacles()
     # group.add_obstacles(obstacles)
     
-    obstacles = group.generate_obstacles(42)
+    obstacles = group.generate_obstacles(seed)
     group.add_obstacles(obstacles)
     group.organise_neighbours()
     
@@ -170,15 +172,15 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     
     "Changing default rotation for initial position"
-    positions = group.ellipse_generator(centerpoint = start_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 9 * 1, b = group.vehicles[0].radious * 5 * 1,
-                                               ellipse_rotation = math.pi / 2 * 1)
+    positions = group.ellipse_generator(centerpoint = start_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 9 * 0.8, b = group.vehicles[0].radious * 5 * 0.8,
+                                               ellipse_rotation = math.pi / 2 * 2)
     for i in range(len(group.vehicles)):
             group.vehicles[i].set_position(position = positions[i], position_type = 'initial')
             
             
     "Changing default rotation for final position"
-    positions = group.ellipse_generator(centerpoint = goal_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 9 * 1, b = group.vehicles[0].radious * 5 * 1,
-                                               ellipse_rotation = math.pi / 2 * 1)
+    positions = group.ellipse_generator(centerpoint = goal_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 9 * 0.8, b = group.vehicles[0].radious * 5 * 0.8,
+                                               ellipse_rotation = math.pi / 2 * 2)
     for i in range(len(group.vehicles)):
             group.vehicles[i].set_position(position = positions[i], position_type = 'final')
     
@@ -244,29 +246,34 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     # group.plot_moovie_frames(iternum=i, seed=seed)
     
     # writing_parameters_to_file(iteration_times)
+    group.plot_moovie_frames(n_steps, iternum=0, seed=0)
+    group.plot_frenet_view()
     
-    return n_steps, group, iteration_times
+    return_dict = {}
+    return_dict["n_steps"] = n_steps
+    # return_dict["group"] = group
+    return_dict["iteration_times"] = iteration_times
+    # return n_steps, group, iteration_times
+    return return_dict
     
 # """    
-group_stages = []
-corners_list = []
-min_iterations = 2
-max_iterations = 2
+
+# return_dict = run_optimizaiton(seed)
 
 
-# Stage 0
-stage = 0
-start_position = [0.0, 0.0, 0.0]
-goal_position = [0.0, 0.0, 0.0]
-n_steps, group, iteration_times = run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage)
-
-group.write_iteration_times(prefix = 'single_core_')
-group.plot_moovie_frames(n_steps, iternum=0, seed=0)
-group.plot_frenet_view()
+if __name__ == '__main__':
+    with ProcessPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(run_optimizaiton, seed) for seed in range(4)]
+        res = [f.result() for f in as_completed(futures)]
+    
 
 
 
+# group.write_iteration_times(prefix = 'single_core_')
 
+
+
+"""
 
 
 
@@ -303,12 +310,13 @@ a_fes = group.vehicles[2].variable_history["feasibility_dict"][5]
     
 # group.plot_moovie_frames_old(iternum=0, seed=0)
 
-# """
+
 # group.vehicles[0].calculate_formation_error()
 # group.calculate_formation_error()
 # group.save_trajectory_to_csv(n_steps)
-"This is not good like this! We need to save the final plots for the various n_intermediate_ADMM values and run the code multiple times"
-"Only then can we assemble and compare the results."
+
+# This is not good like this! We need to save the final plots for the various n_intermediate_ADMM values and run the code multiple times
+# Only then can we assemble and compare the results.
 
 
 kappa_real = group.vehicles[0].variable_history['t_real_intermediate_list']
@@ -325,3 +333,4 @@ kappa_current = self.vehicles[0].variable_history['current_configuration_positio
 
 
 current_configuration_position
+"""
