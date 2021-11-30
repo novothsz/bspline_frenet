@@ -146,7 +146,7 @@ def run_optimizaiton(seed):
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
     # n_steps = 10
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
-    group.set_var({'t_step': 0.04})
+    group.set_var({'t_step': 0.01})
     group.set_var({'t_window_size': 0.12})
     group.set_var({'t_end': 0 + 0.12})
     group.set_var({'knot_intervals': 5})
@@ -172,15 +172,15 @@ def run_optimizaiton(seed):
     
     
     "Changing default rotation for initial position"
-    positions = group.ellipse_generator(centerpoint = start_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 9 * 0.8, b = group.vehicles[0].radious * 5 * 0.8,
-                                               ellipse_rotation = math.pi / 2 * 2)
+    positions = group.ellipse_generator(centerpoint = start_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 9, b = group.vehicles[0].radious * 5,
+                                               ellipse_rotation = math.pi / 2)
     for i in range(len(group.vehicles)):
             group.vehicles[i].set_position(position = positions[i], position_type = 'initial')
             
             
     "Changing default rotation for final position"
-    positions = group.ellipse_generator(centerpoint = goal_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 9 * 0.8, b = group.vehicles[0].radious * 5 * 0.8,
-                                               ellipse_rotation = math.pi / 2 * 2)
+    positions = group.ellipse_generator(centerpoint = goal_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 9 * 0.8, b = group.vehicles[0].radious * 5,
+                                               ellipse_rotation = math.pi / 2)
     for i in range(len(group.vehicles)):
             group.vehicles[i].set_position(position = positions[i], position_type = 'final')
     
@@ -262,8 +262,8 @@ def run_optimizaiton(seed):
 
 
 if __name__ == '__main__':
-    with ProcessPoolExecutor(max_workers=4) as pool:
-        futures = [pool.submit(run_optimizaiton, seed) for seed in range(4)]
+    with ProcessPoolExecutor(max_workers=1) as pool:
+        futures = [pool.submit(run_optimizaiton, seed) for seed in range(1)]
         res = [f.result() for f in as_completed(futures)]
     
 

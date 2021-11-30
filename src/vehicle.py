@@ -578,7 +578,7 @@ class Vehicle(VehicleBasis):
                 # constraint on pq at t_intermediate
                 self.define_constraint([(p(t_intermediate) - x_intermediate[0])**2, (q(t_intermediate) - x_intermediate[1])**2],
                                         [0, 0],
-                                        [(self.radious*1)**2, (self.radious*1)**2],
+                                        [(self.radious*2)**2, (self.radious*2)**2],
                                         constraint_type='time',
                                         name=["pq_intermediate" + str(i)] * 2)
                 
@@ -621,12 +621,12 @@ class Vehicle(VehicleBasis):
             raise NotImplementedError()
             
         # At the end we should have horizontal speed (or at least no vertical :) )
-        self.define_constraint([q_dot],
-                               [0],
-                               [0],
-                               constraint_type='final',
-                               name=["q_dot_final" + str(i)] * 1)
-            
+        # self.define_constraint([q_dot],
+        #                        [0],
+        #                        [0],
+        #                        constraint_type='final',
+        #                        name=["q_dot_final" + str(i)] * 1)
+        self.J += (p(1) - x_intermediate[0])**2 + (q(1) - x_intermediate[1])**2
         # self.J += self.rho_intermediate * 10000 * (p_dot(t_intermediate)**2 + q_dot(t_intermediate)**2)
         # self.J += self.rho_intermediate * 10000 * (p_dot(1)**2 + q_dot(1)**2)
         
@@ -714,7 +714,7 @@ class Vehicle(VehicleBasis):
                 center_circle = [center, circle_rad]
             
                 tmp_a = self.collision_avoidance_hyperplane([p, q], obst_corners,
-                                                    radious=self.radious * 0.001, name="obst_" + str(i),
+                                                    radious=self.radious * 1, name="obst_" + str(i),
                                                     constraint_type='obstacle',
                                                     center_circle = center_circle)
                 a_list += [tmp_a]
@@ -1435,8 +1435,8 @@ class Vehicle(VehicleBasis):
     def plot_moovie_frames_mooving_horizon(self, ax, horizon_num):
         t_steps = 100     
         self_ID = self.ID
-        self_ID = self.plot_self_ID
-        self_ID = 2
+        # self_ID = self.plot_self_ID
+        # self_ID = 2
         obst_IDX = self.plot_obst_IDX
         horizon_num_original = int(horizon_num)    
         horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
@@ -1505,7 +1505,8 @@ class Vehicle(VehicleBasis):
         # There is the global time [t_start, t_end], and there is the local time t \in [0, 1]
         # We want to plot a line for every time instance in the local time, which is actually associated with a global time. Just like we did
         # for x, y before. But don't forget, that in that case we plotted dots, and now we plot lines.
-        if self.ID == self_ID:
+        # if self.ID == self_ID:
+        if False:
             
             # plot hyperplanes
             t = np.linspace(0.001, 1-0.001, 100)

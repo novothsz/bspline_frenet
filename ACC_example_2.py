@@ -134,7 +134,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     # obstacles = group.generate_obstacles()
     # group.add_obstacles(obstacles)
     
-    obstacles = group.generate_obstacles(42)
+    obstacles = group.generate_obstacles(0)
     group.add_obstacles(obstacles)
     group.organise_neighbours()
     
@@ -144,7 +144,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
     # n_steps = 10
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
-    group.set_var({'t_step': 0.04})
+    group.set_var({'t_step': 0.01})
     group.set_var({'t_window_size': 0.12})
     group.set_var({'t_end': 0 + 0.12})
     group.set_var({'knot_intervals': 5})

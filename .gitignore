@@ -7,4 +7,6 @@ videos/
 yaml/
 data/
 tamás/
-.DS_Store
+.DS_Store/
+*.png
+*.pickle

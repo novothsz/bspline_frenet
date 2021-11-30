@@ -40,6 +40,8 @@ class Obstacle(Environment):
         self.spline_position_in_frenet() # This function creates the self.corners_spline values.
         self.gate_pair_ID = []
         
+        # self.plot_corners_spline()
+        
         
         
         
@@ -112,7 +114,7 @@ class Obstacle(Environment):
         # ---- Regular corners
         corners_spline_coeffs = []
         t = np.linspace(0, 1, 100)
-        self.fitter.knot_intervals = 10
+        self.fitter.knot_intervals = 20
         for i in range(len(self.corners)):
             corner_ = np.array([self.fp.inertial_to_frenet(self.corners[i][0], self.corners[i][1], t_) for t_ in t])
             p_ = corner_[:, 0].tolist()
@@ -133,7 +135,7 @@ class Obstacle(Environment):
         # ---- Scaled corners
         scaled_corners_spline_coeffs = []
         t = np.linspace(0, 1, 100)
-        self.fitter.knot_intervals = 10
+        self.fitter.knot_intervals = 20
         for i in range(len(self.scaled_corners)):
             corner_ = np.array([self.fp.inertial_to_frenet(self.scaled_corners[i][0], self.scaled_corners[i][1], t_) for t_ in t])
             p_ = corner_[:, 0].tolist()
@@ -155,7 +157,7 @@ class Obstacle(Environment):
         # ---- Virtual center "corner/circle" with virtual "radious"
         center_spline_coeffs = []
         t = np.linspace(0, 1, 100)
-        self.fitter.knot_intervals = 10
+        self.fitter.knot_intervals = 20
         center = self.center
         corner_ = np.array([self.fp.inertial_to_frenet(center[0], center[1], t_) for t_ in t])
         p_ = corner_[:, 0].tolist()
