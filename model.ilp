@@ -1,0 +1,16 @@
+\ Model ppl_copy
+\ LP format - for model browsing. Use MPS format to capture full model detail.
+Minimize
+  + Constant
+Subject To
+ R175: - 100000 c_8vertex_3[1,0] <= -0.08
+ R176: - 100000 c_8vertex_3[0,0] <= -2.08
+ R177: - 100000 c_8vertex_3[3,0] <= -0.08
+ R178: - 100000 c_8vertex_3[2,0] <= -2.08
+ R179: c_8vertex_3[0,0] + c_8vertex_3[1,0] + c_8vertex_3[2,0]
+   + c_8vertex_3[3,0] <= 3
+Bounds
+ Constant = 1
+Binaries
+ c_8vertex_3[0,0] c_8vertex_3[1,0] c_8vertex_3[2,0] c_8vertex_3[3,0]
+End
