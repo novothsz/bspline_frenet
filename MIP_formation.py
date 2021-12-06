@@ -156,6 +156,9 @@ for t_idx in range(N):
         myList = sol_rotation_chooser[t_idx]
         val = next((index for index,value in enumerate(myList) if value != 0), None) # https://stackoverflow.com/questions/19502378/python-find-first-instance-of-non-zero-number-in-list/19502692
         phi_idx = val
+        print(phi_idx)
+        if phi_idx != 0:
+            kappa = True
         # Rotation
         x_rot = CS[phi_idx][0][0] * x + CS[phi_idx][0][1] * y
         y_rot = CS[phi_idx][1][0] * x + CS[phi_idx][1][1] * y
