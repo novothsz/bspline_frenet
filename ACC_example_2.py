@@ -183,6 +183,8 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
             group.vehicles[i].set_position(position = positions[i], position_type = 'final')
     
     new_version = True
+    group.MIP_DFG()
+    
     
     if new_version == False:
         group.intermediate_position_generator_PENI_MPC()

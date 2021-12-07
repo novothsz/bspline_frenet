@@ -1,6 +1,6 @@
 from .vehicle import Vehicle
 import numpy as np
-import math
+from math import *
 import matplotlib.pyplot as plt
 from .frenet_path import FrenetPath
 from .environment import Environment
@@ -11,6 +11,12 @@ import csv
 import random
 import copy
 import os
+
+from gurobipy import Model
+from gurobipy import *
+from gurobi import GRB
+from matplotlib.patches import Polygon
+
 
 from .obstacle import Obstacle
 
@@ -50,10 +56,8 @@ class Group(Environment):
         self.DFM_lookahead = 1 / self.DFM_division / 2
         self.MPC_version = []
         
-        
         self.cum_rotation = 0
         self.cum_scaling = 1
-        
         
         self.ACC_MPC_t_queue = []
         self.ACC_MPC_pos_queue = []
@@ -100,6 +104,265 @@ class Group(Environment):
     ###########################################################################
     ###########################################################################
     ###########################################################################
+    
+    def MIP_DFG(self):
+        """ We implement a MIP version of the DFG algorithm. This function is only for test, and 
+        calculates way-points for the entire maneuver. (frenet 0->1)        
+        """
+        
+        model = Model("ppl")
+        N = 20 # number of vertices
+        
+        vehicle_positions = []
+        for vehicle in self.vehicles:
+            # vehicle_positions += [vehicle.x0[:2]]
+            vehicle_positions += [vehicle.current_configuration_position[:2]]
+        vehicle_positions_original = np.array(vehicle_positions).tolist()
+        
+        def cs(gamma):
+            "Rotation matrix"
+            mx = [[cos(gamma), -sin(gamma)],
+                  [sin(gamma), cos(gamma)]]
+            return np.array(mx)
+        
+        # The collision-avoidance method, described by Richards in: 
+        # "Aircraft Trajectory Planning With Collision Avoidance Using Mixed Integer Linear Programming"
+        # works for cases, where the obstacle is a rectangle, with vertical and horizontal sides.
+        # If however, the rectangle is tilted, the method sizes working.
+        # What we can do in this case (if the rectangle is tilted by phi for example),
+        # is to rotate everything by the same amount (-phi in this case)
+        
+        # calculated the amount the obstacle is rotated by: phi
+        obst_rotation_list = []
+        obst_d_list = []
+        v_rot_list = []
+        obst_c_rot_list = []
+        
+        for obstacle in self.vehicles[0].obstacles:
+            center = obstacle.center_t
+            corners = obstacle.scaled_corners_t
+            
+            # the first two corners are the bottom part of the rectangle
+            # c0 -> c1 : c1 - c0
+            vec1 = np.array([1, 0]) # x axis
+            vec2 = np.array(corners[1]) - np.array(corners[0])
+            
+            phi = []
+            for i in range(vec2.shape[1]):
+                phi += [math.atan2(vec2[1, i], vec2[0, i])]
+                # phi += [math.atan(vec2[1, i] / vec2[0, i])]
+            
+            # plt.figure()
+            # phi_deg = [phi_/math.pi * 180 for phi_ in phi]
+            # plt.plot(phi)
+            # plt.plot(phi_deg)
+            # plt.show()
+            
+            # fig, ax = plt.subplots()
+            vertices = copy.deepcopy(vehicle_positions_original)
+            vertices_rot = []
+            for phi_ in phi:
+                vertices_rot += [[np.dot(cs(-phi_), np.array(vertex)) for vertex in vertices]]
+                # [ax.plot(v_[0], v_[1], 'b.') for v_ in vertices_rot]
+            # ax.set_aspect('equal', adjustable='box')
+            # plt.show()
+                
+            def get_dx_dy(center, corners):
+                dx = 0
+                dy = 0
+                for corner in corners:
+                    dx = max(dx, abs(center[0] - corner[0]))
+                    dy = max(dy, abs(center[1] - corner[1]))
+                return dx, dy
+            
+            obst_rotation_list += [phi]
+            obst_d = []
+            v_rot_list += [vertices_rot]
+            # fig, ax = plt.subplots()
+            obst_c_rot = []
+            for t_idx in range(len(phi)):
+                center_ = [center[0][0][t_idx], center[0][1][t_idx]]
+                corners_ = [[corner[0][t_idx], corner[1][t_idx]] for corner in corners]
+                # We need to rotate the corners
+                corners_rot = [np.dot(cs(-phi[t_idx]), np.array(corners__)).tolist() for corners__ in corners_]
+                center_rot = np.dot(cs(-phi[t_idx]), np.array(center_)).tolist()
+                dx, dy = get_dx_dy(center_rot, corners_rot)
+                
+                # saving them
+                obst_c_rot += center_rot
+                obst_d += [dx, dy]
+                # v_rot += [[vertex_rot[0], vertex_rot[1]] for vertex_rot in vertices_rot[t_idx]]
+            # obst_d_list += [obst_d]
+            obst_d_list += [[np.mean(obst_d[0::2]), np.mean(obst_d[1::2])]]
+            obst_c_rot_list += [obst_c_rot]
+                # print(dx, dy)
+                # if t_idx%10 == 0:
+                #     ax.plot(center_rot[0], center_rot[1], 'k.')
+                #     [ax.plot(corner_rot[0], corner_rot[1], 'b.') for corner_rot in corners_rot]
+                #     [ax.plot(vertex_rot[0], vertex_rot[1], 'b.') for vertex_rot in vertices_rot[t_idx]]
+                    
+            # ax.set_aspect('equal', adjustable='box')
+            # plt.show()
+            # ax.plot(-10, 0)
+            # ax.plot(10, 0)
+            # ax.plot(0, 10)
+            # ax.plot(0, -10)
+            # plt.show()
+            # plt.show()
+                
+                
+                # dx, dy = get_dx_dy(center_, corners_rot)
+                # print(dx, dy)
+                # for phi_idx in range(len(CS)):
+                #     c = model.addVars(len(CS), 4, lb = 0, vtype = GRB.BINARY, name = 'c')
+                #     vertices_rot_ = copy.deepcopy(vertices_rot[t_idx])
+                    
+                #     for vertex in vertices_rot_:
+                #         kappa = True
+        kappa = True
+        # v_rot_list[obst_idx][t_idx][vertex_idx][xy_idx]
+        # obst_d_list[obst_idx][[xy]]
+        # obst_rotation_list[obst_idx][t_idx]
+        # obst_c_rot_list[obst_idx][[xy] * xy_idx]
+        
+        # Okay, we have everything for the MIP formulation
+        # let's rename the variables
+        vertices = v_rot_list
+        dxy = obst_d_list
+        phi = obst_rotation_list
+        center = obst_c_rot_list
+        
+        N = 100
+        
+        
+        # limits
+        R = 1e5
+        # - expansion
+        s_min, s_max = 0, 10    
+        x_min, x_max = -10, 10
+        y_min, y_max = -10, 10
+        # - translation
+        t_min, t_max = (x_min - x_max), (x_max - x_min)
+        # - rotation
+        # q_min, q_max = -1, 1
+        # Collision avoidance constraints
+        d_obs = self.vehicles[0].radious
+
+        # decision variables
+        # rotation (gridded rotation)
+        rotation_res = 10
+        CS = [cs(gamma) for gamma in np.linspace(-math.pi/2, math.pi/2, rotation_res)]
+        rotation_chooser  = model.addVars(N, len(CS), lb = 0, vtype = GRB.BINARY)
+        # expansion
+        s = model.addVars(N, lb = s_min, ub = s_max, name = "s")
+        # translation
+        t = model.addVars(N, 2, lb = t_min, ub = t_max, name = "t")
+        
+        
+        
+        rotation_chooser  = model.addVars(N, len(CS), lb = 0, vtype = GRB.BINARY)
+        for t_idx in range(N):
+            for phi_idx in range(len(CS)):
+                for obst_idx in range(len(self.vehicles[0].obstacles)):
+                    c = model.addVars(len(CS), 4, lb = 0, vtype = GRB.BINARY, name = 'c')
+                    for vertex in vertices[obst_idx][t_idx]:
+                        x, y = vertex
+                        
+                        # Rotation
+                        x_rot = CS[phi_idx][0][0] * x + CS[phi_idx][0][1] * y
+                        y_rot = CS[phi_idx][1][0] * x + CS[phi_idx][1][1] * y
+                        
+                        # Scaling
+                        x_rot  = x_rot * s[t_idx]
+                        y_rot  = y_rot * s[t_idx]
+                        
+                        # Translation
+                        x_rot = x_rot + t[t_idx,0]
+                        y_rot = y_rot + t[t_idx,1]
+                        
+                        # Constraints
+                        idx = np.arange(2*t_idx,2*t_idx+2)
+                        center_ = np.array(center[obst_idx])[idx].reshape(-1).tolist()
+                        obs_dx, obs_dy = dxy[obst_idx]
+                        
+                        model.addConstr(  x_rot - (center_[0] + obs_dx) >=  d_obs - R * c[phi_idx, 1] )
+                        model.addConstr( -x_rot + (center_[0] - obs_dx) >=  d_obs - R * c[phi_idx, 0] )
+                        model.addConstr(  y_rot - (center_[1] + obs_dy) >=  d_obs - R * c[phi_idx, 3] )
+                        model.addConstr( -y_rot + (center_[1] - obs_dy) >=  d_obs - R * c[phi_idx, 2] )
+                        
+                        model.addConstr(   quicksum(c[phi_idx, q_sum_idx] for q_sum_idx in range(4)) * rotation_chooser[t_idx, phi_idx] <= 3 )
+            model.addConstr(quicksum(rotation_chooser[t_idx,i] for i in range(len(CS))) == 1)
+        J = 0
+        for t_idx in range(N):
+            J += (1 - s[t_idx])**2 + t[t_idx, 0]**2 + t[t_idx, 1]**2
+            for phi_idx, gamma_ in enumerate(np.linspace(-math.pi/2, math.pi/2, rotation_res)):
+                J += rotation_chooser[t_idx, phi_idx] * gamma_**2 * 0.001
+                
+        model.setObjective(J, GRB.MINIMIZE)
+        model.Params.Threads = 4
+        model.Params.TimeLimit = 100
+        
+        model.optimize()
+        
+        sol = model.getVars()
+        model.getVars()
+        
+        kappa = True
+        
+        sol_t = [[t[t_idx, i].x for i in range(2)] for t_idx in range(N)]
+        sol_s = [s[t_idx].x for t_idx in range(N)]
+        sol_rotation_chooser = [[rotation_chooser[t_idx,phi_idx].x for phi_idx in range(len(CS))] for t_idx in range(N)]
+
+        # Let us now plot what we have done :))
+        fig, ax = plt.subplots()
+        
+        t_tmp = np.linspace(0, 1, 100)
+        for t_idx in range(N):
+            calc_vertices = []
+            corners = []
+            for vertex in vehicle_positions_original:
+                x, y = vertex
+                myList = sol_rotation_chooser[t_idx]
+                val = next((index for index,value in enumerate(myList) if value != 0), None) # https://stackoverflow.com/questions/19502378/python-find-first-instance-of-non-zero-number-in-list/19502692
+                phi_idx = val
+                
+                # Rotation
+                x_rot = CS[phi_idx][0][0] * x + CS[phi_idx][0][1] * y
+                y_rot = CS[phi_idx][1][0] * x + CS[phi_idx][1][1] * y
+                
+                # Scaling
+                x_rot  = x_rot * sol_s[t_idx]
+                y_rot  = y_rot * sol_s[t_idx]
+                
+                # Translation
+                x_rot = x_rot + sol_t[t_idx][0]
+                y_rot = y_rot + sol_t[t_idx][1]
+                
+                # Here we need to shift it by the frenet path :))
+                x_rot, y_rot = self.fp.frenet_to_inertial(x_rot, y_rot, t_tmp[t_idx])
+                ax.plot(x_rot, y_rot, 'b.')
+                corners += [[x_rot, y_rot]]
+            corners = np.array(corners)
+            corners = np.vstack((corners, corners[0, :]))
+            polygon = Polygon(corners, closed=True, fill=True, fc=(0,0,1,0.1), ec=(0,0,0,1), lw=1, zorder = -1)
+            ax.add_patch(polygon)
+    
+    
+                
+        ax.set_aspect('equal', adjustable='box')
+        
+        self.vehicles[0].plot_environment(ax, 0)
+        for obstacle in self.vehicles[0].obstacles:
+            obstacle.plot_obstacle(ax)
+            
+            
+        plt.show()    
+        
+        # rotate everything by -phi
+        # do the MIP
+        # get the results
+        # plot the results
+        
     
     def ACC_MPC_t_param(self):
         "To this end, we introduce, DFG-MPC... :))"
@@ -2076,7 +2339,7 @@ class Group(Environment):
         # t_free_end = 0.2
         
         
-        n_obst_along = 2
+        n_obst_along = 0
         random.seed(seed)
         centerpoint_x_bound = [-0.1, 0.1]
         centerpoint_y_bound = [-0.1, 0.1]
@@ -2111,13 +2374,15 @@ class Group(Environment):
         # Generate gates
         # Okay. We have generated obstacles along the way.
         # Let's generate gates now! :)
-        n_obst_gate = 3
+        n_obst_gate = 2
         gate_gap_bound = [3.5 * self.vehicles[0].radious, 10 * self.vehicles[0].radious]
         gate_length_bound = 0.3 # 0.3
         
         
         # obstacles = []
-        t_tmp = [0.2, 0.5, 0.8]
+        # t_tmp = [0.2, 0.5, 0.8]
+        # t_tmp = [0.8]
+        t_tmp = [0.35, 0.65]
         for i in range(n_obst_gate):
             gate_points_tmp = random.uniform(gate_gap_bound[0], gate_gap_bound[1])
             # The lower part of the gate

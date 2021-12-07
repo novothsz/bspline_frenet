@@ -30,6 +30,7 @@ class Obstacle(Environment):
         self.scaled_corners = self.scaled_corners(size = 0.03)    
         self.corners_spline = [] # these will be splines defined in the frenet frame.
         self.center_spline = []
+        self.center_t = []
         self.corners_t = [] # sampling of the corner positions in the mooving frenet frame. They represent
         # the true value at time t and can be used measure if we have correctly fitted the spline.
         
@@ -41,9 +42,6 @@ class Obstacle(Environment):
         self.gate_pair_ID = []
         
         # self.plot_corners_spline()
-        
-        
-        
         
         
     def cropped_corner_trajectories(self, default_basis, t_start, t_end):
@@ -159,17 +157,17 @@ class Obstacle(Environment):
         t = np.linspace(0, 1, 100)
         self.fitter.knot_intervals = 20
         center = self.center
-        corner_ = np.array([self.fp.inertial_to_frenet(center[0], center[1], t_) for t_ in t])
-        p_ = corner_[:, 0].tolist()
-        q_ = corner_[:, 1].tolist()
-        corner_ = [p_, q_]
-        fitted_splines = self.fitter.fitting_single(corner_,
+        center_ = np.array([self.fp.inertial_to_frenet(center[0], center[1], t_) for t_ in t])
+        p_ = center_[:, 0].tolist()
+        q_ = center_[:, 1].tolist()
+        center_ = [p_, q_]
+        fitted_splines = self.fitter.fitting_single(center_,
                                              y_min = [-20, -20],
                                              y_max = [20, 20]
                                              )
         self.center_spline += fitted_splines
         center_spline_coeffs += [ [sp.coeffs for sp in fitted_splines] ]
-        # self.scaled_corners_t += [corner_]
+        self.center_t += [center_]
         
         
         # ---- Collecting all the coeffs and writing it to file

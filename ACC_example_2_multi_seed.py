@@ -146,7 +146,7 @@ def run_optimizaiton(seed):
     "n_steps = math.floor(1 / group.vehicles[0].t_step)"
     # n_steps = 10
     group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
-    group.set_var({'t_step': 0.01})
+    group.set_var({'t_step': 0.04})
     group.set_var({'t_window_size': 0.12})
     group.set_var({'t_end': 0 + 0.12})
     group.set_var({'knot_intervals': 5})
@@ -185,6 +185,7 @@ def run_optimizaiton(seed):
             group.vehicles[i].set_position(position = positions[i], position_type = 'final')
     
     new_version = True
+    
     
     if new_version == False:
         group.intermediate_position_generator_PENI_MPC()

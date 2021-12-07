@@ -3,11 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 
 
-x_min, x_max = -10, 10
-y_min, y_max = -10, 10
-s_min, s_max = 0, 10    # expansion
-q_min, q_max = -1, 1
-t_min, t_max = (x_min - x_max), (x_max - x_min)
+
 
 
 from gurobipy import Model
@@ -18,11 +14,20 @@ model = Model("ppl")
 
 
 N = 20 # number of vertices
-T = 1 # time horizon
+# T = 1 # time horizon
 
+# limits
+# - expansion
+s_min, s_max = 0, 10    
+x_min, x_max = -10, 10
+y_min, y_max = -10, 10
+# - translation
+t_min, t_max = (x_min - x_max), (x_max - x_min)
+        
+        
 # Define the vertices
 "If the shape is not zero centered, the scaling equation must be changed!"
-vertices = [[1, 1], [-1, 1], [-1, -1], [1, -1]]
+vertices = [[0.5, 1], [-0.5, 1], [-0.5, -1], [0.5, -1]]
 vertices = np.array(vertices)
 # vertices_list = [vertices + shift for shift in np.linspace(-5, 5, 10)]
 
@@ -35,11 +40,12 @@ vertices = np.array(vertices)
 # ---
 #
 def cs(gamma):
+    "Rotation matrix"
     mx = [[cos(gamma), -sin(gamma)],
           [sin(gamma), cos(gamma)]]
     return np.array(mx)
-n_cs = 9
-CS = [cs(gamma) for gamma in np.linspace(-math.pi/2, math.pi/2, n_cs)]
+rotation_res = 10
+CS = [cs(gamma) for gamma in np.linspace(-math.pi/2, math.pi/2, rotation_res)]
 
 # expansion
 s = model.addVars(N, lb = s_min, ub = s_max, name = "s")
@@ -75,9 +81,7 @@ R = 1e5
 
 rotation_chooser  = model.addVars(N, len(CS), lb = 0, vtype = GRB.BINARY)
 for t_idx in range(N):
-    
     for phi_idx in range(len(CS)):
-        
         c = model.addVars(len(CS), 4, lb = 0, vtype = GRB.BINARY, name = 'c')
         for vertex in vertices:
             x, y = vertex
@@ -94,7 +98,7 @@ for t_idx in range(N):
             x_rot = x_rot + t[t_idx,0]
             y_rot = y_rot + t[t_idx,1]
             
-            
+            # Constraints
             model.addConstr(  x_rot - (obs_center_list[t_idx][0] + obs_dx) >=  d_obs - R * c[phi_idx, 1] )
             model.addConstr( -x_rot + (obs_center_list[t_idx][0] - obs_dx) >=  d_obs - R * c[phi_idx, 0] )
             model.addConstr(  y_rot - (obs_center_list[t_idx][1] + obs_dy) >=  d_obs - R * c[phi_idx, 3] )
@@ -107,8 +111,8 @@ for t_idx in range(N):
 J = 0
 for t_idx in range(N):
     J += (1 - s[t_idx])**2 + t[t_idx, 0]**2 + t[t_idx, 1]**2
-    for i, gamma_ in enumerate(np.linspace(-math.pi/2, math.pi/2, n_cs)):
-        J += rotation_chooser[t_idx,i] * gamma_**2 * 0.00000001
+    for phi_idx, gamma_ in enumerate(np.linspace(-math.pi/2, math.pi/2, rotation_res)):
+        J += rotation_chooser[t_idx, phi_idx] * gamma_**2 * 0.001
 
 
 model.setObjective(J, GRB.MINIMIZE)
@@ -156,9 +160,10 @@ for t_idx in range(N):
         myList = sol_rotation_chooser[t_idx]
         val = next((index for index,value in enumerate(myList) if value != 0), None) # https://stackoverflow.com/questions/19502378/python-find-first-instance-of-non-zero-number-in-list/19502692
         phi_idx = val
-        print(phi_idx)
-        if phi_idx != 0:
-            kappa = True
+        # print(phi_idx)
+        # print(CS[phi_idx])
+        # if phi_idx != 0:
+            # kappa = True
         # Rotation
         x_rot = CS[phi_idx][0][0] * x + CS[phi_idx][0][1] * y
         y_rot = CS[phi_idx][1][0] * x + CS[phi_idx][1][1] * y
@@ -176,7 +181,7 @@ for t_idx in range(N):
         calc_vertices += [x_rot, y_rot]
     calc_vertices_all += [np.array(calc_vertices)]
             
-    
+ax.set_aspect('equal', adjustable='box')
 plt.show()
 
 
