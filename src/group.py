@@ -131,28 +131,30 @@ class Group(Environment):
         # is to rotate everything by the same amount (-phi in this case)
         
         # calculate the amount the obstacle is rotated by: phi (at the given time)
-        obst_rotation_list = []
-        obst_d_list = []
-        v_rot_list = []
-        obst_c_rot_list = []
+        obst_rotation_list = [] # phi values for every obstacle, for every t
+        obst_d_list = [] # dxy values -- || --
+        v_rot_list = [] # rotated vertices -- || --
+        obst_c_rot_list = [] # rotated center -- || --
         
         for obstacle in self.vehicles[0].obstacles:
             center = obstacle.center_t
             corners = obstacle.scaled_corners_t
-            corners += [corners[0]]
+            
             
             # the first two corners are the bottom part of the rectangle
             # c0 -> c1 : c1 - c0
             
             # get phi for every time instance
+            corners += [corners[0]] # --> adding the first corner again
             phi = []
             for i in range(100):
-                # ?? or maybe get the smallest rotation??
+                # getting all possible phi values
                 tmp_phi = []
                 for j in range(1, 5):
-                    vec = np.array(corners[j]) - np.array(corners[j-1])
+                    vec = np.array(corners[j]) - np.array(corners[j-1]) # <-- this is why we added the first corner again
                     tmp_phi += [math.atan2(vec[1, i], vec[0, i])]
                 
+                # getting the smallest phi value
                 min_deviation = math.inf
                 min_deviation_idx = []
                 for j, tmp_phi_ in enumerate(tmp_phi):
@@ -160,6 +162,7 @@ class Group(Environment):
                         min_deviation = abs(0 - tmp_phi_)
                         min_deviation_idx = j
                     
+                # saving the choosen phi (for the specific time instace)
                 # phi += [math.atan2(vec[1, i], vec[0, i])]
                 phi += [tmp_phi[min_deviation_idx]]
                 
@@ -190,14 +193,16 @@ class Group(Environment):
             for t_idx in range(len(phi)):
                 center_ = [center[0][0][t_idx], center[0][1][t_idx]]
                 corners_ = [[corner[0][t_idx], corner[1][t_idx]] for corner in corners]
-                # We need to rotate the corners
+                # we need to rotate the corners & the center (by -phi)
                 corners_rot = [np.dot(cs(-phi[t_idx]), np.array(corners__)).tolist() for corners__ in corners_]
                 center_rot = np.dot(cs(-phi[t_idx]), np.array(center_)).tolist()
+                # get the extension of the obstacle
                 dx, dy = get_dx_dy(center_rot, corners_rot)
                 
                 # saving them
                 obst_c_rot += center_rot
                 obst_d += [dx, dy]
+                # rotated corners need not to be saved
                 
             obst_d_list += [[np.mean(obst_d[0::2]), np.mean(obst_d[1::2])]]
             obst_c_rot_list += [obst_c_rot]
@@ -207,7 +212,7 @@ class Group(Environment):
         ###############
         
         # Okay, we have everything for the MIP formulation
-        # let's rename the variables
+        # let's rename the variables (because previous naming was just baad)
         vertices = v_rot_list
         dxy = obst_d_list
         phi = obst_rotation_list
@@ -215,18 +220,20 @@ class Group(Environment):
         
         
         model = Model("ppl")
-        N = 20 # number of vertices
-        N = 100
+        N = 100 # number of time-steps
+        assert N == len(self.vehicles[0].obstacles[0].center_t[0][0])
         
         
         # limits
         R = 1e5
         # - expansion
-        s_min, s_max = 0.3, 10    
-        x_min, x_max = -10, 10
-        y_min, y_max = -10, 10
+        s_min, s_max = 0.3, 4    
+        x_min, x_max = -3, 3
+        y_min, y_max = -3, 3
         # - translation
-        t_min, t_max = (x_min - x_max), (x_max - x_min)
+        # t_min, t_max = (x_min - x_max), (x_max - x_min)
+        t_min = -5
+        t_max = 5
         # - rotation
         # q_min, q_max = -1, 1
         # Collision avoidance constraints
@@ -234,7 +241,7 @@ class Group(Environment):
 
         # decision variables
         # rotation (gridded rotation)
-        rotation_res = 10
+        rotation_res = 9
         CS = [cs(gamma) for gamma in np.linspace(-math.pi/2, math.pi/2, rotation_res)]
         rotation_chooser  = model.addVars(N, len(CS), lb = 0, vtype = GRB.BINARY)
         # expansion
@@ -243,14 +250,23 @@ class Group(Environment):
         t = model.addVars(N, 2, lb = t_min, ub = t_max, name = "t")
         
         
-        
-        rotation_chooser  = model.addVars(N, len(CS), lb = 0, vtype = GRB.BINARY)
+        # rotation_chooser  = model.addVars(N, len(CS), lb = 0, vtype = GRB.BINARY)
         for t_idx in range(N):
+            # "choose a rotation"
             for phi_idx in range(len(CS)):
+                # "that avoids collision with every obstacle"
                 for obst_idx in range(len(self.vehicles[0].obstacles)):
+                    # create c, which decides, which coll. av. constraint has to be relaxed.
                     c = model.addVars(len(CS), 4, lb = 0, vtype = GRB.BINARY, name = 'c')
+                    
+                    # go through every vertex of the formation
+                    # there is a different combination of vertices, for every time instance, associated with each obstacle.
+                    # Why?, you may ask... Well, because the rectangular obstacles rotate around in the Frenet frame, and the 
+                    # coll. av. constraint, described by Arthur Richards only works for rectangles, whose edges are 
+                    # vertical and horizontal respectively.
                     for vertex in vertices[obst_idx][t_idx]:
-                        x, y = vertex
+                        # separating x, y coordinates
+                        x, y = vertex 
                         
                         # Rotation
                         x_rot = CS[phi_idx][0][0] * x + CS[phi_idx][0][1] * y
@@ -274,8 +290,13 @@ class Group(Environment):
                         model.addConstr(  y_rot - (center_[1] + obs_dy) >=  d_obs - R * c[phi_idx, 3] )
                         model.addConstr( -y_rot + (center_[1] - obs_dy) >=  d_obs - R * c[phi_idx, 2] )
                         
+                        # the constraint on the amount of relaxation only needs to hold, if this is the 
+                        # rotation we have choosen. Otherwise rotation_chooser = 0, and the constraint holds every time.
                         model.addConstr(   quicksum(c[phi_idx, q_sum_idx] for q_sum_idx in range(4)) * rotation_chooser[t_idx, phi_idx] <= 3 )
+            # for a given time-instance only a single rotation can be and should be choosen.
             model.addConstr(quicksum(rotation_chooser[t_idx,i] for i in range(len(CS))) == 1)
+            
+        # cost for scaling, translation and rotation
         J = 0
         for t_idx in range(N):
             J += (1 - s[t_idx])**2 + t[t_idx, 0]**2*9999 + t[t_idx, 1]**2*9999

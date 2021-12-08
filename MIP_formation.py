@@ -18,9 +18,12 @@ N = 20 # number of vertices
 
 # limits
 # - expansion
-s_min, s_max = 0, 10    
-x_min, x_max = -10, 10
-y_min, y_max = -10, 10
+# s_min, s_max = 0, 10   
+s_min, s_max = 0.8, 10
+# x_min, x_max = -10, 10
+# y_min, y_max = -10, 10
+x_min, x_max = 0, 0
+y_min, y_max = 0, 0
 # - translation
 t_min, t_max = (x_min - x_max), (x_max - x_min)
         
@@ -44,8 +47,9 @@ def cs(gamma):
     mx = [[cos(gamma), -sin(gamma)],
           [sin(gamma), cos(gamma)]]
     return np.array(mx)
-rotation_res = 10
-CS = [cs(gamma) for gamma in np.linspace(-math.pi/2, math.pi/2, rotation_res)]
+rotation_res = 1
+# CS = [cs(gamma) for gamma in np.linspace(-math.pi/2, math.pi/2, rotation_res)]
+CS = [cs(0)]
 
 # expansion
 s = model.addVars(N, lb = s_min, ub = s_max, name = "s")
@@ -178,7 +182,14 @@ for t_idx in range(N):
         
         ax.plot(x_rot, y_rot, 'b.') 
         
-        calc_vertices += [x_rot, y_rot]
+        calc_vertices += [[x_rot, y_rot]]
+        
+    corners = calc_vertices
+    corners = np.array(corners)
+    corners = np.vstack((corners, corners[0, :]))
+    polygon = Polygon(corners, closed=True, fill=True, fc=(0,0,1,0.1), ec=(0,0,0,1), lw=1, zorder = -1)
+    ax.add_patch(polygon)
+            
     calc_vertices_all += [np.array(calc_vertices)]
             
 ax.set_aspect('equal', adjustable='box')
