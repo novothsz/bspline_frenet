@@ -86,8 +86,8 @@ R = 1e5
 rotation_chooser  = model.addVars(N, len(CS), lb = 0, vtype = GRB.BINARY)
 for t_idx in range(N):
     for phi_idx in range(len(CS)):
-        c = model.addVars(len(CS), 4, lb = 0, vtype = GRB.BINARY, name = 'c')
         for vertex in vertices:
+            c = model.addVars(len(CS), 4, lb = 0, vtype = GRB.BINARY, name = 'c')
             x, y = vertex
             
             # Rotation

@@ -256,8 +256,6 @@ class Group(Environment):
             for phi_idx in range(len(CS)):
                 # "that avoids collision with every obstacle"
                 for obst_idx in range(len(self.vehicles[0].obstacles)):
-                    # create c, which decides, which coll. av. constraint has to be relaxed.
-                    c = model.addVars(len(CS), 4, lb = 0, vtype = GRB.BINARY, name = 'c')
                     
                     # go through every vertex of the formation
                     # there is a different combination of vertices, for every time instance, associated with each obstacle.
@@ -265,6 +263,8 @@ class Group(Environment):
                     # coll. av. constraint, described by Arthur Richards only works for rectangles, whose edges are 
                     # vertical and horizontal respectively.
                     for vertex in vertices[obst_idx][t_idx]:
+                        # create c, which decides, which coll. av. constraint has to be relaxed.
+                        c = model.addVars(len(CS), 4, lb = 0, vtype = GRB.BINARY, name = 'c')
                         # separating x, y coordinates
                         x, y = vertex 
                         
