@@ -647,7 +647,8 @@ class Obstacle(Environment):
         # Plotting of obstacle
         corners = np.array(self.corners)
         corners = np.vstack((corners, corners[0, :]))
-        polygon = Polygon(corners, closed=True, fill=True, fc=(0,0,0,0.1), ec=(0,0,0,1), lw=1, zorder = 1)
+        # polygon = Polygon(corners, closed=True, fill=True, fc=(0,0,0,0.1), ec=(0,0,0,1), lw=1, zorder = 1)
+        polygon = Polygon(corners, closed=True, fill=True, fc=(1,0,0,1), ec=(0,0,0,1), lw=1, zorder = 1)
         ax.add_patch(polygon)
         
         """

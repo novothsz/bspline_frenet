@@ -10,6 +10,7 @@ tamás/
 .DS_Store/
 *.png
 *.pickle
-*.pickle/
-/*.pickle/
-/*.pickle
+*.pdf
+
+*.pickle
+*.pyc

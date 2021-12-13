@@ -234,6 +234,8 @@ class Group(Environment):
         # t_min, t_max = (x_min - x_max), (x_max - x_min)
         t_min = -5
         t_max = 5
+        t_min = 0
+        t_max = 0
         # - rotation
         # q_min, q_max = -1, 1
         # Collision avoidance constraints
@@ -249,6 +251,10 @@ class Group(Environment):
         # translation
         t = model.addVars(N, 2, lb = t_min, ub = t_max, name = "t")
         
+        EVENT_ON = True
+        if EVENT_ON == True:
+            e = model.addVars(N, len(self.vehicles[0].obstacles), lb = 0, vtype = GRB.BINARY, name = 'e')
+        
         
         # rotation_chooser  = model.addVars(N, len(CS), lb = 0, vtype = GRB.BINARY)
         for t_idx in range(N):
@@ -262,6 +268,76 @@ class Group(Environment):
                     # Why?, you may ask... Well, because the rectangular obstacles rotate around in the Frenet frame, and the 
                     # coll. av. constraint, described by Arthur Richards only works for rectangles, whose edges are 
                     # vertical and horizontal respectively.
+                    
+                    # single event variable for each vertex
+                    # if dist(formation, obstacle) < r
+                    #   event = 1
+                    #   collsion_avoindace = ON
+                    # else:
+                    #   event  = 0
+                    #   collision_avoidance = OFF
+                    
+                    # e = model.addVars(1, lb = 0, vtype = GRB.BINARY, name = 'e')
+                    # get minimum distance
+                    min_dist = math.inf
+                    for vertex in vertices[obst_idx][t_idx]:
+                        x, y = vertex
+                        
+                        # Rotation
+                        x_rot = CS[phi_idx][0][0] * x + CS[phi_idx][0][1] * y
+                        y_rot = CS[phi_idx][1][0] * x + CS[phi_idx][1][1] * y
+                        
+                        # Scaling
+                        x_rot  = x_rot * s[t_idx]
+                        y_rot  = y_rot * s[t_idx]
+                        
+                        # Translation
+                        x_rot = x_rot + t[t_idx,0]
+                        y_rot = y_rot + t[t_idx,1]
+                        
+                        idx = np.arange(2*t_idx,2*t_idx+2)
+                        center_ = np.array(center[obst_idx])[idx].reshape(-1).tolist()
+                        obs_dx, obs_dy = dxy[obst_idx]
+                        
+                        # x, y = x_rot, y_rot
+                        # dist = []
+                        # dist += [math.sqrt((x - (center_[0] + obs_dx))**2 + (y - (center_[1] + obs_dy))**2)]
+                        # dist += [math.sqrt((x - (center_[0] + obs_dx))**2 + (y - (center_[1] - obs_dy))**2)]
+                        # dist += [math.sqrt((x - (center_[0] - obs_dx))**2 + (y - (center_[1] + obs_dy))**2)]
+                        # dist += [math.sqrt((x - (center_[0] - obs_dx))**2 + (y - (center_[1] - obs_dy))**2)]
+                        
+                        # for dist_ in dist:
+                        #     if dist_ <= min_dist:
+                        #         min_dist = dist_
+                        
+                        
+                        if math.sqrt((x - center_[0])**2 + (y - center_[1])**2) <= min_dist:
+                            min_dist = math.sqrt((x - center_[0])**2 + (y - center_[1])**2)
+                               
+                    
+                        # if math.sqrt(obs_dx**2 + obs_dy**2) < min_dist:
+                        #     min_dist = math.sqrt(obs_dx**2 + obs_dy**2)
+                    obs_dx, obs_dy = dxy[obst_idx]
+                    obs_radious = math.sqrt(obs_dx**2 + obs_dy**2)
+                        
+                            
+                    # we have obtained the minimum distance from the formation to the obstacle
+                    # now what?
+                    # coll. avoidance should only happen, if we are this close
+                    s_danger = 0.6988905493709299 * 1 * 1
+                    s_danger = obs_radious
+                    # if s_danger > current distance (meaming the current distance is too small), then event binary = 1
+                    # R * e >= s_danger - min_dist
+                    # R * (1 - e) >= min_dist - s_danger
+                    # and we multiply the right hand side by the chooser. Because if that is 0, then noone cares :))
+                    if EVENT_ON == True:
+                        # model.addConstr( R * e[t_idx, phi_idx, obst_idx] >= (s_danger - min_dist) * rotation_chooser[t_idx, phi_idx] )
+                        # model.addConstr( R * (1 - e[t_idx, phi_idx, obst_idx]) >= (min_dist - s_danger) * rotation_chooser[t_idx, phi_idx] )
+                        model.addConstr( R * e[t_idx, obst_idx] >= (s_danger - min_dist) )
+                        model.addConstr( R * (1 - e[t_idx, obst_idx]) >= (min_dist - s_danger) )
+                    
+                    
+                    
                     for vertex in vertices[obst_idx][t_idx]:
                         # create c, which decides, which coll. av. constraint has to be relaxed.
                         c = model.addVars(len(CS), 4, lb = 0, vtype = GRB.BINARY, name = 'c')
@@ -292,16 +368,25 @@ class Group(Environment):
                         
                         # the constraint on the amount of relaxation only needs to hold, if this is the 
                         # rotation we have choosen. Otherwise rotation_chooser = 0, and the constraint holds every time.
-                        model.addConstr(   quicksum(c[phi_idx, q_sum_idx] for q_sum_idx in range(4)) * rotation_chooser[t_idx, phi_idx] <= 3 )
+                        if EVENT_ON == True:
+                            model.addConstr(   quicksum(c[phi_idx, q_sum_idx] for q_sum_idx in range(4)) * rotation_chooser[t_idx, phi_idx] <= 3 + (1 - e[t_idx, obst_idx]))
+                        else:
+                            model.addConstr(   quicksum(c[phi_idx, q_sum_idx] for q_sum_idx in range(4)) * rotation_chooser[t_idx, phi_idx] <= 3)
             # for a given time-instance only a single rotation can be and should be choosen.
             model.addConstr(quicksum(rotation_chooser[t_idx,i] for i in range(len(CS))) == 1)
             
         # cost for scaling, translation and rotation
         J = 0
         for t_idx in range(N):
-            J += (1 - s[t_idx])**2 + t[t_idx, 0]**2*9999 + t[t_idx, 1]**2*9999
+            J += (1 - s[t_idx])**2 + t[t_idx, 0]**2 + t[t_idx, 1]**2
             for phi_idx, gamma_ in enumerate(np.linspace(-math.pi/2, math.pi/2, rotation_res)):
-                J += rotation_chooser[t_idx, phi_idx] * gamma_**2 * 1 * 0.001
+                J += rotation_chooser[t_idx, phi_idx] * gamma_**2
+                
+        for t_idx in range(1, N):
+            J += 1e0 * ((s[t_idx] - s[t_idx-1])**2 + (t[t_idx, 0] - t[t_idx-1, 0])**2 + (t[t_idx, 1] - t[t_idx-1, 1])**2)
+            for phi_idx, gamma_ in enumerate(np.linspace(-math.pi/2, math.pi/2, rotation_res)):
+                J += 1e0 *((rotation_chooser[t_idx, phi_idx] * gamma_ - rotation_chooser[t_idx-1, phi_idx] * gamma_)**2)
+            
                 
         model.setObjective(J, GRB.MINIMIZE)
         model.Params.Threads = 8
@@ -321,6 +406,11 @@ class Group(Environment):
         # Let us now plot what we have done :))
         fig, ax = plt.subplots()
         
+        self.vehicles[0].plot_environment(ax, 0)
+        for obstacle in self.vehicles[0].obstacles:
+            obstacle.plot_obstacle(ax)
+            
+            
         t_tmp = np.linspace(0, 1, 100)
         for t_idx in range(N):
             calc_vertices = []
@@ -345,20 +435,36 @@ class Group(Environment):
                 
                 # Here we need to shift it by the frenet path :))
                 x_rot, y_rot = self.fp.frenet_to_inertial(x_rot, y_rot, t_tmp[t_idx])
-                ax.plot(x_rot, y_rot, 'b.')
+                # ax.plot(x_rot, y_rot, 'b.')
                 corners += [[x_rot, y_rot]]
             corners = np.array(corners)
             corners = np.vstack((corners, corners[0, :]))
-            polygon = Polygon(corners, closed=True, fill=True, fc=(0,0,1,0.1), ec=(0,0,0,1), lw=1, zorder = -1)
-            ax.add_patch(polygon)
+            # polygon = Polygon(corners, closed=True, fill=True, fc=(0,0,1,0.1), ec=(0,0,0,1), lw=1, zorder = 2)
+            # ax.add_patch(polygon)
+            
+            # actually, we are also pplotting the instances, when e = 0 and collision avoidance is not cinsidered.
+            # Let's plot with green the cases, where e = 1.
+            # print([e[t_idx, phi_idx, obst_idx].x for obst_idx in range(len(self.vehicles[0].obstacles))])
+            if EVENT_ON == True:
+                if any( [e[t_idx, obst_idx].x for obst_idx in range(len(self.vehicles[0].obstacles))] )  == 1:
+                    polygon = Polygon(corners, closed=True, fill=True, fc=(0,1,0,0.1), ec=(0,0,0,1), lw=1, zorder = 2)
+                    ax.add_patch(polygon)
+                    for corner in corners:
+                        x_rot, y_rot = corner
+                        ax.plot(x_rot, y_rot, 'g.')
+                    f0, f1 = self.fp.frenet_to_inertial(0, 0, t_tmp[t_idx])
+                    ax.plot(f0, f1, 'g*')
+                # print([e[t_idx, phi_idx, obst_idx].x for obst_idx in range(len(self.vehicles[0].obstacles))])
+        
+        
+            
+            
+        
     
     
                 
         ax.set_aspect('equal', adjustable='box')
         
-        self.vehicles[0].plot_environment(ax, 0)
-        for obstacle in self.vehicles[0].obstacles:
-            obstacle.plot_obstacle(ax)
             
             
         plt.show()  
@@ -2362,6 +2468,11 @@ class Group(Environment):
         t_tmp = [0.35, 0.65]
         # t_tmp = [0.5]
         for i in range(n_obst_along):
+            if i == 1:
+                a_bound = [1.5, 1.5]
+                b_bound = [1.5, 1.5]
+                
+                
             centerpoint = [random.uniform(centerpoint_x_bound[0], centerpoint_x_bound[1]), \
                            random.uniform(centerpoint_y_bound[0], centerpoint_y_bound[1]), 0 ]
                 
