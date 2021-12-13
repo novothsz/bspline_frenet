@@ -105,7 +105,377 @@ class Group(Environment):
     ###########################################################################
     ###########################################################################
     
+    
     def MIP_DFG(self):
+        """ We implement a MIP version of the DFG algorithm. This function is only for test, and 
+        calculates way-points for the entire maneuver. (frenet 0->1)   
+        ADDED: perseverance
+        """
+        
+        # get vehicle positions
+        vehicle_positions = []
+        for vehicle in self.vehicles:
+            vehicle_positions += [vehicle.current_configuration_position[:2]]
+        vehicle_positions_original = np.array(vehicle_positions).tolist()
+        
+        # define rotation matrix
+        def cs(gamma):
+            "Rotation matrix"
+            mx = [[cos(gamma), -sin(gamma)],
+                  [sin(gamma), cos(gamma)]]
+            return np.array(mx)
+        
+        # The collision-avoidance method, described by Richards in: 
+        # "Aircraft Trajectory Planning With Collision Avoidance Using Mixed Integer Linear Programming"
+        # works for cases, where the obstacle is a rectangle, with vertical and horizontal sides.
+        # If however, the rectangle is tilted, the method sizes working.
+        # What we can do in this case (if the rectangle is tilted by phi for example),
+        # is to rotate everything by the same amount (-phi in this case)
+        
+        # calculate the amount the obstacle is rotated by: phi (at the given time)
+        obst_rotation_list = [] # phi values for every obstacle, for every t
+        obst_d_list = [] # dxy values -- || --
+        v_rot_list = [] # rotated vertices -- || --
+        obst_c_rot_list = [] # rotated center -- || --
+        
+        for obstacle in self.vehicles[0].obstacles:
+            center = obstacle.center_t
+            corners = obstacle.scaled_corners_t
+            
+            
+            # the first two corners are the bottom part of the rectangle
+            # c0 -> c1 : c1 - c0
+            
+            # get phi for every time instance
+            corners += [corners[0]] # --> adding the first corner again
+            phi = []
+            for i in range(100):
+                # getting all possible phi values
+                tmp_phi = []
+                for j in range(1, 5):
+                    vec = np.array(corners[j]) - np.array(corners[j-1]) # <-- this is why we added the first corner again
+                    tmp_phi += [math.atan2(vec[1, i], vec[0, i])]
+                
+                # getting the smallest phi value
+                min_deviation = math.inf
+                min_deviation_idx = []
+                for j, tmp_phi_ in enumerate(tmp_phi):
+                    if abs(0 - tmp_phi_) < min_deviation:
+                        min_deviation = abs(0 - tmp_phi_)
+                        min_deviation_idx = j
+                    
+                # saving the choosen phi (for the specific time instace)
+                # phi += [math.atan2(vec[1, i], vec[0, i])]
+                phi += [tmp_phi[min_deviation_idx]]
+                
+            # rotation by -phi
+            # here we rotate only the formation, but later we will rotate the obstacle corners as well.
+            vertices = copy.deepcopy(vehicle_positions_original)
+            vertices_rot = []
+            for phi_ in phi:
+                vertices_rot += [[np.dot(cs(-phi_), np.array(vertex)) for vertex in vertices]]
+                
+                
+            def get_dx_dy(center, corners):
+                """This function calculates the vertical and horizontal extension of an obstacle, with 
+                regards to the center.
+                Important: to get the correct result, make sure, that the obstacle sides are horizontal and vertical and
+                the center is actually in the center of the rectangle(!)."""
+                dx = 0
+                dy = 0
+                for corner in corners:
+                    dx = max(dx, abs(center[0] - corner[0]))
+                    dy = max(dy, abs(center[1] - corner[1]))
+                return dx, dy
+            
+            obst_rotation_list += [phi]
+            obst_d = []
+            v_rot_list += [vertices_rot]
+            obst_c_rot = []
+            for t_idx in range(len(phi)):
+                center_ = [center[0][0][t_idx], center[0][1][t_idx]]
+                corners_ = [[corner[0][t_idx], corner[1][t_idx]] for corner in corners]
+                # we need to rotate the corners & the center (by -phi)
+                corners_rot = [np.dot(cs(-phi[t_idx]), np.array(corners__)).tolist() for corners__ in corners_]
+                center_rot = np.dot(cs(-phi[t_idx]), np.array(center_)).tolist()
+                # get the extension of the obstacle
+                dx, dy = get_dx_dy(center_rot, corners_rot)
+                
+                # saving them
+                obst_c_rot += center_rot
+                obst_d += [dx, dy]
+                # rotated corners need not to be saved
+                
+            obst_d_list += [[np.mean(obst_d[0::2]), np.mean(obst_d[1::2])]]
+            obst_c_rot_list += [obst_c_rot]
+        
+        ###############
+        # --- MIP --- #
+        ###############
+        
+        # Okay, we have everything for the MIP formulation
+        # let's rename the variables (because previous naming was just baad)
+        vertices = v_rot_list
+        dxy = obst_d_list
+        phi = obst_rotation_list
+        center = obst_c_rot_list
+        
+        
+        model = Model("ppl")
+        N = 100 # number of time-steps
+        assert N == len(self.vehicles[0].obstacles[0].center_t[0][0])
+        
+        
+        # limits
+        R = 1e5
+        # - expansion
+        s_min, s_max = 0.3, 4    
+        x_min, x_max = -3, 3
+        y_min, y_max = -3, 3
+        # - translation
+        # t_min, t_max = (x_min - x_max), (x_max - x_min)
+        t_min = -5
+        t_max = 5
+        t_min = 0
+        t_max = 0
+        # - rotation
+        # q_min, q_max = -1, 1
+        # Collision avoidance constraints
+        d_obs = self.vehicles[0].radious*0
+
+        # decision variables
+        # rotation (gridded rotation)
+        rotation_res = 9
+        CS = [cs(gamma) for gamma in np.linspace(-math.pi/2, math.pi/2, rotation_res)]
+        rotation_chooser  = model.addVars(N, len(CS), lb = 0, vtype = GRB.BINARY)
+        # expansion
+        s = model.addVars(N, lb = s_min, ub = s_max, name = "s")
+        # translation
+        t = model.addVars(N, 2, lb = t_min, ub = t_max, name = "t")
+        
+        EVENT_ON = True
+        if EVENT_ON == True:
+            e = model.addVars(N, len(self.vehicles[0].obstacles), lb = 0, vtype = GRB.BINARY, name = 'e')
+        
+        
+        # rotation_chooser  = model.addVars(N, len(CS), lb = 0, vtype = GRB.BINARY)
+        for t_idx in range(N):
+            # "choose a rotation"
+            for phi_idx in range(len(CS)):
+                # "that avoids collision with every obstacle"
+                for obst_idx in range(len(self.vehicles[0].obstacles)):
+                    
+                    # go through every vertex of the formation
+                    # there is a different combination of vertices, for every time instance, associated with each obstacle.
+                    # Why?, you may ask... Well, because the rectangular obstacles rotate around in the Frenet frame, and the 
+                    # coll. av. constraint, described by Arthur Richards only works for rectangles, whose edges are 
+                    # vertical and horizontal respectively.
+                    
+                    # single event variable for each vertex
+                    # if dist(formation, obstacle) < r
+                    #   event = 1
+                    #   collsion_avoindace = ON
+                    # else:
+                    #   event  = 0
+                    #   collision_avoidance = OFF
+                    
+                    # e = model.addVars(1, lb = 0, vtype = GRB.BINARY, name = 'e')
+                    # get minimum distance
+                    min_dist = math.inf
+                    for vertex in vertices[obst_idx][t_idx]:
+                        x, y = vertex
+                        
+                        # Rotation
+                        x_rot = CS[phi_idx][0][0] * x + CS[phi_idx][0][1] * y
+                        y_rot = CS[phi_idx][1][0] * x + CS[phi_idx][1][1] * y
+                        
+                        # Scaling
+                        x_rot  = x_rot * s[t_idx]
+                        y_rot  = y_rot * s[t_idx]
+                        
+                        # Translation
+                        x_rot = x_rot + t[t_idx,0]
+                        y_rot = y_rot + t[t_idx,1]
+                        
+                        idx = np.arange(2*t_idx,2*t_idx+2)
+                        center_ = np.array(center[obst_idx])[idx].reshape(-1).tolist()
+                        obs_dx, obs_dy = dxy[obst_idx]
+                        
+                        # x, y = x_rot, y_rot
+                        # dist = []
+                        # dist += [math.sqrt((x - (center_[0] + obs_dx))**2 + (y - (center_[1] + obs_dy))**2)]
+                        # dist += [math.sqrt((x - (center_[0] + obs_dx))**2 + (y - (center_[1] - obs_dy))**2)]
+                        # dist += [math.sqrt((x - (center_[0] - obs_dx))**2 + (y - (center_[1] + obs_dy))**2)]
+                        # dist += [math.sqrt((x - (center_[0] - obs_dx))**2 + (y - (center_[1] - obs_dy))**2)]
+                        
+                        # for dist_ in dist:
+                        #     if dist_ <= min_dist:
+                        #         min_dist = dist_
+                        
+                        
+                        if math.sqrt((x - center_[0])**2 + (y - center_[1])**2) <= min_dist:
+                            min_dist = math.sqrt((x - center_[0])**2 + (y - center_[1])**2)
+                               
+                    
+                        # if math.sqrt(obs_dx**2 + obs_dy**2) < min_dist:
+                        #     min_dist = math.sqrt(obs_dx**2 + obs_dy**2)
+                    obs_dx, obs_dy = dxy[obst_idx]
+                    obs_radious = math.sqrt(obs_dx**2 + obs_dy**2)
+                        
+                            
+                    # we have obtained the minimum distance from the formation to the obstacle
+                    # now what?
+                    # coll. avoidance should only happen, if we are this close
+                    s_danger = 0.6988905493709299 * 1 * 1
+                    print(obs_radious)
+                    s_danger = obs_radious
+                    # if s_danger > current distance (meaming the current distance is too small), then event binary = 1
+                    # R * e >= s_danger - min_dist
+                    # R * (1 - e) >= min_dist - s_danger
+                    # and we multiply the right hand side by the chooser. Because if that is 0, then noone cares :))
+                    if EVENT_ON == True:
+                        # model.addConstr( R * e[t_idx, phi_idx, obst_idx] >= (s_danger - min_dist) * rotation_chooser[t_idx, phi_idx] )
+                        # model.addConstr( R * (1 - e[t_idx, phi_idx, obst_idx]) >= (min_dist - s_danger) * rotation_chooser[t_idx, phi_idx] )
+                        model.addConstr( R * e[t_idx, obst_idx] >= (s_danger - min_dist) )
+                        model.addConstr( R * (1 - e[t_idx, obst_idx]) >= (min_dist - s_danger) )
+                    
+                    
+                    
+                    for vertex in vertices[obst_idx][t_idx]:
+                        # create c, which decides, which coll. av. constraint has to be relaxed.
+                        c = model.addVars(len(CS), 4, lb = 0, vtype = GRB.BINARY, name = 'c')
+                        # separating x, y coordinates
+                        x, y = vertex 
+                        
+                        # Rotation
+                        x_rot = CS[phi_idx][0][0] * x + CS[phi_idx][0][1] * y
+                        y_rot = CS[phi_idx][1][0] * x + CS[phi_idx][1][1] * y
+                        
+                        # Scaling
+                        x_rot  = x_rot * s[t_idx]
+                        y_rot  = y_rot * s[t_idx]
+                        
+                        # Translation
+                        x_rot = x_rot + t[t_idx,0]
+                        y_rot = y_rot + t[t_idx,1]
+                        
+                        # Constraints
+                        idx = np.arange(2*t_idx,2*t_idx+2)
+                        center_ = np.array(center[obst_idx])[idx].reshape(-1).tolist()
+                        obs_dx, obs_dy = dxy[obst_idx]
+                        
+                        model.addConstr(  x_rot - (center_[0] + obs_dx) >=  d_obs - R * c[phi_idx, 1] )
+                        model.addConstr( -x_rot + (center_[0] - obs_dx) >=  d_obs - R * c[phi_idx, 0] )
+                        model.addConstr(  y_rot - (center_[1] + obs_dy) >=  d_obs - R * c[phi_idx, 3] )
+                        model.addConstr( -y_rot + (center_[1] - obs_dy) >=  d_obs - R * c[phi_idx, 2] )
+                        
+                        # the constraint on the amount of relaxation only needs to hold, if this is the 
+                        # rotation we have choosen. Otherwise rotation_chooser = 0, and the constraint holds every time.
+                        if EVENT_ON == True:
+                            model.addConstr(   quicksum(c[phi_idx, q_sum_idx] for q_sum_idx in range(4)) * rotation_chooser[t_idx, phi_idx] <= 3 + (1 - e[t_idx, obst_idx]))
+                        else:
+                            model.addConstr(   quicksum(c[phi_idx, q_sum_idx] for q_sum_idx in range(4)) * rotation_chooser[t_idx, phi_idx] <= 3)
+            # for a given time-instance only a single rotation can be and should be choosen.
+            model.addConstr(quicksum(rotation_chooser[t_idx,i] for i in range(len(CS))) == 1)
+            
+        # cost for scaling, translation and rotation
+        J = 0
+        for t_idx in range(N):
+            J += (1 - s[t_idx])**2 + t[t_idx, 0]**2 + t[t_idx, 1]**2
+            for phi_idx, gamma_ in enumerate(np.linspace(-math.pi/2, math.pi/2, rotation_res)):
+                J += rotation_chooser[t_idx, phi_idx] * gamma_**2
+                
+        for t_idx in range(1, N):
+            J += 1e3 * ((s[t_idx] - s[t_idx-1])**2 + (t[t_idx, 0] - t[t_idx-1, 0])**2 + (t[t_idx, 1] - t[t_idx-1, 1])**2)
+            for phi_idx, gamma_ in enumerate(np.linspace(-math.pi/2, math.pi/2, rotation_res)):
+                J += 1e3 *((rotation_chooser[t_idx, phi_idx] * gamma_ - rotation_chooser[t_idx-1, phi_idx] * gamma_)**2)
+            
+                
+        model.setObjective(J, GRB.MINIMIZE)
+        model.Params.Threads = 8
+        model.Params.TimeLimit = 100
+        
+        model.optimize()
+        
+        sol = model.getVars()
+        model.getVars()
+        
+        kappa = True
+        
+        sol_t = [[t[t_idx, i].x for i in range(2)] for t_idx in range(N)]
+        sol_s = [s[t_idx].x for t_idx in range(N)]
+        sol_rotation_chooser = [[rotation_chooser[t_idx,phi_idx].x for phi_idx in range(len(CS))] for t_idx in range(N)]
+
+        # Let us now plot what we have done :))
+        fig, ax = plt.subplots()
+        
+        self.vehicles[0].plot_environment(ax, 0)
+        for obstacle in self.vehicles[0].obstacles:
+            obstacle.plot_obstacle(ax)
+            
+            
+        t_tmp = np.linspace(0, 1, 100)
+        for t_idx in range(N):
+            calc_vertices = []
+            corners = []
+            for vertex in vehicle_positions_original:
+                x, y = vertex
+                myList = sol_rotation_chooser[t_idx]
+                val = next((index for index,value in enumerate(myList) if value != 0), None) # https://stackoverflow.com/questions/19502378/python-find-first-instance-of-non-zero-number-in-list/19502692
+                phi_idx = val
+                
+                # Rotation
+                x_rot = CS[phi_idx][0][0] * x + CS[phi_idx][0][1] * y
+                y_rot = CS[phi_idx][1][0] * x + CS[phi_idx][1][1] * y
+                
+                # Scaling
+                x_rot  = x_rot * sol_s[t_idx]
+                y_rot  = y_rot * sol_s[t_idx]
+                
+                # Translation
+                x_rot = x_rot + sol_t[t_idx][0]
+                y_rot = y_rot + sol_t[t_idx][1]
+                
+                # Here we need to shift it by the frenet path :))
+                x_rot, y_rot = self.fp.frenet_to_inertial(x_rot, y_rot, t_tmp[t_idx])
+                ax.plot(x_rot, y_rot, 'b.')
+                corners += [[x_rot, y_rot]]
+            corners = np.array(corners)
+            corners = np.vstack((corners, corners[0, :]))
+            polygon = Polygon(corners, closed=True, fill=True, fc=(0,0,1,0.1), ec=(0,0,0,1), lw=1, zorder = 2)
+            ax.add_patch(polygon)
+            
+            # actually, we are also pplotting the instances, when e = 0 and collision avoidance is not cinsidered.
+            # Let's plot with green the cases, where e = 1.
+            # print([e[t_idx, phi_idx, obst_idx].x for obst_idx in range(len(self.vehicles[0].obstacles))])
+            if EVENT_ON == True:
+                if any( [e[t_idx, obst_idx].x for obst_idx in range(len(self.vehicles[0].obstacles))] )  == 1:
+                    polygon = Polygon(corners, closed=True, fill=True, fc=(0,1,0,0.1), ec=(0,0,0,1), lw=1, zorder = 2)
+                    ax.add_patch(polygon)
+                    for corner in corners:
+                        x_rot, y_rot = corner
+                        ax.plot(x_rot, y_rot, 'g.')
+                    f0, f1 = self.fp.frenet_to_inertial(0, 0, t_tmp[t_idx])
+                    ax.plot(f0, f1, 'g*')
+                # print([e[t_idx, phi_idx, obst_idx].x for obst_idx in range(len(self.vehicles[0].obstacles))])
+        
+        
+            
+            
+        
+    
+    
+                
+        ax.set_aspect('equal', adjustable='box')
+        
+            
+            
+        plt.show()  
+        assert 0
+        return 0
+        
+    
+    def MIP_DFG_EVENT(self):
         """ We implement a MIP version of the DFG algorithm. This function is only for test, and 
         calculates way-points for the entire maneuver. (frenet 0->1)        
         """
@@ -2520,8 +2890,19 @@ class Group(Environment):
                 pass
             else:
                 # Extending till the edge of the environment
-                g1 = g1 + [[g1[-1][0], -6]] + [[g1[0][0], -6]]
-                g2 = g2 + [[g2[-1][0],  6]] + [[g2[0][0],  6]]
+                # g1 = g1 + [[g1[-1][0], -6]] + [[g1[0][0], -6]]
+                # g2 = g2 + [[g2[-1][0],  6]] + [[g2[0][0],  6]]
+                
+                g1_extra = []
+                g1_extra += [list(self.fp.frenet_to_inertial(gate1_inside_corners[-1][0], gate1_inside_corners[-1][1] - 2.3, t_tmp[i]))]
+                g1_extra += [list(self.fp.frenet_to_inertial(gate1_inside_corners[0][0], gate1_inside_corners[0][1] - 2.3, t_tmp[i]))]
+                g1 += g1_extra
+                g2_extra = []
+                g2_extra += [list(self.fp.frenet_to_inertial(gate2_inside_corners[-1][0], gate2_inside_corners[-1][1] + 2.3, t_tmp[i]))]
+                g2_extra += [list(self.fp.frenet_to_inertial(gate2_inside_corners[0][0], gate2_inside_corners[0][1] + 2.3, t_tmp[i]))]
+                g2 += g2_extra
+                # g1 = g1 + [[g1[-1][0], -1.3]] + [[g1[0][0], -1.3]]
+                # g2 = g2 + [[g2[-1][0],  1.3]] + [[g2[0][0],  1.3]]
                 obstacles += [Obstacle(ID = 3+i*2, corners = g1)]
                 obstacles += [Obstacle(ID = 3+i*2 + 1, corners = g2)]
                 # Sharing ID-s between gate pairs
