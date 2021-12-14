@@ -137,6 +137,7 @@ class Group(Environment):
         obst_d_list = [] # dxy values -- || --
         v_rot_list = [] # rotated vertices -- || --
         obst_c_rot_list = [] # rotated center -- || --
+        obst_corners_rot_list = [] # rotated corners -- || --
         
         for obstacle in self.vehicles[0].obstacles:
             center = obstacle.center_t
@@ -168,12 +169,9 @@ class Group(Environment):
                 # phi += [math.atan2(vec[1, i], vec[0, i])]
                 phi += [tmp_phi[min_deviation_idx]]
                 
-            # rotation by -phi
-            # here we rotate only the formation, but later we will rotate the obstacle corners as well.
-            vertices = copy.deepcopy(vehicle_positions_original)
-            vertices_rot = []
-            for phi_ in phi:
-                vertices_rot += [[np.dot(cs(-phi_), np.array(vertex)) for vertex in vertices]]
+            # removing the last vertex, which we have previously added
+            corners = corners[:4]
+                
                 
                 
             def get_dx_dy(center, corners):
@@ -190,11 +188,13 @@ class Group(Environment):
             
             obst_rotation_list += [phi]
             obst_d = []
-            v_rot_list += [vertices_rot]
             obst_c_rot = []
+            obst_corners_rot = []
             for t_idx in range(len(phi)):
                 center_ = [center[0][0][t_idx], center[0][1][t_idx]]
                 corners_ = [[corner[0][t_idx], corner[1][t_idx]] for corner in corners]
+                
+                
                 # we need to rotate the corners & the center (by -phi)
                 corners_rot = [np.dot(cs(-phi[t_idx]), np.array(corners__)).tolist() for corners__ in corners_]
                 center_rot = np.dot(cs(-phi[t_idx]), np.array(center_)).tolist()
@@ -204,10 +204,24 @@ class Group(Environment):
                 # saving them
                 obst_c_rot += center_rot
                 obst_d += [dx, dy]
-                # rotated corners need not to be saved
+                obst_corners_rot += [corners_rot]
+                # rotated obstacle corners need not to be saved
+                # they might actually proove to be useful for the event-thingy
                 
-            obst_d_list += [[np.mean(obst_d[0::2]), np.mean(obst_d[1::2])]]
+                
+            obst_d_list += [[obst_d[0::2], obst_d[1::2]]]
             obst_c_rot_list += [obst_c_rot]
+            obst_corners_rot_list += [obst_corners_rot]
+            
+            
+            # rotation by -phi
+            # here we rotate only the formation, but later we will rotate the obstacle corners as well.
+            vertices = copy.deepcopy(vehicle_positions_original)
+            vertices_rot = []
+            for phi_ in phi:
+                vertices_rot += [[np.dot(cs(-phi_), np.array(vertex)) for vertex in vertices]]
+                
+            v_rot_list += [vertices_rot]
         
         ###############
         # --- MIP --- #
@@ -219,6 +233,35 @@ class Group(Environment):
         dxy = obst_d_list
         phi = obst_rotation_list
         center = obst_c_rot_list
+        corners = obst_corners_rot_list
+        
+        fig, ax = plt.subplots()
+        for i, vertices_ in enumerate(corners[5]):
+            for vertex in vertices_:
+            
+                ax.plot(vertex[0], vertex[1], 'k.')
+                # print(vertex[0], vertex[1])
+            
+            
+                    
+            vertices_ = np.array(vertices_)
+            vertices_ = np.vstack((vertices_, vertices_[0, :]))
+            polygon = Polygon(vertices_, closed=True, fill=True, fc=(0,0,1,0.1), ec=(0,0,0,1), lw=1, zorder = 2)
+            ax.add_patch(polygon)
+            
+            
+            tmp_phi = []
+            for j in range(1, 5):
+                vec = np.array(vertices_[j, :]) - np.array(vertices_[j-1, :]) # <-- this is why we added the first corner again
+                tmp_phi += [math.atan2(vec[1], vec[0])]
+            # print(tmp_phi)
+            
+            
+                
+        plt.show()
+        ax.set_aspect('equal', adjustable='box')
+        fig.savefig('figures/' + '___' + '.png', dpi = 200)
+        
         
         
         model = Model("ppl")
@@ -229,13 +272,15 @@ class Group(Environment):
         # limits
         R = 1e5
         # - expansion
-        s_min, s_max = 0.3, 4    
+        s_min, s_max = 0.3, 4  
+        # s_min, s_max = 0.3, 1   
         x_min, x_max = -3, 3
         y_min, y_max = -3, 3
         # - translation
         # t_min, t_max = (x_min - x_max), (x_max - x_min)
-        t_min = -5
-        t_max = 5
+        # t_min = -5
+        # t_max = 5
+        # No translation is allowed for this testing phase.
         t_min = 0
         t_max = 0
         # - rotation
@@ -285,21 +330,21 @@ class Group(Environment):
                     for vertex in vertices[obst_idx][t_idx]:
                         x, y = vertex
                         
-                        # Rotation
-                        x_rot = CS[phi_idx][0][0] * x + CS[phi_idx][0][1] * y
-                        y_rot = CS[phi_idx][1][0] * x + CS[phi_idx][1][1] * y
+                        # # Rotation
+                        # x_rot = CS[phi_idx][0][0] * x + CS[phi_idx][0][1] * y
+                        # y_rot = CS[phi_idx][1][0] * x + CS[phi_idx][1][1] * y
                         
-                        # Scaling
-                        x_rot  = x_rot * s[t_idx]
-                        y_rot  = y_rot * s[t_idx]
+                        # # Scaling
+                        # x_rot  = x_rot * s[t_idx]
+                        # y_rot  = y_rot * s[t_idx]
                         
-                        # Translation
-                        x_rot = x_rot + t[t_idx,0]
-                        y_rot = y_rot + t[t_idx,1]
+                        # # Translation
+                        # x_rot = x_rot + t[t_idx,0]
+                        # y_rot = y_rot + t[t_idx,1]
                         
                         idx = np.arange(2*t_idx,2*t_idx+2)
                         center_ = np.array(center[obst_idx])[idx].reshape(-1).tolist()
-                        obs_dx, obs_dy = dxy[obst_idx]
+                        obs_dx, obs_dy = dxy[obst_idx][0][t_idx], dxy[obst_idx][1][t_idx]
                         
                         # x, y = x_rot, y_rot
                         # dist = []
@@ -312,23 +357,35 @@ class Group(Environment):
                         #     if dist_ <= min_dist:
                         #         min_dist = dist_
                         
+                        "is any of the vertex point obstacle radious close to the obstacle center?"
+                        # if math.sqrt((x - center_[0])**2 + (y - center_[1])**2) <= min_dist:
+                        #     min_dist = math.sqrt((x - center_[0])**2 + (y - center_[1])**2)
                         
-                        if math.sqrt((x - center_[0])**2 + (y - center_[1])**2) <= min_dist:
-                            min_dist = math.sqrt((x - center_[0])**2 + (y - center_[1])**2)
+                        "is any of the obstacle corners inside the danger zone?"
+                        corner_idx = np.arange(5*t_idx,5*t_idx+5)
+                        for corner_enum in range(4):
+                            corners_ = np.array(corners[obst_idx])[t_idx] # [corner_idx]
+                            if math.sqrt((0 - corners_[corner_enum][0])**2 + (0 - corners_[corner_enum][1])**2) <= min_dist:
+                                min_dist = math.sqrt((0 - corners_[corner_enum][0])**2 + (0 - corners_[corner_enum][1])**2)
                                
                     
                         # if math.sqrt(obs_dx**2 + obs_dy**2) < min_dist:
                         #     min_dist = math.sqrt(obs_dx**2 + obs_dy**2)
-                    obs_dx, obs_dy = dxy[obst_idx]
+                    # obs_dx, obs_dy = dxy[obst_idx]
+                    obs_dx, obs_dy = dxy[obst_idx][0][t_idx], dxy[obst_idx][1][t_idx]
                     obs_radious = math.sqrt(obs_dx**2 + obs_dy**2)
+                    # print(str(["  "] * obst_idx) + str(obs_radious) + " -- " + str([obs_dx, obs_dy]))
                         
                             
                     # we have obtained the minimum distance from the formation to the obstacle
                     # now what?
                     # coll. avoidance should only happen, if we are this close
-                    s_danger = 0.6988905493709299 * 1 * 1
-                    print(obs_radious)
-                    s_danger = obs_radious
+                    "is any of the obstacle corners inside the danger zone?"
+                    s_danger = 0.6988905493709299 * 1 * 1.5
+                    # print(obs_radious)
+                    # s_danger = obs_radious
+                    "is any of the vertex point obstacle radious close to the obstacle center?"
+                    # s_danger = self.vehicles[0].obstacles[obst_idx].max_dist_from_center * 1.01
                     # if s_danger > current distance (meaming the current distance is too small), then event binary = 1
                     # R * e >= s_danger - min_dist
                     # R * (1 - e) >= min_dist - s_danger
@@ -336,8 +393,12 @@ class Group(Environment):
                     if EVENT_ON == True:
                         # model.addConstr( R * e[t_idx, phi_idx, obst_idx] >= (s_danger - min_dist) * rotation_chooser[t_idx, phi_idx] )
                         # model.addConstr( R * (1 - e[t_idx, phi_idx, obst_idx]) >= (min_dist - s_danger) * rotation_chooser[t_idx, phi_idx] )
-                        model.addConstr( R * e[t_idx, obst_idx] >= (s_danger - min_dist) )
-                        model.addConstr( R * (1 - e[t_idx, obst_idx]) >= (min_dist - s_danger) )
+                        # model.addConstr( R * e[t_idx, obst_idx] >= (s_danger - min_dist) )
+                        # model.addConstr( R * (1 - e[t_idx, obst_idx]) >= (min_dist - s_danger) )
+                        model.addConstr( R * e[t_idx, obst_idx] >= ((s_danger - min_dist) > 0) + ( (np.linalg.norm(center_) - s_danger) < 0 ) )
+                        model.addConstr( R * (1 - e[t_idx, obst_idx]) >= -1 * (((s_danger - min_dist) > 0) + ( (np.linalg.norm(center_) - s_danger) < 0 )) )
+                        
+                        # actually, if all corners are outside the radious, but 
                     
                     
                     
@@ -362,7 +423,8 @@ class Group(Environment):
                         # Constraints
                         idx = np.arange(2*t_idx,2*t_idx+2)
                         center_ = np.array(center[obst_idx])[idx].reshape(-1).tolist()
-                        obs_dx, obs_dy = dxy[obst_idx]
+                        # obs_dx, obs_dy = dxy[obst_idx]
+                        obs_dx, obs_dy = dxy[obst_idx][0][t_idx], dxy[obst_idx][1][t_idx]
                         
                         model.addConstr(  x_rot - (center_[0] + obs_dx) >=  d_obs - R * c[phi_idx, 1] )
                         model.addConstr( -x_rot + (center_[0] - obs_dx) >=  d_obs - R * c[phi_idx, 0] )
@@ -386,14 +448,14 @@ class Group(Environment):
                 J += rotation_chooser[t_idx, phi_idx] * gamma_**2
                 
         for t_idx in range(1, N):
-            J += 1e3 * ((s[t_idx] - s[t_idx-1])**2 + (t[t_idx, 0] - t[t_idx-1, 0])**2 + (t[t_idx, 1] - t[t_idx-1, 1])**2)
+            J += 1e2 * ((s[t_idx] - s[t_idx-1])**2 + (t[t_idx, 0] - t[t_idx-1, 0])**2 + (t[t_idx, 1] - t[t_idx-1, 1])**2)
             for phi_idx, gamma_ in enumerate(np.linspace(-math.pi/2, math.pi/2, rotation_res)):
-                J += 1e3 *((rotation_chooser[t_idx, phi_idx] * gamma_ - rotation_chooser[t_idx-1, phi_idx] * gamma_)**2)
+                J += 1e2 *((rotation_chooser[t_idx, phi_idx] * gamma_ - rotation_chooser[t_idx-1, phi_idx] * gamma_)**2)
             
                 
         model.setObjective(J, GRB.MINIMIZE)
         model.Params.Threads = 8
-        model.Params.TimeLimit = 100
+        model.Params.TimeLimit = 300
         
         model.optimize()
         
@@ -457,6 +519,7 @@ class Group(Environment):
                         ax.plot(x_rot, y_rot, 'g.')
                     f0, f1 = self.fp.frenet_to_inertial(0, 0, t_tmp[t_idx])
                     ax.plot(f0, f1, 'g*')
+                # print([e[t_idx, obst_idx].x for obst_idx in range(len(self.vehicles[0].obstacles))])
                 # print([e[t_idx, phi_idx, obst_idx].x for obst_idx in range(len(self.vehicles[0].obstacles))])
         
         
@@ -2894,12 +2957,12 @@ class Group(Environment):
                 # g2 = g2 + [[g2[-1][0],  6]] + [[g2[0][0],  6]]
                 
                 g1_extra = []
-                g1_extra += [list(self.fp.frenet_to_inertial(gate1_inside_corners[-1][0], gate1_inside_corners[-1][1] - 2.3, t_tmp[i]))]
-                g1_extra += [list(self.fp.frenet_to_inertial(gate1_inside_corners[0][0], gate1_inside_corners[0][1] - 2.3, t_tmp[i]))]
+                g1_extra += [list(self.fp.frenet_to_inertial(gate1_inside_corners[-1][0], gate1_inside_corners[-1][1] - 5.3, t_tmp[i]))]
+                g1_extra += [list(self.fp.frenet_to_inertial(gate1_inside_corners[0][0], gate1_inside_corners[0][1] - 5.3, t_tmp[i]))]
                 g1 += g1_extra
                 g2_extra = []
-                g2_extra += [list(self.fp.frenet_to_inertial(gate2_inside_corners[-1][0], gate2_inside_corners[-1][1] + 2.3, t_tmp[i]))]
-                g2_extra += [list(self.fp.frenet_to_inertial(gate2_inside_corners[0][0], gate2_inside_corners[0][1] + 2.3, t_tmp[i]))]
+                g2_extra += [list(self.fp.frenet_to_inertial(gate2_inside_corners[-1][0], gate2_inside_corners[-1][1] + 5.3, t_tmp[i]))]
+                g2_extra += [list(self.fp.frenet_to_inertial(gate2_inside_corners[0][0], gate2_inside_corners[0][1] + 5.3, t_tmp[i]))]
                 g2 += g2_extra
                 # g1 = g1 + [[g1[-1][0], -1.3]] + [[g1[0][0], -1.3]]
                 # g2 = g2 + [[g2[-1][0],  1.3]] + [[g2[0][0],  1.3]]

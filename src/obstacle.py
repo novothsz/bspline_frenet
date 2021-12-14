@@ -93,7 +93,7 @@ class Obstacle(Environment):
     
     
     def spline_position_in_frenet(self):
-        
+        do_the_fit = True
         # try:
         #     basis = self.fitter.define_knots(degree = 3, knot_intervals = self.fitter.knot_intervals)
         #     import pickle
@@ -118,16 +118,14 @@ class Obstacle(Environment):
             p_ = corner_[:, 0].tolist()
             q_ = corner_[:, 1].tolist()
             corner_ = [p_, q_]
-            # fitted_splines = self.fitter.fitting(corner_,
-            #                                      y_min = [self.border_x[0], self.border_y[0]],
-            #                                      y_max = [self.border_x[1], self.border_y[1]]
-            #                                      )
-            fitted_splines = self.fitter.fitting_single(corner_,
-                                                 y_min = [-20, -20],
-                                                 y_max = [20, 20]
-                                                 )
-            self.corners_spline += [fitted_splines]
-            corners_spline_coeffs += [ [sp.coeffs for sp in fitted_splines] ]
+            
+            if do_the_fit == True:
+                fitted_splines = self.fitter.fitting_single(corner_,
+                                                     y_min = [-20, -20],
+                                                     y_max = [20, 20]
+                                                     )
+                self.corners_spline += [fitted_splines]
+                corners_spline_coeffs += [ [sp.coeffs for sp in fitted_splines] ]
             self.corners_t += [corner_]
             
         # ---- Scaled corners
@@ -143,12 +141,14 @@ class Obstacle(Environment):
             #                                      y_min = [self.border_x[0], self.border_y[0]],
             #                                      y_max = [self.border_x[1], self.border_y[1]]
             #                                      )
-            fitted_splines = self.fitter.fitting_single(corner_,
-                                                 y_min = [-20, -20],
-                                                 y_max = [20, 20]
-                                                 )
-            self.scaled_corners_spline += [fitted_splines]
-            scaled_corners_spline_coeffs += [ [sp.coeffs for sp in fitted_splines] ]
+            
+            if do_the_fit == True:
+                fitted_splines = self.fitter.fitting_single(corner_,
+                                                     y_min = [-20, -20],
+                                                     y_max = [20, 20]
+                                                     )
+                self.scaled_corners_spline += [fitted_splines]
+                scaled_corners_spline_coeffs += [ [sp.coeffs for sp in fitted_splines] ]
             self.scaled_corners_t += [corner_]
         # self.plot_corners_spline()
         
@@ -161,26 +161,40 @@ class Obstacle(Environment):
         p_ = center_[:, 0].tolist()
         q_ = center_[:, 1].tolist()
         center_ = [p_, q_]
-        fitted_splines = self.fitter.fitting_single(center_,
-                                             y_min = [-20, -20],
-                                             y_max = [20, 20]
-                                             )
-        self.center_spline += fitted_splines
-        center_spline_coeffs += [ [sp.coeffs for sp in fitted_splines] ]
+        
+        if do_the_fit == True:
+            fitted_splines = self.fitter.fitting_single(center_,
+                                                 y_min = [-20, -20],
+                                                 y_max = [20, 20]
+                                                 )
+            self.center_spline += fitted_splines
+            center_spline_coeffs += [ [sp.coeffs for sp in fitted_splines] ]
         self.center_t += [center_]
         
         
         # ---- Collecting all the coeffs and writing it to file
-        coeffs = {
-                "corners_spline_coeffs" : corners_spline_coeffs,
-                "scaled_corners_spline_coeffs" : scaled_corners_spline_coeffs,
-                "center_spline_coeffs" : center_spline_coeffs
-                }
-        import pickle
-        pickle_out = open("obst_" + str(int(self.ID)) + "_coeffs.pickle", "wb")
-        pickle.dump(coeffs, pickle_out)
-        pickle_out.close()
+        if do_the_fit == True:
+            coeffs = {
+                    "corners_spline_coeffs" : corners_spline_coeffs,
+                    "scaled_corners_spline_coeffs" : scaled_corners_spline_coeffs,
+                    "center_spline_coeffs" : center_spline_coeffs
+                    }
+            import pickle
+            pickle_out = open("obst_" + str(int(self.ID)) + "_coeffs.pickle", "wb")
+            pickle.dump(coeffs, pickle_out)
+            pickle_out.close()
         
+        
+        else:
+            # fitter = SplineFitter()
+            basis = self.fitter.define_knots(degree = 3, knot_intervals = self.fitter.knot_intervals)
+            import pickle
+            pickle_in = open("obst_" + str(int(self.ID)) + "_coeffs.pickle", "rb")
+            coeffs = pickle.load(pickle_in)
+    
+            self.corners_spline = [[BSpline(basis, xy) for xy in cxy] for cxy in coeffs["corners_spline_coeffs"]]
+            self.scaled_corners_spline = [[BSpline(basis, xy) for xy in cxy] for cxy in coeffs["scaled_corners_spline_coeffs"]]
+            self.center_spline = [BSpline(basis, xy) for xy in coeffs["center_spline_coeffs"]]
         
             
             
