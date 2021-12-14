@@ -235,32 +235,32 @@ class Group(Environment):
         center = obst_c_rot_list
         corners = obst_corners_rot_list
         
-        fig, ax = plt.subplots()
-        for i, vertices_ in enumerate(corners[5]):
-            for vertex in vertices_:
+        # fig, ax = plt.subplots()
+        # for i, vertices_ in enumerate(corners[5]):
+        #     for vertex in vertices_:
             
-                ax.plot(vertex[0], vertex[1], 'k.')
-                # print(vertex[0], vertex[1])
+        #         ax.plot(vertex[0], vertex[1], 'k.')
+        #         # print(vertex[0], vertex[1])
             
             
                     
-            vertices_ = np.array(vertices_)
-            vertices_ = np.vstack((vertices_, vertices_[0, :]))
-            polygon = Polygon(vertices_, closed=True, fill=True, fc=(0,0,1,0.1), ec=(0,0,0,1), lw=1, zorder = 2)
-            ax.add_patch(polygon)
+        #     vertices_ = np.array(vertices_)
+        #     vertices_ = np.vstack((vertices_, vertices_[0, :]))
+        #     polygon = Polygon(vertices_, closed=True, fill=True, fc=(0,0,1,0.1), ec=(0,0,0,1), lw=1, zorder = 2)
+        #     ax.add_patch(polygon)
             
             
-            tmp_phi = []
-            for j in range(1, 5):
-                vec = np.array(vertices_[j, :]) - np.array(vertices_[j-1, :]) # <-- this is why we added the first corner again
-                tmp_phi += [math.atan2(vec[1], vec[0])]
-            # print(tmp_phi)
+        #     tmp_phi = []
+        #     for j in range(1, 5):
+        #         vec = np.array(vertices_[j, :]) - np.array(vertices_[j-1, :]) # <-- this is why we added the first corner again
+        #         tmp_phi += [math.atan2(vec[1], vec[0])]
+        #     # print(tmp_phi)
             
             
                 
-        plt.show()
-        ax.set_aspect('equal', adjustable='box')
-        fig.savefig('figures/' + '___' + '.png', dpi = 200)
+        # plt.show()
+        # ax.set_aspect('equal', adjustable='box')
+        # fig.savefig('figures/' + '___' + '.png', dpi = 200)
         
         
         
@@ -381,7 +381,7 @@ class Group(Environment):
                     # now what?
                     # coll. avoidance should only happen, if we are this close
                     "is any of the obstacle corners inside the danger zone?"
-                    s_danger = 0.6988905493709299 * 1 * 1.5
+                    s_danger = 0.6988905493709299 * 1 * 1.8
                     # print(obs_radious)
                     # s_danger = obs_radious
                     "is any of the vertex point obstacle radious close to the obstacle center?"
