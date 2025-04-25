@@ -2,14 +2,11 @@ from .vehicle import Vehicle
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-from .frenet_path import FrenetPath
 from .environment import Environment
 import yaml
-from numpy import interp
 import time
 import csv
 import random
-import copy
 import os
 
 from .obstacle import Obstacle
@@ -204,33 +201,8 @@ class Group(Environment):
             vehicle.variable_history['current_configuration_position'] += [vehicle.current_configuration_position]
                 
             
-        # Step 3.5: Okay, so we habe the a_intermediate_list
+        # Step 3.5: 
         # For each obsacle, that is isn't doing any problems for us, put zeros
-        # Otherwise yeah... ;)
-        
-        """
-        for i, vehicle in enumerate(self.vehicles):
-            a_intermediate_list = copy.deepcopy(vehicle.a_intermediate_list)
-            a_intermediate_ID_list = vehicle.a_intermediate_ID_list
-            
-            # Blowing up, just in case :)
-            a_intermediate_list = a_intermediate_list + [0 , 0] * len(self.vehicles[0].obstacles)
-            a_intermediate_ID_list = a_intermediate_ID_list + [0] * len(self.vehicles[0].obstacles)
-            
-            a_intermediate_list_new = []
-            
-            for j in range(len(self.vehicles[0].obstacles)):
-                if j == a_intermediate_ID_list[0]:
-                    a_intermediate_list_new += a_intermediate_list[:2]
-                    a_intermediate_list = a_intermediate_list[2:]
-                    a_intermediate_ID_list = a_intermediate_ID_list[1:]
-                else:
-                    a_intermediate_list_new += [0, 0]
-        """
-                    
-            
-        
-        
         
         # Step 4: Replication/truncation    
         for i, vehicle in enumerate(self.vehicles):
@@ -336,28 +308,13 @@ class Group(Environment):
                     # when looking for the obstacle ID, we should find the one, with which we will collide!!
                     # Meaning: use the collision function and not the danger zone function.
                     # (If none, then we can keep the formation :) )
-                    # all_collisions2, collision2 = self.check_collision_with_obstacles(vehicle_positions, [self.get_obstacle_corners(t_end)[i]])
-                    # all_collisions2, collision2 = self.check_collision_with_obstacles(vehicle_positions, np.array(self.get_obstacle_corners(t_end))[ [i] ].tolist()) 
-                    
-                    
-                    # --> we need to use this, because danger zone is kind of arbitrary
-                    # we are using the non-scaled positions for a reason...
-                    # And the reason being
+
                     all_collisions2, collision2 = self.check_collision_with_obstacles(vehicle_positions, np.array(self.get_obstacle_corners(t_end))[ [i] ].tolist()) 
-                    # nah... maybe it is better to use the same, because let's just use the same. Because they might give different results.
-                    # all_collisions2, collision2 = self.check_danger_zone_with_obstacles(vehicle_positions, np.array(self.get_scaled_obstacle_corners(t_end))[ [i] ].tolist()) 
                     is_collision2 = collision2
                     if is_collision2:
                         # If we collide with an obstacle, we save its index
                         obstacle_idx += [i]
                         
-            # if (t_end >= 1 - self.TOL and t_end <= 1 + self.TOL) == True:
-                # obstacle_idx = [0]
-                # TODO: what was the above code doing??
-                # print("Setting original configuration")
-            # if t_end >= t_sweep_end - t_step:
-            #     kappa = True
-            #     all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, self.get_scaled_obstacle_corners(t_end))
             # Step 2: If collision has been found, find t_danger_end time.
             if obstacle_idx != []:
                 
@@ -377,16 +334,6 @@ class Group(Environment):
                         self.check_danger_zone_with_obstacles(vehicle_positions, np.array(self.get_scaled_obstacle_corners(t_danger_end))[obstacle_idx].tolist())
                         break
                     
-                    # fig = plt.figure()
-                    # ax = fig.add_subplot(111)
-                    # for pos in np.array(self.get_scaled_obstacle_corners(t_danger_end))[obstacle_idx].tolist()[0]:
-                    #     plt.plot(pos[0], pos[1], 'ro')
-                        
-                    # s_danger = 0.6988905493709299    
-                    # circle = plt.Circle((0, 0), s_danger, color='r', alpha=0.5, zorder = 0)
-                    # ax.add_patch(circle)
-                    # ax.set_aspect('equal', adjustable='box')
-                    # plt.show()
                     
                 # Step 3: Find the right formation configuration for t \in [t_danger_start, t_danger_end]
                 # Form t_zizz
@@ -407,15 +354,6 @@ class Group(Environment):
                 
                 self.cum_rotation = cum_rotation
                 self.cum_scaling = cum_scaling
-                
-                
-                # plt.figure()
-                # for pos in self.get_obstacle_corners(t_end)[1]:
-                #     plt.plot(pos[0], pos[1], 'ro')
-                
-                # for veh in vehicle_positions:
-                #     plt.plot(veh[0], veh[1], 'ko')
-                # plt.show()
                 
                 
                 # Step 4: Handle actions taken (back_transformation, yes, no_action, no_solution_found)
@@ -448,46 +386,8 @@ class Group(Environment):
                                 
                                 
                                 # - outside or inside the formation?
-                                obstacle_corners = np.array(self.get_obstacle_corners(t))[obstacle_idx[0]].tolist()
-                                point = [vehicle_positions[i][0], vehicle_positions[i][1]]
-                                inside = self.check_point_inside(point, obstacle_corners)
-                                
-                                a_hyp_direction = point[1] - obstacle_corners[0][1]
-                                
-                                if a_hyp_direction > 0:
-                                    a = [0, 1]
-                                else:
-                                    a = [0, -1]
                                 a = [0, 0]
                                 
-                                
-                                """
-                                # Okay, so the normal vector of the hyperplane points from the obstacle to 
-                                # the vehicle.
-                                # If the obstacle is inside the formation, that means, that the normal vector
-                                # should point "away" from the from the Frenet center
-                                # Okay, and how do we decide, in which direction? "upward" or "downward"?
-                                # Well, if x_intermediate[0] > 0, then upward, otherwise downward.
-                                if inside:
-                                    if point[1] > 0:
-                                        a = [0, 1]
-                                    elif point[1] < 0:
-                                        a = [0,-1]
-                                    else:
-                                        raise Exception("Azt hogy? :D")
-                                # If the obstacle is outside the formation, then a_n should point "inwards", in the 
-                                # direction of the Frenet center
-                                else:
-                                    if point[1] > 0:
-                                        a = [0, -1]
-                                        # a = [1, 0]
-                                    elif point[1] < 0:
-                                        a = [0, 1]
-                                        # a = [-1,0]
-                                    else:
-                                        raise Exception("Azt hogy? :D")
-                                """
-                                        
                                 # If this is a gate, then it has a pair. Let's get its ID as well
                                 gate_pair_exists = False
                                 gate_pair_ID = []
@@ -500,8 +400,6 @@ class Group(Environment):
                                             gate_pair_exists = False
                                             gate_pair_ID = obst.gate_pair_ID
                                             
-                                
-                                        
                                 # Okay. So for this specific obstacle, we add a, and [0, 0] for the others.
                                 for obst in self.vehicles[0].obstacles:
                                     if obst.ID == obst_ID:
@@ -513,13 +411,6 @@ class Group(Environment):
                                     else:
                                         vehicle.a_intermediate_list += [0, 0]
                                         vehicle.a_intermediate_ID_list += ["[0, 0]"]
-                                        
-                                        
-                                        
-                                
-                                    
-                                    
-                                
                         
                     elif self.MPC_version == False or self.MPC_version == True:
                         for i, vehicle in enumerate(self.vehicles):
@@ -542,14 +433,7 @@ class Group(Environment):
         
             elif obstacle_idx == []:
                 t_end += t_step
-                
-                
-        # print("ACC_sweep finished")
-        # print('t_intermediate_list')
-        # print(self.vehicles[0].t_intermediate_list)
-        # print('x_intermediate_list')
-        # print(self.vehicles[0].x_intermediate_list)
-        
+           
         tmp_len = len(self.vehicles[0].t_intermediate_list)
 
                 
@@ -581,151 +465,6 @@ class Group(Environment):
         
 
     
-        
-    
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    
-    
-    
-    """
-    Okay... so...
-    Assume, we are doing MPC.
-    Then, in the first run, we will have to create t_intermediate steps. Let it be self.n_of_saved_waypoints = int(self.t_window_size / self.t_step) assert 
-    # We already have this, actually...
-        
-        self.n_of_saved_waypoints = int(self.t_window_size / self.t_step) + 1; epsilon = 10e-10; assert self.t_window_size % self.t_step > -epsilon and \
-                                                                                                        self.t_window_size % self.t_step < epsilon# math.floor(self.t_window_size / self.t_step)
-                                                                                                        
-    s = np.sqrt(definite_integral(self.fp.fx_spline.derivative()**2 + self.fp.fy_spline.derivative()**2,0, 1))   
-    !!!!! VIGYÁZZ, ITT MÉG HOZZA KELL ADNI AZT, HOGY HALAD ALATTUNK AZ ÚT, TEHÁT AZ, AKI EGY IRÁNYBA 
-    AKAR MENNI A FRENET SEBESSÉGÉVEL, ANNAK MÉG GYORSABBAN KELL MENNIE!!!!!
-    
-    
-    T = 10
-    v_frenet = s / T
-    
-    s_max = self.vehicles[0].radious * 5 * 2
-    t_DFG = s_max / v_frenet
-    
-    
-    
-    
-    """
-    
-    def intermediate_position_generator_SZILARD_sweep(self):
-        from .spline_extra import definite_integral
-        s = np.sqrt(definite_integral(self.fp.fx_spline.derivative()**2 + self.fp.fy_spline.derivative()**2,0, 1))    
-        T = 10
-        v_frenet = s / T
-        
-        s_max = self.vehicles[0].radious * 5 * 2
-        s_max = 1.39
-        v_max = v_frenet * 5
-        t_DFG = s_max / (v_max - abs(v_frenet))
-        
-    
-        
-        t_step = t_DFG.reshape(-1).tolist()[0] # self.vehicles[0].t_step
-        
-        self.lookback = 0
-        self.lookahead = t_step
-        print('lookback&lookahead has benn changed')
-        
-        
-        # t_step = 0.02
-        t_end = 0
-        while t_end <= 1:
-            self.intermediate_position_generator_SZILARD_action(t_end)
-            t_end += t_step
-        
-        return self
-    
-    def intermediate_position_generator_SZILARD_action(self, t_end):
-        
-        "Some part are copied over from intermediate_position_generator_PENI_MPC"
-        # namely: setting x0
-        
-        """ This function is used, when generating new waypoints. 
-        """
-        # Step 1: Set x0 as starting position
-        if self.vehicles[0].t_intermediate_list == []:
-            vehicle_positions = []
-            for vehicle in self.vehicles:
-                vehicle_positions += [vehicle.x0[:2]]
-        else:
-            vehicle_positions = []
-            for vehicle in self.vehicles:
-                final_waypoints = vehicle.x_intermediate_list[-3:-1]
-                vehicle_positions += [final_waypoints]
-                
-            
-        # Step 2: get the current final time, rotation and scaling
-        # t_end = self.vehicles[0].t_end + self.vehicles[0].t_step #... well, maybe  - self.vehicles[0].t_step? Depends on when we call this method
-        
-        t_end = t_end # :))
-        
-        cum_rotation = self.cum_rotation
-        cum_scaling = self.cum_scaling
-                
-        # Step 3: zizzentsük be 
-        # TODO: ?Mennyi legyen a zizz?
-        t = t_end
-        # lookback = self.vehicles[0].t_window_size * 0.2
-        # lookahead = self.vehicles[0].t_window_size * 0.2
-        lookback = self.DFM_lookback
-        lookahead = self.DFM_lookahead
-        t_zizz = np.linspace( (t-lookback >= 0) * (t-lookback) + (t-lookback > 0) * 0,
-                                  (t+lookahead <= 1) * (t+lookahead) + (t+lookahead > 1) * 1,
-                                  10)
-        # Step 4: Get the least cost formation & ACTION_TAKEN
-        vehicle_positions, cum_rotation, cum_scaling, ACTION_TAKEN = self.intermediate_position_generator_SZILARD(vehicle_positions, cum_rotation, cum_scaling, t_zizz)
-        
-        # Step 5: Save stuff
-        self.cum_rotation = cum_rotation
-        self.cum_scaling = cum_scaling
-        
-        # Step 6: update x_intermediate_list & t_intermediate_list
-        # Well... we have the following ACTION_TAKEN options:
-        # - no_action -> do nothing
-        # - back_transformation -> save it
-        # - no_solution_found -> do nothing
-        # - yes -> save it
-        
-        if ACTION_TAKEN == "back_transformation" or ACTION_TAKEN == "yes":
-        
-            
-            # for vehicle_positions, cum_rotation, t_ in zip(vehicle_positions_saved, cum_rotation_saved, t_waypoints):
-            for i, vehicle in enumerate(self.vehicles):
-                vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
-                vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
-                vehicle.t_intermediate_list += [t]
-                
-            # "MPC style"
-            # for i, vehicle in enumerate(self.vehicles):
-            #     # delete first elemnt, attach new element to the end
-            #     vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation] 
-            #     vehicle.variable_history['x_intermediate_list'] += [vehicle.x_intermediate_list]
-            #     vehicle.xf = vehicle.x_intermediate_list[-3:] + vehicle.xf[3:]
-                
-            # vehicle_positions_new = []
-            # for i, vehicle in enumerate(self.vehicles):
-            #     vehicle_positions_new += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
-            # self.set_var({'new_positions': {'stage' : self.stage, 'vehicle_positions_new' : vehicle_positions_new}})
-            
-        if ACTION_TAKEN == 'no_action' or ACTION_TAKEN == 'no_solution_found':
-            
-            pass
-        
-        print('t_end, ACTION_TAKEN: ' + str(t_end) + ', ' + str(ACTION_TAKEN))
-        
-        return self
-        
     def intermediate_position_generator_SZILARD(self, vehicle_positions, cum_rotation, cum_scaling, t):
         """ This function is called iteratively every ?t_step? -> What should this value be?. It check for collision. 
         If no collision:
@@ -908,326 +647,7 @@ class Group(Environment):
                 
         return max_distance
                         
-            
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
     
-    def intermediate_position_generator_PENI_MPC(self):  
-        """ This function is used, when generating new waypoints. 
-        """
-        # Step 1: Set x0 as starting position
-        if self.vehicles[0].t_intermediate_list == []:
-            vehicle_positions = []
-            for vehicle in self.vehicles:
-                vehicle_positions += [vehicle.x0[:2]]
-        else:
-            vehicle_positions = []
-            for vehicle in self.vehicles:
-                final_waypoints = vehicle.x_intermediate_list[-3:-1]
-                vehicle_positions += [final_waypoints]
-            
-        # Step X: if the list "t_intermediate_list" hasn't reached its full length, then we are at the beginning, and need to fill it up.
-        # This means we have to call intermediate_position_generator_PENI_full for the t_window_size
-        
-        if self.vehicles[0].t_intermediate_list == []:
-            
-            epsilon = 10e-10; assert ( self.vehicles[0].t_window_size / (self.vehicles[0].n_of_saved_waypoints - 1)) % self.vehicles[0].t_step > -epsilon and \
-                                     ( self.vehicles[0].t_window_size / (self.vehicles[0].n_of_saved_waypoints - 1)) % self.vehicles[0].t_step < epsilon
-            DFM_values = [np.linspace(0, self.vehicles[0].t_window_size, self.vehicles[0].n_of_saved_waypoints),
-                          self.vehicles[0].t_window_size * 0.1, # lookback
-                          self.vehicles[0].t_window_size * 0.1] # lookahead
-            self.intermediate_position_generator_PENI_full(DFM_values = DFM_values)
-            # In this case, we are done :)
-            # No, we are not done. The vehicles have their local time... ;)
-            for vehicle in self.vehicles:
-                vehicle.t_intermediate_list = np.linspace(self.vehicles[0].t_step, 1, self.vehicles[0].n_of_saved_waypoints).tolist()
-                # print(vehicle.x_intermediate_list)
-                
-                vehicle.variable_history['x_intermediate_list'] += [vehicle.x_intermediate_list] 
-                
-                # print(vehicle.variable_history['x_intermediate_list'][-1])
-                # assert 0
-            
-            return self
-            
-        # Step 2: get the current final time, rotation and scaling
-        t_end = self.vehicles[0].t_end + self.vehicles[0].t_step #... well, maybe  - self.vehicles[0].t_step? Depends on when we call this method
-        
-        cum_rotation = self.cum_rotation
-        cum_scaling = self.cum_scaling
-        
-        # Step 3: zizzentsük be
-        t = t_end
-        lookback = self.vehicles[0].t_window_size * 0.2
-        lookahead = self.vehicles[0].t_window_size * 0.2
-        lookback = self.DFM_lookback
-        lookahead = self.DFM_lookahead
-        t_zizz = np.linspace( (t-lookback >= 0) * (t-lookback) + (t-lookback > 0) * 0,
-                                  (t+lookahead <= 1) * (t+lookahead) + (t+lookahead > 1) * 1,
-                                  10)
-        # Step 4: Get the least cost formation
-        vehicle_positions, cum_rotation, cum_scaling = self.intermediate_position_generator_PENI(vehicle_positions, cum_rotation, cum_scaling, t_zizz)
-        
-        # Step 5: Save stuff
-        self.cum_rotation = cum_rotation
-        self.cum_scaling = cum_scaling
-        
-        # Step 6: update x_intermediate_list & t_intermediate_list
-        
-        for i, vehicle in enumerate(self.vehicles):
-            # delete first elemnt, attach new element to the end
-            vehicle.x_intermediate_list = vehicle.x_intermediate_list[3:] + [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation] 
-            vehicle.variable_history['x_intermediate_list'] += [vehicle.x_intermediate_list]
-            vehicle.xf = vehicle.x_intermediate_list[-3:] + vehicle.xf[3:]
-            
-        vehicle_positions_new = []
-        for i, vehicle in enumerate(self.vehicles):
-            vehicle_positions_new += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
-        self.set_var({'new_positions': {'stage' : self.stage, 'vehicle_positions_new' : vehicle_positions_new}})
-            
-            # We are not allowed to update the t_intermediate_list, because the vehicle has its "local" time
-            # vehicle.t_intermediate_list = vehicle.t_intermediate_list[1:] + [t]
-                
-        return self
-    
-    # fig = plt.figure()
-    # ax = fig.add_subplot(111)
-    # for position in vehicle_positions:
-    #     ax.plot(position[0], position[1], 'ro')
-    # ax.set_aspect('equal', adjustable='box')
-    # plt.show()
-    
-    # fig = plt.figure()
-    # ax = fig.add_subplot(111)
-    # for vehicle in group.vehicles:
-    #     # for x_intermediate_list in vehicle.variable_history['x_intermediate_list'][-1]:
-    #     x_intermediate_list = vehicle.variable_history['x_intermediate_list'][4]
-    #     print(x_intermediate_list)
-    #     for i in [4]:
-    #         idx = np.arange(int(vehicle.state_len/2)*i,int(vehicle.state_len/2)*i+int(vehicle.state_len/2))
-    #         print(idx)
-    #         position = np.array(x_intermediate_list)[idx].tolist()
-    #         ax.plot(position[0], position[1], 'ro')
-            
-    # ax.set_aspect('equal', adjustable='box')
-    # plt.show()
-    
-    
-    # fig = plt.figure()
-    # ax = fig.add_subplot(111)
-    # for vehicle in group.vehicles:
-    #     # for x_intermediate_list in vehicle.variable_history['x_intermediate_list'][-1]:
-    #     x_intermediate_list = vehicle.variable_history['x_intermediate_list'][9]
-    #     print(x_intermediate_list)
-    #     for i in [4]:
-    #         idx = np.arange(int(vehicle.state_len/2)*i,int(vehicle.state_len/2)*i+int(vehicle.state_len/2))
-    #         print(idx)
-    #         position = np.array(x_intermediate_list)[idx].tolist()
-    #         ax.plot(position[0], position[1], 'ro')
-            
-    # ax.set_aspect('equal', adjustable='box')
-    # plt.show()
-    
-        
-        
-    def intermediate_position_generator_PENI_full(self, DFM_values = []):
-        import time
-        t_iter = time.time()
-        # Set x0 as starting position
-        vehicle_positions = []
-        for vehicle in self.vehicles:
-            vehicle_positions += [vehicle.x0[:2]]
-            
-        vehicle_positions_saved = []
-        cum_rotation_saved = []
-        cum_scaling_saved = []
-        cum_rotation = self.cum_rotation
-        cum_scaling = self.cum_scaling
-        # we start from 0, the first item in vehicle_positions_saved will be the original
-        # vehicle_positions, because at timepoint 0 there will be no collision, hence no
-        # rotation or scaling will occure
-        if DFM_values == []:
-            t_waypoints = np.linspace(0, 1, self.DFM_division)
-            lookback = self.DFM_lookback
-            lookahead = self.DFM_lookahead
-        else:
-            t_waypoints = DFM_values[0]
-            lookback = DFM_values[1]
-            lookahead = DFM_values[2]
-            
-        for t in t_waypoints: # if you change this line, make sure you also change the appropriate for loop at the end of the function if necessary
-            
-            t_zizz = np.linspace( (t-lookback >= 0) * (t-lookback) + (t-lookback > 0) * 0,
-                                  (t+lookahead <= 1) * (t+lookahead) + (t+lookahead > 1) * 1,
-                                  10)
-            
-            vehicle_positions, cum_rotation, cum_scaling = self.intermediate_position_generator_PENI(vehicle_positions, cum_rotation, cum_scaling, t_zizz)
-            
-            vehicle_positions_saved += [vehicle_positions]
-            cum_rotation_saved += [cum_rotation]
-            cum_scaling_saved += [cum_scaling]
-            
-        print('peni full runtime: ' + str(time.time() - t_iter))
-        for vehicle in self.vehicles:
-            vehicle.x_intermediate_list = []
-            vehicle.t_intermediate_list = []
-        for vehicle_positions, cum_rotation, t_ in zip(vehicle_positions_saved, cum_rotation_saved, t_waypoints):
-            for i, vehicle in enumerate(self.vehicles):
-                vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
-                vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
-                vehicle.t_intermediate_list += [t_]
-        
-        return self
-        # return cum_rotation_saved, cum_scaling_saved, vehicle_positions_saved
-    
-    
-    def intermediate_position_generator_PENI(self, vehicle_positions, cum_rotation, cum_scaling, t):
-        """The goal of this function is to receive a set of vehicle positions and calculate a rotated-scaled frame, that does not collide with 
-        obstaacles at the given time-point.
-        If t is a list of time values, then each of these time values will be checked for collision"""
-        
-        if t[-1] >= self.vehicles[0].t_end + self.vehicles[0].t_window_size:
-            self.back_rotation_factor = 1
-            self.back_scaling_factor = 1
-            print(self.vehicles[0].t_end)
-            print(self.vehicles[0].t_end + self.vehicles[0].t_window_size)
-        # Step 0: first always try to turn&scale it back... :)
-        #Backturning
-        rotation_angle = -1 * self.back_rotation_factor * cum_rotation
-        # --minimum rotation value--
-        if -5/360 * 2 * math.pi <= rotation_angle < 0.0 or 0.0 < rotation_angle <= -5/360 * 2 * math.pi:
-            rotation_angle = -1 * cum_rotation
-        
-        
-        # Backscaling
-        deviance = abs(1 - 1 / cum_scaling)
-        deviance *= self.back_scaling_factor
-        
-        # if the formation is larger, than the reference size, then we want to shrink it
-        if cum_scaling >= 1:
-            scaling_factor = 1 - deviance
-        # if the formation is smaller, than the reference size, then we want to expand it
-        else:
-            scaling_factor = 1 + deviance
-            
-        # --minimum scaling value--
-        # if the back-scaling factor changes the size less then 10%, then we scale back completely
-        if 0.9 <= scaling_factor < 1.0 or 1.0 < scaling_factor <= 1.1:
-            deviance = abs(1 - 1 / cum_scaling)
-            if cum_scaling >= 1:
-                scaling_factor = 1 - deviance
-            else:
-                scaling_factor = 1 + deviance
-        
-        vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
-        vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
-        collision_saved = []
-        for t_ in t:
-            all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, self.get_obstacle_corners(t_))
-           
-            collision_saved += [False]
-            if collision == True:
-                collision_saved[-1] = True
-                break
-        
-        if all(collision is False for collision in collision_saved):
-            # If we are in this if, then no collision happens when we try to rotate/scale back the formation.
-            # print('-, -')
-            return vehicle_positions_scaled_rotated, cum_rotation + rotation_angle, cum_scaling * scaling_factor
-        
-        # Otherwise, if we cannot rotate&scale back, find something else:
-        # Step 1: generate possible rotation angles & scaling factors
-        degree_step = 5
-        radian_step = degree_step/360 * 2 * math.pi
-        rotation_angles = [[0 + radian_step * i, 0 - radian_step * i] for i in range(1, int( (math.pi/2) / radian_step))]
-        rotation_angles = np.array(rotation_angles).reshape(-1).tolist()
-        
-        scaling_step = 1.5
-        scaling_factors_shrink = [  1 / (scaling_step ** i)  for i in range(0, math.floor(abs(math.log(0.25) / math.log(scaling_step))))  ]
-        scaling_factors_expand = [  1 * scaling_step ** i  for i in range(0, math.floor(abs(math.log(0.25) / math.log(scaling_step))))  ]
-        scaling_factors = scaling_factors_shrink + scaling_factors_expand
-        
-        
-        # Step 2: We iterate through all possible rotation & scaling possibilities
-        # Then, in b) we check, if that specific rotation & sacling results in collision between [t0, tf] or not.
-        costs = []
-        vehicle_positions_new_saved = []
-        rotation_angle_new_saved = []
-        scaling_factor_new_saved = []
-        collision_saved = []
-        for scaling_factor in scaling_factors:
-            vehicle_positions_scaled = self.scale_formation(vehicle_positions, scaling_factor)
-            for rotation_angle in rotation_angles:
-                
-                vehicle_positions_scaled_rotated = self.rotate_formation(vehicle_positions_scaled, rotation_angle)
-                # Step 2b) check for each t_ in t if collision happens. If yes, do not check further, 
-                # the given scaling factor & rotation angle is not good.
-                
-                # First let's save these :)
-                vehicle_positions_new_saved += [vehicle_positions_scaled_rotated]
-                rotation_angle_new_saved += [rotation_angle]
-                scaling_factor_new_saved += [scaling_factor]
-                collision_saved += [False]
-                
-                collision_saved_tmp = []
-                for t_ in t:
-                    all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, self.get_obstacle_corners(t_))
-                    collision_saved_tmp += [collision]
-                    if collision == True:
-                        collision_saved[-1] = True
-                        costs += [math.inf]
-                        break
-                # if for any t_ we did not break and put inf cost into costs, then calculate a proper cost   
-                if all(collision is False for collision in collision_saved_tmp):
-                    # Step 2c) if no collision happens, calculate a cost for the given rotation & scaling combo
-                    cost = self.formation_change_cost_calculator(vehicle_positions, vehicle_positions_scaled_rotated, rotation_angle, scaling_factor)
-                    # print(scaling_factor, rotation_angle, cost)
-                    costs += [cost]
-        
-        # if we cannot find good solution, do nothing
-        if all(collision_saved):
-            vehicle_positions_new = vehicle_positions
-            cum_rotation = 0
-            cum_scaling = 1
-            print("We have a problem boss! Every formation candidate collides :/")
-        else: 
-            # Now we have the costs and everything in order.
-            # Let's find the least cost value.
-            cost_min = min(costs)
-            cost_min_idx = costs.index(cost_min)
-            # And the ideal position, rotation angle & scaling factor is:
-            vehicle_positions_new = vehicle_positions_new_saved[cost_min_idx]
-            rotation_angle_new = rotation_angle_new_saved[cost_min_idx]
-            scaling_factor_new = scaling_factor_new_saved[cost_min_idx]
-            
-            cum_rotation += rotation_angle_new
-            cum_scaling *= scaling_factor_new
-            
-            # print(rotation_angle_new, scaling_factor_new)
-        
-        
-        return vehicle_positions_new, cum_rotation, cum_scaling
-        
-        
-        
-
-        
     
     def formation_change_cost_calculator(self, vehicle_positions_original, vehicle_positions_new, rotation_angle = 0, scaling_factor = 1):
         cost = 0
@@ -1246,22 +666,6 @@ class Group(Environment):
         if scaling_factor < 1:
             cost += alpha_scaling_down * abs(1-scaling_factor)
                 
-            # cost += alpha_scaling_up * scaling_factor * abs(1-scaling_factor)
-            
-            
-        # # Dereasing the cost, if we are forming back to the original formation
-        # for original, new in zip(self.og_final_positions, vehicle_positions_new):
-        #     cost += alpha_distance * (original[0] - new[0])**2 + (original[1] - new[1])**2
-            
-            
-        # sign = (1 - scaling_factor) * (1 - self.scaling_factor)
-        # if sign < 0:
-        #     cost -= np.mean([alpha_scaling_down, alpha_scaling_up]) * abs(scaling_factor - self.scaling_factor)
-            
-        # sign = (rotation_angle * self.rotation_angle)#  / abs(rotation_angle * self.rotation_angle)
-        # if sign < 0:
-        #     cost -= alpha_rotation * abs(rotation_angle - self.rotation_angle)
-            
         return cost 
     
     def rotate_formation(self, vehicle_positions, angle):
@@ -1296,29 +700,6 @@ class Group(Environment):
         
         return scaled_vector
     
-    def check_point_inside(self, point, obstacle_corners):
-        
-        # 1. Obtain obstacle center
-        obst_center = self.get_obstacle_center(obstacle_corners)
-        # 1.5 Moove the point to the center (and also moove the obstacle corners with it)
-        corners = [ [corner[0] - point[0], corner[1] - point[1]] for corner in obstacle_corners  ]
-        # 2. Transform obstacle & circle
-        corners = [ [corner[0] - obst_center[0], corner[1] - obst_center[1]] for corner in corners  ]
-        d_zone_center = [-obst_center[0], -obst_center[1]]
-        # 3. calculate angle of obstacle
-        obst_angle = self.get_obstacle_angle(corners)
-        # 4. rotate obstacle & circle
-        new_corners = self.rotate_formation(corners, -obst_angle)
-        new_d_zone_center = self.rotate_formation([d_zone_center], -obst_angle)
-        # 5. check intersection
-        s_danger = 0.0
-        inside = self.intersects([list(new_d_zone_center[0]), s_danger], new_corners)
-        
-            
-        return inside
-            
-        
-    
     def check_danger_zone_with_obstacles(self, vehicle_positions, obstacle_corners):
         any_inside = []
         
@@ -1334,24 +715,6 @@ class Group(Environment):
         any_inside = []
         corner_inside = []
         
-        "Old, foolish code:"
-        # for corners in obstacle_corners:
-        #     for corner in corners:
-        #         corner_distance_from_origo = np.sqrt((0-corner[0])**2 + (0-corner[1])**2)
-        #         if corner_distance_from_origo <= s_danger: # is inside the danger zone?
-        #             corner_inside += [True]
-        #         else:
-        #             corner_inside += [False]
-            
-            
-        # from sympy import Point, Polygon, Circle
-        # d_zone = Circle(Point(0, 0), s_danger)
-        # for corners in obstacle_corners:
-        #     poly_corners = [(corner) for corner in corners]
-        #     poly_obstacle = Polygon(*poly_corners)
-        #     # poly_obstacle = Polygon(poly_corners[0], poly_corners[1], poly_corners[2], poly_corners[3])
-        #     isIntersection = d_zone.intersection(poly_obstacle)
-            
         "New, highly professional code"
         for corners in obstacle_corners:
             # 1. Obtain obstacle center
@@ -1401,25 +764,7 @@ class Group(Environment):
         
         return min_rot_angle
     
-    
-    # fig, ax = plt.subplots()
-    # for pos in corners:
-    #     ax.plot(pos[0], pos[1], 'bo')
-    # for pos in new_corners:
-    #     ax.plot(pos[0], pos[1], 'go')
-        
-    #     circle = plt.Circle(new_d_zone_center[0], s_danger, color='k', alpha=0.5, zorder = 10)
-    #     ax.add_patch(circle)
-        
-    # for pos in vehicle_positions:
-    #     ax.plot(pos[0], pos[1], 'ro')
-        
-    # ax.set_aspect('equal', adjustable='box')
-    # plt.show()
-        
-    
-    # def rotate_formation(self, formation):
-    #     return "Done already :)"
+
     
     def intersects(self, circle, rect):
         # https://stackoverflow.com/questions/401847/circle-rectangle-collision-detection-intersection
@@ -1430,8 +775,8 @@ class Group(Environment):
         rect_x, rect_y = self.get_obstacle_center(rect)
         rect_width = abs(rect[0][0] * 2)
         rect_height = abs(rect[0][1] * 2)
-        circleDistance_x = abs(circle_x - rect_x);
-        circleDistance_y = abs(circle_y - rect_y);
+        circleDistance_x = abs(circle_x - rect_x)
+        circleDistance_y = abs(circle_y - rect_y)
     
         if (circleDistance_x > (rect_width/2 + circle_radious)):
             return False
@@ -1448,16 +793,6 @@ class Group(Environment):
     
         return cornerDistance_sq <= circle_radious**2
     
-    # def check_danger_zone_with_obstacle(self, vehicle_pos, obstacle_corners):
-    #     import matplotlib.path as mpltPath
-    #     path = mpltPath.Path(obstacle_corners)
-    #     try:
-    #         inside = path.contains_points(np.array([vehicle_pos]))[0] #, radius = 0.001)
-    #     except:
-    #         kappa = True
-            
-    #     return inside
-        
     def check_collision_with_obstacles(self, vehicle_positions, obstacle_corners):
         any_inside = []
         for corners in obstacle_corners:
@@ -1481,23 +816,9 @@ class Group(Environment):
         return inside
     
     
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-        
-
     def set_group_position(self, position : list, targetHeight : float = 0.8,  position_type : str = 'initial'):
 
 
-        # targetHeight = 1.3
-        # def float_representer(dumper, value):
-        #     text = '{0:.4f}'.format(value)
-        #     return dumper.represent_scalar(u'tag:yaml.org,2002:float', text)
-        # yaml.add_representer(float, float_representer)
         if position_type == 'initial':
             position = self.start_position
             positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 6)
@@ -1505,11 +826,6 @@ class Group(Environment):
                                                ellipse_rotation = math.pi / 2 + math.pi / 4)
             
             
-            
-    # def ellipse_generator(self, centerpoint : list, n_positions : int, a : float, b : float, 
-    #                       ellipse_rotation : float = 0, vehicles_rotation : float = 0,
-    #                       ellipse_scale_x : float = 1, ellipse_scale_y : float = 1):
-        
         
             if self.stage == 0:
                 yaml_dict = {'crazyflies' : []}
@@ -1524,16 +840,6 @@ class Group(Environment):
                 with open(self.cwd + "/yaml/initialPosition.yaml", "w") as file_descriptor:
                     yaml.dump(yaml_dict, file_descriptor)
 
-            # "But actually we want to read in :)"
-
-            # # Read yaml
-            # with open("initialPosition.yaml", "r") as file:
-            #     initialPosition = yaml.load(file, Loader=yaml.FullLoader)
-
-            # # Assign these as starting positions
-            # positions = []
-            # for i, vehicle in enumerate(self.vehicles):
-            #     positions += [initialPosition['crazyflies'][i]['initialPosition'][:2]]
         elif position_type == 'final':
             position = self.goal_position
             positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 6)
@@ -1579,17 +885,12 @@ class Group(Environment):
 
         return positions
     
-    # def ellipse_generator(self,
     # import functools
     # @functools.lru_cache(maxsize=None)
     def ellipse_generator(self, centerpoint : list, n_positions : int, a : float, b : float, 
                           ellipse_rotation : float = 0, vehicles_rotation : float = math.pi / 4,
                           ellipse_scale_x : float = 1, ellipse_scale_y : float = 1):
-        # centerpoint = [0, 0, 0]
-        # n_positions = 30
-        # a = self.vehicles[0].radious * 6
-        # b = self.vehicles[0].radious * 2
-        
+
         # Rotating vehicles on the ellipse
         alpha = 0 + vehicles_rotation
         # Scaling
@@ -1616,18 +917,7 @@ class Group(Environment):
                 positions[i][:2] = self.rotate_vector(pos[:2], ellipse_rotation)
                 positions[i][:2] = self.shift_vector(positions[i][:2], centerpoint[:2])
                 
-            
-            
-            
-        
         return positions
-        # plt.figure()
-        # for pos in positions:
-        #     plt.plot(pos[0], pos[1], '.')
-        # plt.show()
-        # kappa = True
-        # return self
-    
     
     ###########################################################################
     ###########################################################################
@@ -1642,7 +932,6 @@ class Group(Environment):
         for i in range(len(self.vehicles)):
             self.vehicles[i].obstacles = obstacles
         return self
-
 
     def organise_neighbours(self):
         """Sets up the l_neighbours for the vehicles in the group. Every agent
@@ -1824,8 +1113,6 @@ class Group(Environment):
                 self.MPC_version = var['MPC_version']
             if 'n_of_saved_waypoints' in var:
                 self.vehicles[i].n_of_saved_waypoints = var['n_of_saved_waypoints']
-                
-                
                 
                 
                 
@@ -2266,49 +1553,6 @@ class Group(Environment):
         fig.savefig(self.cwd + '/figures/' + 'stage_' + '{:0>1d}'.format(self.stage) + 'trajectory_gradients' +'.pdf')
         ax.clear()
 
-    def check_collision(self, plot_distances = False):
-        x_t, y_t = [], []
-        for i in range(len(self.vehicles)):
-            x_t_tmp, y_t_tmp = self.vehicles[i].get_final_trajectories_t()
-            x_t += [x_t_tmp]
-            y_t += [y_t_tmp]
-
-        def distance(a, b):
-            return np.sqrt( (a[0] - b[0])**2 + (a[1] - b[1])**2 )
-
-        r = self.vehicles[0].radious
-        collision = [0] * len(x_t[0])
-        collision_happened = False
-        mean_dists = []
-        minimum_dists = []
-        for i in range(len(x_t[0])):
-            dists = []
-            for j in range(len(x_t)):
-                for k in range(len(x_t)):
-                    if j != k:
-                        a = [ x_t[j][i], y_t[j][i] ]
-                        b = [ x_t[k][i], y_t[k][i] ]
-                        dist = distance(a, b)
-                        if dist < r:
-                            collision[i] = 1
-                        dists += [dist]
-            mean_dists += [np.mean(dists)]
-            minimum_dists += [np.amin(dists)]
-        for i, min_dist in enumerate(minimum_dists):
-            if min_dist < r*2 * self.vehicle_avoidnce_multiplier:
-                collision_happened = True
-
-        if plot_distances == True:
-            plt.figure()
-            plt.plot(mean_dists)
-            plt.plot(minimum_dists)
-            plt.plot([(r*2)] * len(x_t[0]), 'r:')
-            plt.plot([(r*2) * self.vehicle_avoidnce_multiplier] * len(x_t[0]), 'g:')
-            plt.plot(collision, 'y:')
-            plt.savefig('figures/' + 'stage' + '_{:0>1d}'.format(self.stage) + 'mean_and_minimum_distances.png', dpi = 100)
-
-        return collision_happened # , mean_dists
-    
     def calculate_formation_error(self):
         
         angle_errors_intermediate_all = []
@@ -2436,8 +1680,6 @@ class Group(Environment):
     
     def plot_moovie_frames_old(self, iternum : int = 0, seed = ''):
 
-        # self.check_collision()
-        # self.calculate_formation_error()
         
         "Zoomed-in version"
         fig, ax = self.figures["figures"]
@@ -2557,17 +1799,9 @@ class Group(Environment):
         ax.set_title("Trajectories of the vehicles after iteration {} with seed {} in the frenet frame".format(iternum, seed))
         ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
         ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
-        # ax.set_xlim(0, 1)
-        # ax.set_ylim(-0.1, 0)
         ax.set_xlabel("x axis")  
         ax.set_ylabel("y axis") 
         ax.set_aspect('equal', adjustable='box')
-        # Saving figure to folder
-        # fig.savefig(self.cwd + '/figures/' +'{:0>1d}'.format(self.stage) + '{:0>2d}'.format(iternum) +'.png', dpi = 200)
         fig.savefig(self.cwd + '/figures/' + '{:0>2d}'.format(iternum) +'.png', dpi = 200)
         ax.cla()
-        # plt.show()
-        # fig.clf()
-        
-        # fig.clear()
         return self

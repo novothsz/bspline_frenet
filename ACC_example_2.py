@@ -28,102 +28,11 @@ os.system("mkdir yaml")
 
 def run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage):
 
-
-    def writing_parameters_to_file(iteration_times):
-        """
-        Writing parameteres to file
-        """
-        cwd = os.getcwd()
-        log_file = open(cwd + "/log/" + "log.txt", "w")
-    
-        # Writing time required for iteration into file
-        log_file.writelines('\n')
-        log_file.writelines('Iteration times: \n')
-        for i in range(len(iteration_times)):
-            log_file.writelines(str(iteration_times[i]) + '\n')
-    
-        log_file.writelines('Final time: \n')
-        log_file.writelines(str(np.sum(iteration_times)))
-
-
     targetHeight = 0.8
     obstacles = []
     
-    plt.close('all')
-    random.seed(64)
-    seed = 64
-    print("Seed was:", 64)
+    plt.close('all'); random.seed(64); seed = 64; print("Seed was:", 64)
 
-    """
-    "Obstacles"
-    obstacles = []
-    # Obstacle 1
-    corners = ([0.0, -0.3], [0.5,-0.3], [0.5, 0.3], [0.0, 0.3])
-    delta = 0.25
-    corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
-    # obstacles += [Obstacle(ID = 0, corners = corners)]
-    # Obstacle 1 NEW
-    corners = ([0.0, -0.3], [0.5,-0.3], [0.5, 0.3], [0.0, 0.3])
-    delta = 0.15
-    corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
-    corners = ([0.15, -0.15], [0.5, 0.053], [0.25, 0.38], [-0.145, 0.145])
-    corners = ([0.2, -0.25], [0.52, -0.02  ], [0.15, 0.5], [-0.2, 0.23])
-    corners = ([-0.323, -0.2], [-0.18, -0.4  ], [0.5, 0.0], [0.323, 0.2]) # ACC
-    corners = ([-0.323, -0.2], [0, -0.6  ], [0.658, -0.174], [0.323, 0.2]) # ACC
-    delta_x = 0.03
-    delta_y = -0.1
-    corners = ([-0.323 + delta_x, -0.2 + delta_y], [0 + delta_x, -0.6  + delta_y ], [0.658 + delta_x, -0.174 + delta_y], [0.323 + delta_x, 0.2 + delta_y]) # ACC
-    
-    
-    delta_x = 0.03 * -1
-    delta_y = -0.1 * -1
-    delta_x = 0.03 * -0
-    delta_y = -0.1 * -0
-    corners = ([-0.132, -0.2], [0.182, -0.6  ], [0.495, -0.4], [0.185, 0.0]) # ACC
-    corners = ([-0.132 + delta_x, -0.2 + delta_y], [0.182 + delta_x, -0.6 + delta_y], [0.495 + delta_x, -0.4 + delta_y], [0.185 + delta_x, 0.0 + delta_y]) # ACC
-    obstacles += [Obstacle(ID = 0, corners = corners)]
-    
-    # Obstacle 2
-    dx = 0.3
-    dy = 0.4
-    tmp_obs = ([-2.4674-dx, -1-dy],
-             [-2.4674+dx, -1-dy],
-             [-2.4674+dx, -6],
-             [-2.4674-dx, -6])
-    obstacles += [Obstacle(ID = 1, corners = tmp_obs)]
-    
-    # Obstacle 3
-    tmp_obs = ([-2.4674-dx, -1+dy],
-             [-2.4674+dx, -1+dy],
-             [-2.4674+dx, 6],
-             [-2.4674-dx, 6])
-    obstacles += [Obstacle(ID = 2,  corners = tmp_obs)]
-    
-    # Obstacle 4
-    tmp_obs = ([2.474-dx, 1-dy],
-              [2.474+dx, 1-dy],
-              [2.474+dx, -6],
-              [2.474-dx, -6])
-    obstacles += [Obstacle(ID = 3, corners = tmp_obs)]
-    # Obstacle 5
-    # tmp_obs = ([2.474-dx, 1+dy],
-    #           [2.474+dx, 1+dy],
-    #           [2.474+dx, 6],
-    #           [2.474-dx, 6])
-    # obstacles += [Obstacle(ID = 4, corners = tmp_obs)]
-    
-    
-    dx = 0.3
-    dy = 0.4
-    tmp_obs = ([2.474-dx, 1-dy],
-              [2.474+dx, 1-dy],
-              [2.474+dx, 1+dy],
-              [2.474-dx, 1+dy])
-    
-    # obstacles += [Obstacle(ID = 5, corners = tmp_obs)]
-    """
-    
-            
     # Create group
     group = Group(n_vehicles=4, start_position = start_position, goal_position = goal_position, stage = stage)
     group.set_group_position(
@@ -184,18 +93,9 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     new_version = True
     
-    if new_version == False:
-        group.intermediate_position_generator_PENI_MPC()
-    else:
-        # group.ACC_MPC()
-        group.ACC_MPC_t_param()
-    # group.ACC_MPC_t_param()    
+    group.ACC_MPC_t_param()  
     group.prepare()
-    if new_version == False:
-        group.intermediate_position_generator_PENI_MPC()
-    else:
-        # group.ACC_MPC()
-        group.ACC_MPC_t_param()
+    group.ACC_MPC_t_param()
        
        
     
@@ -224,20 +124,7 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         print(str(time.time() - t_iter) + " seconds")
         # print(" ")
         t_iter = time.time()
-              
-        # import time
-        # t_peni_mpc = time.time()
-        # if new_version == False:
-        #     group.intermediate_position_generator_PENI_MPC()
-        # else:
-        #     # group.ACC_MPC()
-        #     # print("Stage == " + str(group.stage))
-        #     # if group.stage == 7:
-        #     #     kappa = True
-        #     group.ACC_MPC_t_param()
-        # print('peni intermediate time: ' + str(time.time() - t_peni_mpc))
-        # group.intermediate_position_generator()
-        # group.frenet_plotter(iternum = i, seed = seed)
+
         group.simulation_step()
             
 
@@ -265,11 +152,6 @@ group.plot_moovie_frames(n_steps, iternum=0, seed=0)
 group.plot_frenet_view()
 
 
-
-
-
-
-
 vehicle_stats = []
 for vehicle in group.vehicles:
     vehicle_stats += [vehicle.variable_history["feasibility_dict"]]
@@ -294,34 +176,3 @@ for veh in range(4):
             print(str(i) +" - Did not help")
 
 a_fes = group.vehicles[2].variable_history["feasibility_dict"][5]
-    
-    
-    
-    
-    
-    
-    
-# group.plot_moovie_frames_old(iternum=0, seed=0)
-
-# """
-# group.vehicles[0].calculate_formation_error()
-# group.calculate_formation_error()
-# group.save_trajectory_to_csv(n_steps)
-"This is not good like this! We need to save the final plots for the various n_intermediate_ADMM values and run the code multiple times"
-"Only then can we assemble and compare the results."
-
-
-kappa_real = group.vehicles[0].variable_history['t_real_intermediate_list']
-kappa_pos = group.vehicles[0].variable_history['x_intermediate_list']
-kappa_act = group.vehicles[0].variable_history['t_real_activation_list']
-kappa_local = group.vehicles[0].variable_history['t_intermediate_list']
-kappa_current = group.vehicles[0].variable_history['current_configuration_position']
-
-kappa_real = self.vehicles[0].variable_history['t_real_intermediate_list']
-kappa_pos = self.vehicles[0].variable_history['x_intermediate_list']
-kappa_act = self.vehicles[0].variable_history['t_real_activation_list']
-kappa_local = self.vehicles[0].variable_history['t_intermediate_list']
-kappa_current = self.vehicles[0].variable_history['current_configuration_position']
-
-
-current_configuration_position

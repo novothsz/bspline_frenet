@@ -28,31 +28,10 @@ os.system("mkdir yaml")
 
 def run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage):
 
-
-    def writing_parameters_to_file(iteration_times):
-        """
-        Writing parameteres to file
-        """
-        cwd = os.getcwd()
-        log_file = open(cwd + "/log/" + "log.txt", "w")
-    
-        # Writing time required for iteration into file
-        log_file.writelines('\n')
-        log_file.writelines('Iteration times: \n')
-        for i in range(len(iteration_times)):
-            log_file.writelines(str(iteration_times[i]) + '\n')
-    
-        log_file.writelines('Final time: \n')
-        log_file.writelines(str(np.sum(iteration_times)))
-
-
     targetHeight = 0.8
     obstacles = []
     
-    plt.close('all')
-    random.seed(64)
-    seed = 64
-    print("Seed was:", 64)
+    plt.close('all'); random.seed(64); seed = 64; print("Seed was:", 64)
 
     
     "Obstacles"
@@ -178,28 +157,14 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
                                                ellipse_rotation = math.pi / 2)
     for i in range(len(group.vehicles)):
             group.vehicles[i].set_position(position = positions[i], position_type = 'final')
-    
-    print("mosoly")
-    # group.intermediate_position_generator_PENI_full()
-    # group.intermediate_position_generator_SZILARD_sweep()
-    
-    # group.vehicles[0].obstacles[0].plot_corners_spline()
-    # assert 0
-    
+
     group.sweep_ACC()
     
-    # return 0, group
-    
-    # group.intermediate_position_generator_PENI_full()
-    # group.intermediate_position_generator_SINGLE_RUN()
-    # assert 0
     group.prepare()
     
     import time
     t_iter = time.time()
     iteration_times = []
-    
-    
     
     for i in range(0, n_steps):
         

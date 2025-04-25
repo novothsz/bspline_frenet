@@ -191,19 +191,10 @@ positions = group.ellipse_generator(centerpoint = goal_position, n_positions = l
 for i in range(len(group.vehicles)):
         group.vehicles[i].set_position(position = positions[i], position_type = 'final')
 
-new_version = True
-
-if new_version == False:
-    group.intermediate_position_generator_PENI_MPC()
-else:
-    group.ACC_MPC_t_param()   
+group.ACC_MPC_t_param()  
 group.prepare()
-if new_version == False:
-    group.intermediate_position_generator_PENI_MPC()
-else:
-    # group.ACC_MPC()
-    group.ACC_MPC_t_param()
-   
+group.ACC_MPC_t_param()
+
 # Till here we did single processing...
 
 # target_function = group.vehicles[0].solver.call

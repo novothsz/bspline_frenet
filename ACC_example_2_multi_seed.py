@@ -186,18 +186,9 @@ def run_optimizaiton(seed):
     
     new_version = True
     
-    if new_version == False:
-        group.intermediate_position_generator_PENI_MPC()
-    else:
-        # group.ACC_MPC()
-        group.ACC_MPC_t_param()
-    # group.ACC_MPC_t_param()    
+    group.ACC_MPC_t_param()  
     group.prepare()
-    if new_version == False:
-        group.intermediate_position_generator_PENI_MPC()
-    else:
-        # group.ACC_MPC()
-        group.ACC_MPC_t_param()
+    group.ACC_MPC_t_param()
        
        
     
@@ -227,19 +218,7 @@ def run_optimizaiton(seed):
         # print(" ")
         t_iter = time.time()
               
-        # import time
-        # t_peni_mpc = time.time()
-        # if new_version == False:
-        #     group.intermediate_position_generator_PENI_MPC()
-        # else:
-        #     # group.ACC_MPC()
-        #     # print("Stage == " + str(group.stage))
-        #     # if group.stage == 7:
-        #     #     kappa = True
-        #     group.ACC_MPC_t_param()
-        # print('peni intermediate time: ' + str(time.time() - t_peni_mpc))
-        # group.intermediate_position_generator()
-        # group.frenet_plotter(iternum = i, seed = seed)
+
         group.simulation_step()
             
 
