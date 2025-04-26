@@ -33,3 +33,6 @@ conda install -c conda-forge \
     -y
 
 conda install -c gurobi gurobi -y
+conda install -c conda-forge tqdm -y
+conda install nbconvert
+curl -O https://raw.githubusercontent.com/basnijholt/ipynb_git_filters/master/ipynb_filter.py
