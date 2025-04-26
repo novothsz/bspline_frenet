@@ -3,11 +3,11 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 from .environment import Environment
-import yaml
-import time
-import csv
 import random
 import os
+import functools
+import matplotlib.path as mpltPath
+from matplotlib.pyplot import cm
 
 from .obstacle import Obstacle
 
@@ -32,8 +32,6 @@ class Group(Environment):
 
         super().__init__()
         
-        
-        
         self.plot_stage = 5
         self.seed = []
 
@@ -55,31 +53,14 @@ class Group(Environment):
         self.DFM_lookahead = 1 / self.DFM_division / 2
         self.MPC_version = []
         
-        
         self.cum_rotation = 0
         self.cum_scaling = 1
-        
         
         self.ACC_MPC_t_queue = []
         self.ACC_MPC_pos_queue = []
         
-        
-        
-    
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    
-    import functools
     @functools.lru_cache(maxsize=None)
     def get_obstacle_corners(self, t):
-        """ This function returns the corners for all the obstacles in a list.
-        (To loop through: 
-        """
         corners = []
         for obstacle in self.vehicles[0].obstacles:
             corners_tmp = [ [corner[0](t).tolist()[0][0], corner[1](t).tolist()[0][0]] for corner in obstacle.corners_spline]
@@ -88,23 +69,11 @@ class Group(Environment):
     
     @functools.lru_cache(maxsize=None)
     def get_scaled_obstacle_corners(self, t):
-        """ This function returns the corners for all the obstacles in a list.
-        (To loop through: 
-        """
         corners = []
         for obstacle in self.vehicles[0].obstacles:
             corners_tmp = [ [corner[0](t).tolist()[0][0], corner[1](t).tolist()[0][0]] for corner in obstacle.scaled_corners_spline]
             corners += [corners_tmp]
         return corners
-    
-    
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
     
     def ACC_MPC_t_param(self):
         "DFG-MPC algorithm"
@@ -112,14 +81,7 @@ class Group(Environment):
         t_sweep_start = self.vehicles[0].t_start
         t_sweep_end = self.vehicles[0].t_end
         
-        # Okay, there is actually a little difference compared to the simple sweep:
-            # 1. We need to clear the intermediate values before every sweep
-            # 2. Sweep
-            # 3. Update the "current_configuration_position" value so we know with what starting position we want to start the next DFG iteration.
-            # 4. We need to replicate (or truncate) the last values of the intermediate list so that the length is consistent. 
-
-        # Clear the history, if this is the first stage still... (because anything we have saved before
-        # is irrelevant)
+        # Step 1: Clear the intermediate lists
         if self.stage == 0:
             for vehicle in self.vehicles:
                 vehicle.variable_history['x_intermediate_list'] = []
@@ -127,10 +89,6 @@ class Group(Environment):
                 vehicle.variable_history['t_intermediate_list'] = []
                 vehicle.variable_history['t_real_intermediate_list'] = []
                 
-                
-            
-            
-        # Step 1: Clear the intermediate lists
         for i, vehicle in enumerate(self.vehicles):
             vehicle.x_intermediate_list = []
             vehicle.a_intermediate_list = []
@@ -143,32 +101,17 @@ class Group(Environment):
         max_len_a = self.vehicles[0].n_of_saved_waypoints * len(self.vehicles[0].obstacles) * 2 
         max_len_t = self.vehicles[0].n_of_saved_waypoints
         
-        
-        # if self.stage == self.plot_stage:
-        #     kappa = True
-            
         # the cummulative values hold the relative formation rotation  scaling w.r.t. the original formation configuration
         cum_rotation_old = self.cum_rotation
         cum_scaling_old = self.cum_scaling
         self.sweep_ACC(t_sweep_start = t_sweep_start, t_sweep_end = t_sweep_end)
-        cum_rotation_new = self.cum_rotation
-        cum_scaling_new = self.cum_scaling
-        # Let's set back the cummulative values.
-        # We accept the cummultive value in Step 3, if we update the current_configuration_position
+        # Setting back the cummulative values.
         self.cum_rotation = cum_rotation_old
         self.cum_scaling = cum_scaling_old
         
         
         # Step 3: Update the "current_configuration_position"
-        # Before we do this duplication stuff, we need to find the next "current_configuration_position" value
-        # What do we do? So if in the next step we will be in between some intermediate-calculated values, then we shall
-        # use the formation configuration valid at that timestep as a starting-point for the next DFG iteration.
-        
-        # How do we do that?
-        # So if history of t_real_intermediate_list doesn't exist, we don't do anything.
-        # If it does, then, we search for the highest index in the list, that is lower, than t_sweep_start.
-        # Use that index to extract the correct x_intermediate_list. This will serve as a starting configuration for the DFG.
-        for v, vehicle in enumerate(self.vehicles):
+        for vehicle in self.vehicles:
             greater_ = False
             index_ = 0
             change_of_current_configuration_needed = False
@@ -234,42 +177,23 @@ class Group(Environment):
                 vehicle.x_intermediate_list = vehicle.x_intermediate_list + vehicle.x_intermediate_list[-3:] * int(diff_x/3)
                 vehicle.a_intermediate_list = vehicle.a_intermediate_list + vehicle.a_intermediate_list[-single_len_a:] * int(diff_a/single_len_a)
                 
-                
                 if max_len_a != len(vehicle.a_intermediate_list):
-                    kappa = True
                     print('Baj van főnök!')
                     vehicle.a_intermediate_list = np.zeros(max_len_a).tolist()
                 
-                
                 vehicle.t_intermediate_list = vehicle.t_intermediate_list + [vehicle.t_intermediate_list[-1]] * diff_t
                 vehicle.t_real_intermediate_list = vehicle.t_real_intermediate_list + [vehicle.t_real_intermediate_list[-1]] * diff_t
-                
-                
-            
-            
-            assert max_len_x == len(vehicle.x_intermediate_list)
-            if max_len_a != len(vehicle.a_intermediate_list):
-                kappa = True
-            # assert max_len_a == len(vehicle.a_intermediate_list)
-            assert max_len_t == len(vehicle.t_intermediate_list)
             
             # Updating the intermediate lists with value, that have the correct length.
             vehicle.variable_history['x_intermediate_list'][-1] = vehicle.x_intermediate_list
             vehicle.variable_history['a_intermediate_list'][-1] = vehicle.a_intermediate_list
             vehicle.variable_history['t_intermediate_list'][-1] = vehicle.t_intermediate_list
             vehicle.variable_history['t_real_intermediate_list'][-1] = vehicle.t_real_intermediate_list
-            # We don't do anything with this... Probably we shouldn't even, because of Step 3.
-            # vehicle.variable_history['t_real_activation_list'][-1] = vehicle.t_real_activation_list 
-            
             
         return self
         
     
-    
-    
-    # Okay, this will be the version, where we look, whether the obstacle has entered the danger zone.
-    # How large is the danger zone?
-    # Well, the size of the maximum formation size.
+    # Check whether the obstacle has entered the danger zone.
     def sweep_ACC(self, t_sweep_start = 0, t_sweep_end = 1):
         """This is the function, described as Dynamic Formaiton Generator(DFG), that was described in the ACC paper.
         It works as follows:
@@ -277,8 +201,6 @@ class Group(Environment):
             searches for collision
             if collision found, h... let's rather implemment it in a new function....
         """
-        
-        t_iter = time.time()
         
         # The timestep of the DFG algorithm.
         t_step = 0.01
@@ -302,41 +224,25 @@ class Group(Environment):
             # Let's check, with which obstacle we have collision.
             obstacle_idx = []
             for i, obstacle in enumerate(self.vehicles[0].obstacles):
-                idx = np.arange(len(self.vehicles)*i,len(self.vehicles)*i+len(self.vehicles)) 
-                idx = np.arange(4*i,4*i+4) # bacuse calculated with danger zone, where values are obst0->[corner 0, c1, c2, c3]; o1->[c0, c1, c2, c3]; ...
-                # is_collision = any(np.array(all_collisions)[idx].tolist())
-                is_collision = all_collisions[i] # no more corners indexing :)
+                is_collision = all_collisions[i]
                 if is_collision:
-                    # It's okay, that we check if the obstacle enters into the danger zone, but 
-                    # when looking for the obstacle ID, we should find the one, with which we will collide!!
-                    # Meaning: use the collision function and not the danger zone function.
-                    # (If none, then we can keep the formation :) )
-
                     all_collisions2, collision2 = self.check_collision_with_obstacles(vehicle_positions, np.array(self.get_obstacle_corners(t_end))[ [i] ].tolist()) 
                     is_collision2 = collision2
                     if is_collision2:
-                        # If we collide with an obstacle, we save its index
                         obstacle_idx += [i]
                         
             # Step 2: If collision has been found, find t_danger_end time.
             if obstacle_idx != []:
-                
                 t_danger_start = t_end
                 t_danger_end = t_danger_start
                 t_danger_step = t_step / 10 # if collision is detected, we step this 'smoothly' until no danger is detected
                 while t_danger_end <= 1:
                     t_danger_end += t_danger_step
-                    # Check collision ---!!!but only with obstacles, which are dangerous!!!--- (we expect, that this doesn't change. Meaning:
-                    # obstacles are spaced out well.)
-                    # all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions, np.array(self.get_obstacle_corners(t_danger_end))[obstacle_idx].tolist())
                     all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, np.array(self.get_scaled_obstacle_corners(t_danger_end))[obstacle_idx].tolist())
                     if collision == False:
                         # this is the t_danger_end we were looking for
-                        
-                        # This line isn't even doing anything...
                         self.check_danger_zone_with_obstacles(vehicle_positions, np.array(self.get_scaled_obstacle_corners(t_danger_end))[obstacle_idx].tolist())
                         break
-                    
                     
                 # Step 3: Find the right formation configuration for t \in [t_danger_start, t_danger_end]
                 # Form t_zizz
@@ -354,7 +260,6 @@ class Group(Environment):
                 # Find optimal formation configuration
                 vehicle_positions, cum_rotation, cum_scaling, ACTION_TAKEN = self.intermediate_position_generator_SZILARD(vehicle_positions, cum_rotation, cum_scaling, t_zizz)
             
-                
                 self.cum_rotation = cum_rotation
                 self.cum_scaling = cum_scaling
                 
@@ -373,12 +278,7 @@ class Group(Environment):
                             t_cropped = t * (t <= t_sweep_end) + t_sweep_end * ( t > t_sweep_end )
                             vehicle.t_real_intermediate_list += [t_cropped]
                             vehicle.t_real_activation_list += [[t_danger_start, t_danger_end]]
-                            # vehicle.variable_history['t_intermediate_list'] += [t_local]
-                            
-                            # Okay... So if ACTION_TAKE == "yes", that means, that an obstacle has triggered DFG
-                            # and an intermediate way-point was created.
-                            # We would want to associate a hyperplane direction to this time and obstacle
-                            
+
                             if ACTION_TAKEN == "back_transformation":
                                 pass
                             
@@ -386,7 +286,6 @@ class Group(Environment):
                                 # assume, that only a single obstacle is causing trouble... (for simplicity)
                                 obstacle_idx[0]
                                 obst_ID = self.vehicles[0].obstacles[obstacle_idx[0]].ID
-                                
                                 
                                 # - outside or inside the formation?
                                 a = [0, 0]
@@ -418,10 +317,7 @@ class Group(Environment):
                     elif self.MPC_version == False or self.MPC_version == True:
                         for i, vehicle in enumerate(self.vehicles):
                             vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
-                            # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
                             vehicle.t_intermediate_list += [t]
-                            # vehicle.variable_history['t_intermediate_list'] += [t]
-                        
                         
                 elif ACTION_TAKEN == 'no_action':
                     pass
@@ -429,31 +325,21 @@ class Group(Environment):
                     print("No solution has ben found. We need to halve the time. This should be implemented later :)")
                     assert 0
                 
-                        
-                
                 t_end = t_danger_end + t_step
                 
-        
             elif obstacle_idx == []:
                 t_end += t_step
            
         tmp_len = len(self.vehicles[0].t_intermediate_list)
 
-                
-                
         if tmp_len == 0:
-            # print("We haven't generated anything, therefore what we started off with, is okay. Use that.")
-            # then we can set the original configuraiton back
             for i, vehicle in enumerate(self.vehicles):
                 vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], self.cum_rotation]
                 vehicle.a_intermediate_list += [0, 0] * len(vehicle.obstacles)
-                # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
                 t_local = np.interp(t_sweep_end,[t_sweep_start,t_sweep_end],[0,1])
                 vehicle.t_intermediate_list += [t_local]
                 vehicle.t_real_intermediate_list += [t_sweep_end]
-                # vehicle.variable_history['t_intermediate_list'] += [1]
-                
-        
+
         # Saving stuff to the history
         for i, vehicle in enumerate(self.vehicles):
             vehicle.variable_history['x_intermediate_list'] += [vehicle.x_intermediate_list]
@@ -462,8 +348,6 @@ class Group(Environment):
             vehicle.variable_history['t_real_intermediate_list'] += [vehicle.t_real_intermediate_list]
             vehicle.variable_history['t_real_activation_list'] += [vehicle.t_real_activation_list]
             
-        # print('ACC_sweep full time: ' + str(time.time() - t_iter))
-        
         return self
         
 
@@ -477,16 +361,7 @@ class Group(Environment):
             - save it to t&x_intermediate_list
         """        
         
-        "The best way to start is to copy everything from intermediate_position_generator_PENI"
-        # we will have an indicator on what action we have taken
         ACTION_TAKEN = []
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
         """The goal of this function is to receive a set of vehicle positions and calculate a rotated-scaled frame, that does not collide with 
         obstaacles at the given time-point.
         If t is a list of time values, then each of these time values will be checked for collision"""
@@ -499,16 +374,12 @@ class Group(Environment):
                 self.back_rotation_factor = 1
                 self.back_scaling_factor = 1
                 
-        if self.stage == 23:
-            kappa = True
-            # print(t)
         # Step 0: first always try to turn&scale it back... :)
         #Backturning
         rotation_angle = -1 * self.back_rotation_factor * cum_rotation
         # --minimum rotation value--
         if -5/360 * 2 * math.pi <= rotation_angle < 0.0 or 0.0 < rotation_angle <= -5/360 * 2 * math.pi:
             rotation_angle = -1 * cum_rotation
-        
         
         # Backscaling
         deviance = abs(1 - 1 / cum_scaling)
@@ -535,16 +406,13 @@ class Group(Environment):
         collision_saved = []
         for t_ in t:
             all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions_scaled_rotated, self.get_scaled_obstacle_corners(t_))
-            # all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions_scaled_rotated, self.get_scaled_obstacle_corners(t_))
-           
+
             collision_saved += [False]
             if collision == True:
                 collision_saved[-1] = True
                 break
         
         if all(collision is False for collision in collision_saved):
-            # If we are in this if, then no collision happens when we try to rotate/scale back the formation.
-            # print('-, -')
             if rotation_angle == 0 and scaling_factor == 1:
                 ACTION_TAKEN = "no_action"
             else:
@@ -597,7 +465,6 @@ class Group(Environment):
                 if all(collision is False for collision in collision_saved_tmp):
                     # Step 2c) if no collision happens, calculate a cost for the given rotation & scaling combo
                     cost = self.formation_change_cost_calculator(vehicle_positions, vehicle_positions_scaled_rotated, rotation_angle, scaling_factor)
-                    # print(scaling_factor, rotation_angle, cost)
                     costs += [cost]
                     
         max_distance = self.max_distance_during_turning(vehicle_positions, vehicle_positions_new_saved)
@@ -623,21 +490,9 @@ class Group(Environment):
             
             ACTION_TAKEN = "yes"
             
-            # print(rotation_angle_new, scaling_factor_new)
-        
-        
         return vehicle_positions_new, cum_rotation, cum_scaling, ACTION_TAKEN
 
-        
-       
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ########################################################################### 
-        
+     
     def max_distance_during_turning(self, vehicle_positions_original , vehicle_positions_new_saved):
         max_distance = -math.inf
         # for each formation candidate
@@ -649,9 +504,7 @@ class Group(Environment):
                     max_distance = distance
                 
         return max_distance
-                        
-    
-    
+             
     def formation_change_cost_calculator(self, vehicle_positions_original, vehicle_positions_new, rotation_angle = 0, scaling_factor = 1):
         cost = 0
         alpha_distance = 0.1 * 1 * 0
@@ -661,9 +514,7 @@ class Group(Environment):
         for original, new in zip(vehicle_positions_original, vehicle_positions_new):
             cost += alpha_distance * ((original[0] - new[0])**2 + (original[1] - new[1])**2)
             
-            
         cost += alpha_rotation * abs(rotation_angle)
-        # cost += alpha_scaling * abs(1-scaling_factor)
         if scaling_factor > 1:
             cost += alpha_scaling_up * abs(1-scaling_factor)
         if scaling_factor < 1:
@@ -697,16 +548,12 @@ class Group(Environment):
         
         return [a1 + b1, a2 + b2]
         
-        
     def scale_vector(self, vector, scaling_factor):
         scaled_vector = [vector[0] * scaling_factor, vector[1] * scaling_factor]
         
         return scaled_vector
     
     def check_danger_zone_with_obstacles(self, vehicle_positions, obstacle_corners):
-        any_inside = []
-        
-        # Getting the largest distance from the origo
         s_danger = -math.inf
         for position in vehicle_positions:
             vehicle_distance_from_origo = np.sqrt((0-position[0])**2 + (0-position[1])**2)
@@ -715,7 +562,6 @@ class Group(Environment):
         # print(s_danger)
         s_danger = 0.6988905493709299
         # Check if any of the obstacles are in the danger zone
-        any_inside = []
         corner_inside = []
         
         "New, highly professional code"
@@ -734,7 +580,6 @@ class Group(Environment):
             is_intersection = self.intersects([list(new_d_zone_center[0]), s_danger], new_corners)
             corner_inside += [is_intersection]
             
-        # return corner_inside, is_intersection
         return corner_inside, any(corner_inside)
         
     def get_obstacle_center(self, corners):
@@ -749,25 +594,19 @@ class Group(Environment):
     
     def get_obstacle_angle(self, corners):
         corners = corners + [corners[0]]
-        
         edge_vectors = [ [p2[0] - p1[0], p2[1] - p1[1]]  for p1, p2 in zip(corners[:-1], corners[1:])]
-        
-        angles = [math.atan2(vector[1], vector[0]) for vector in edge_vectors]
-        
         angles = np.array([])
         for vector in edge_vectors:
             vector = np.array(vector)
             x_axis = np.array([1, 0])
             alpha = math.acos( np.dot(vector, x_axis) / (np.linalg.norm(vector) * 1))
             angles = np.append(angles, alpha)
-        angles_degree = angles / math.pi * 180
+            
         min_rot_angle = max(angles)
         for angle in angles:
             min_rot_angle = min_rot_angle * (angle < 0 or angle > min_rot_angle) + angle * (not(angle < 0 or angle > min_rot_angle))
         
         return min_rot_angle
-    
-
     
     def intersects(self, circle, rect):
         # https://stackoverflow.com/questions/401847/circle-rectangle-collision-detection-intersection
@@ -785,7 +624,6 @@ class Group(Environment):
             return False
         if (circleDistance_y > (rect_height/2 + circle_radious)):
             return False
-    
         if (circleDistance_x <= (rect_width/2)):
             return True
         if (circleDistance_y <= (rect_height/2)):
@@ -800,28 +638,18 @@ class Group(Environment):
         any_inside = []
         for corners in obstacle_corners:
             for position in vehicle_positions:
-                try:
-                    any_inside += [self.check_collision_with_obstacle(position, corners)]
-                except:
-                    kappa = True
+                any_inside += [self.check_collision_with_obstacle(position, corners)]
                         
         return any_inside, any(any_inside)
                     
     
     def check_collision_with_obstacle(self, vehicle_pos, obstacle_corners):
-        import matplotlib.path as mpltPath
         path = mpltPath.Path(obstacle_corners)
-        try:
-            inside = path.contains_points(np.array([vehicle_pos]))[0] #, radius = 0.001)
-        except:
-            kappa = True
-            
+        inside = path.contains_points(np.array([vehicle_pos]))[0]
         return inside
     
     
     def set_group_position(self, position : list, targetHeight : float = 0.8,  position_type : str = 'initial'):
-
-
         if position_type == 'initial':
             positions = self.ellipse_generator(centerpoint = self.start_position, n_positions = len(self.vehicles), a = self.vehicles[0].radious * 9, b = self.vehicles[0].radious * 5,
                                                ellipse_rotation = math.pi / 2)
@@ -849,8 +677,6 @@ class Group(Environment):
         positions = []
         for i in range(n_positions):
             positions += [ [centerpoint[0] + a * np.cos(alpha), centerpoint[1] + b * np.sin(alpha), centerpoint[2]] ] # [p, q, phi]
-            # Because of having cos_phi and sin_phi instead of a single phi value, our position array will be 4 long
-            # positions += [ [centerpoint[0] + a * np.cos(alpha), centerpoint[1] + b * np.sin(alpha), np.cos(centerpoint[2]), np.sin(centerpoint[2])] ] # [p, q, cos_phi, sin_phi]
             alpha += np.pi * 2.0 / n_positions
         
         # Rotating the ellipse itself with the vehicles already in place
@@ -859,25 +685,12 @@ class Group(Environment):
                 positions[i][:2] = self.rotate_vector(pos[:2], ellipse_rotation)
                 
         if ellipse_rotation != 0 and centerpoint[:2] != [0.0, 0.0]:
-            # raise NotImplementedError("Please set the centerpoint to [0, 0]")
-            # Actually, not an error... We can still rotate around (0, 0) and then shift the 
-            # corners with the centerpoint vector.
-            
             for i, pos in enumerate(positions):
                 positions[i][:2] = self.rotate_vector(pos[:2], ellipse_rotation)
                 positions[i][:2] = self.shift_vector(positions[i][:2], centerpoint[:2])
                 
         return positions
     
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    
-
     def add_obstacles(self, obstacles : list):
         for i in range(len(self.vehicles)):
             self.vehicles[i].obstacles = obstacles
@@ -946,13 +759,7 @@ class Group(Environment):
             res = False
         return res
 
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
+
     def initialize_values(self):
         """ This function performs a single optimization step, whereas the
         decision variables and parameters that will be used later in the ADMM iteration
@@ -1004,9 +811,6 @@ class Group(Environment):
         creating the necessary variables and solver that are needed for the
         ADMM iteration.
         """
-
-        # Extra step: we initialize decision variables and parameters for faster convergence
-        # self.initialize_values()
 
         for i in range(len(self.vehicles)):
             self.vehicles[i].prepare0()
@@ -1169,117 +973,6 @@ class Group(Environment):
 
         return self
 
-
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-
-    def write_iteration_times(self, prefix = ''):
-        # first_line = "vehicle 1; vehicle 2; vehicle 3; vehicle 4; worst; sum"
-        first_line = ["vehicle 1", "vehicle 2", "vehicle 3", "vehicle 4", "worst", "best", "worst - best", "sum", "worst * 4"]
-        mode = 'w'
-        n_steps = math.floor(1 / self.vehicles[0].t_step)
-        horizon_num = n_steps
-        horizon_num_original = int(horizon_num)    
-        
-        # x update
-        with open(self.cwd + '/log/' + prefix + 'x_update_times.csv', mode = mode) as csvfile:
-            writer = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            writer.writerow(first_line)
-            for i in range(horizon_num_original):
-                horizon_num = int(i * self.vehicles[0].n_intermediate_ADMM + self.vehicles[0].n_intermediate_ADMM - 1)
-                line = []
-                worst = 0
-                best = 1e6
-                sum_ = 0
-                for vehicle in self.vehicles:
-                    sol_time = vehicle.variable_history["x_update_time"][horizon_num]
-                    line += [sol_time]
-                    worst = worst * (worst > sol_time) + sol_time * (sol_time > worst)
-                    best = best * (best < sol_time) + sol_time * (sol_time < best)
-                    sum_ += sol_time
-                line += [worst, best, worst - best, sum_, worst * 4]
-                writer.writerow(line)
-                
-                
-        # z update
-        with open(self.cwd + '/log/' + prefix + 'z_update_times.csv', mode = mode) as csvfile:
-            writer = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            writer.writerow(first_line)
-            for i in range(horizon_num_original):
-                horizon_num = int(i * self.vehicles[0].n_intermediate_ADMM + self.vehicles[0].n_intermediate_ADMM - 1)
-                line = []
-                worst = 0
-                best = 1e6
-                sum_ = 0
-                for vehicle in self.vehicles:
-                    sol_time = vehicle.variable_history["z_update_time"][horizon_num]
-                    line += [sol_time]
-                    worst = worst * (worst > sol_time) + sol_time * (sol_time > worst)
-                    best = best * (best < sol_time) + sol_time * (sol_time < best)
-                    sum_ += sol_time
-                line += [worst, best, worst - best, sum_, worst * 4]
-                writer.writerow(line)
-                
-                
-        # combined update
-        first_line = ["worst x", "worst z", "(worst x + worst z)", "(worst x + worst z) * 4"]
-        with open(self.cwd + '/log/' + prefix + 'combined_update_times.csv', mode = mode) as csvfile:
-            writer = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            writer.writerow(first_line)
-            for i in range(horizon_num_original):
-                horizon_num = int(i * self.vehicles[0].n_intermediate_ADMM + self.vehicles[0].n_intermediate_ADMM - 1)
-                line = []
-                worst_x = 0
-                worst_z = 0
-                for vehicle in self.vehicles:
-                    sol_time = vehicle.variable_history["x_update_time"][horizon_num]
-                    sol_time_z = vehicle.variable_history["z_update_time"][horizon_num]
-                    worst_x = worst_x * (worst_x > sol_time) + sol_time * (sol_time > worst_x)
-                    worst_z = worst_z * (worst_z > sol_time_z) + sol_time_z * (sol_time_z > worst_z)
-                line += [worst_x, worst_z, worst_x + worst_z, (worst_x + worst_z) * 4]
-                writer.writerow(line)
-                # writer.writerow(['{:3.4e}'.format(x) for x in line])
-                
-                
-
-    def compare_iteration_times(self):            
-        mode = 'r'
-        with open(self.cwd + '/log/' + 'single_core_combined_update_times.csv', mode = mode) as csvfile:
-            csvreader = csv.reader(csvfile)
-            header = next(csvreader)
-            rows = []
-            for row in csvreader:
-                row_numeric = [float(value) for value in row]
-                rows.append(row_numeric)
-                
-                
-        with open(self.cwd + '/log/' + 'multi_core_combined_update_times.csv', mode = mode) as csvfile:
-            csvreader = csv.reader(csvfile)
-            header = next(csvreader)
-            rows_m = []
-            for row in csvreader:
-                row_numeric = [float(value) for value in row]
-                rows_m.append(row_numeric)
-                
-        divident = [multi[-1] - single[-1] for single, multi in zip(rows, rows_m)]    
-        single = [single[-1] for single in rows]
-        multi = [multi[-1] for multi in rows_m]
-        return [single, multi, divident]
-
-
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-
     def generate_obstacles(self, seed : int = 0):
         # There are the following types of obstacles:
             # - obstacles on the path: these obstacles are created using the ellipse generator algorithm.
@@ -1359,15 +1052,6 @@ class Group(Environment):
 
         return obstacles
 
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    "For plotting stuff"
-
     def plot_setup(self):
         """This function plots the environment and the group starting and final
         position"""
@@ -1383,14 +1067,11 @@ class Group(Environment):
             xf_plot =  ax.plot(x, y, 'go', markersize = 3)
         x0_plot[0].set_label("Starting positions")
         xf_plot[0].set_label("Final positions")
-        # ax.legend([x0_plot[0], xf_plot[0]], ["Starting positions", "Final positions"])
         ax.legend(fontsize = 'x-small')
             
         ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
         ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
         ax.set_aspect('equal', adjustable='box')
-        print("Kezemet, mert csalok!") # x0 helyett is xf
-
 
     def plot_initial_values(self):
         """This function plots initial trajectories generated only considering
@@ -1398,7 +1079,6 @@ class Group(Environment):
         flatten = lambda t: [item for sublist in t for item in sublist]
         fig, ax = plt.subplots()
         for i in range(len(self.vehicles)):
-            # ax = self.vehicles[i].plot_vehicle_trajectories(ax)
             x, y = self.vehicles[i].astar_initials["y_astar"]
             t = np.linspace(0, 1, 100)
             x_t = [x(t_) for t_ in t]
@@ -1420,8 +1100,6 @@ class Group(Environment):
         fig.clear()
 
         return self
-
-
 
     def plotter(self, iternum : int = 0, seed = ''):
         """This function plots the trajectories calculated by each of the agent.
@@ -1480,8 +1158,6 @@ class Group(Environment):
                 t, angle_errors_tmp = vehicle.calculate_formation_error(intermediate_ADMM_idx = intermediate_ADMM_idx)
                 angle_errors += [angle_errors_tmp]
             
-                
-            # return angle_errors
             angle_errors_mean = []
             for i in range(len(angle_errors_tmp)):
                 angle_errors_sum_tmp = np.array(angle_errors[0][0]) * 0
@@ -1491,8 +1167,6 @@ class Group(Environment):
                 angle_errors_mean += [angle_errors_sum_tmp / len(self.vehicles)]
             angle_errors_intermediate_all += [angle_errors_mean]
         
-        
-        from matplotlib.pyplot import cm
         color=cm.rainbow(np.linspace(0,1,self.n_intermediate_ADMM))
         
         plt.figure()
@@ -1501,61 +1175,13 @@ class Group(Environment):
                 plt.plot(time, angle, c = c)
         plt.show()
 
-    def calculate_formation_error_old(self):
-
-        # Getting the formation errors
-        formation_error_means = []
-        formation_error_summed_over_iter_means = []
-        tmp1 = []
-        tmp2 = []
-        for i in range(len(self.vehicles)):
-            formation_error, formation_error_summed_over_iter = self.vehicles[i].calculate_formation_error()
-            tmp1 += [formation_error]
-            tmp2 += [formation_error_summed_over_iter]
-
-        # Formation error means
-        formation_error_means = np.mean(np.array(tmp1), axis=0)
-        formation_error_summed_over_iter_means = np.mean(np.array(tmp2), axis=0)
-
-        # New plot
-        fig, ax = plt.subplots()
-        # Plotting
-        from matplotlib.pyplot import cm
-        color=cm.rainbow(np.linspace(0,1,len(formation_error_means)))
-        [ax.plot(np.linspace(0, 1, 100), formation_error_means[i], c = color[i, :]) for i in range(len(formation_error_means))]
-
-        # Axis realated stuff
-        ax.set_xlabel("time t")
-        ax.set_ylabel("formation error")
-        ax.set_title("Formation error of the group for subsequent iterations")
-        # Saving the figure
-        fig.savefig(self.cwd + '/figures/' + 'stage' + '_{:0>1d}'.format(self.stage) + 'formation_error_mean.png', dpi = 100)
-
-        # New plot
-        fig, ax = plt.subplots()
-        # Plotting
-        ax.plot(formation_error_summed_over_iter_means)
-
-        # Axis realated stuff
-        ax.set_xlabel("iteration k")
-        ax.set_ylabel("formation error")
-        ax.set_title("Formation error of the group for subsequent iterations")
-        # Saving the figure
-        fig.savefig(self.cwd + '/figures/' + 'stage' + '_{:0>1d}'.format(self.stage) + 'formation_error_summed_over_iter_mean.png', dpi = 100)
-
-
-
-        return self
-    
     def plot_frenet_view(self):
         fig, ax = self.figures["figures"]
         
         for i in range(self.stage):
             ax.clear()
-            
             for vehicle in self.vehicles:
                 ax = vehicle.visualize_x_problem(ax, i)
-                
             fig.savefig(self.cwd + '/figures/' + str(self.seed) + '/frenet_view_' + '{:0>2d}'.format(i) +'.png', dpi = 200)
     
     def plot_moovie_frames(self, n_frames, iternum : int = 0, seed = ''):
@@ -1577,22 +1203,17 @@ class Group(Environment):
             ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
             ax.set_xlim(self.vehicles[0].fp.fx_spline(t_start)[0][0] - 2, self.vehicles[0].fp.fx_spline(t_start)[0][0] + 2*3)
             ax.set_ylim(self.vehicles[0].fp.fy_spline(t_start)[0][0] - 2.5, self.vehicles[0].fp.fy_spline(t_start)[0][0] + 2.5)
-            # ax.set_xlim(self.vehicles[0].fp.fx_spline(t_start)[0][0] - 5, self.vehicles[0].fp.fx_spline(t_start)[0][0] + 10)
-            # ax.set_ylim(self.vehicles[0].fp.fy_spline(t_start)[0][0] - 7.5, self.vehicles[0].fp.fy_spline(t_start)[0][0] + 7.5)
-            # ax.set_xlabel("x axis")
-            # ax.set_ylabel("y axis")
+
             ax.set_aspect('equal', adjustable='box')
             plt.axis('off')
             ax.axes.xaxis.set_visible(False)
             ax.axes.yaxis.set_visible(False)
             # Saving figure to folder
-            # fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
             self.seed = 0
             fig.savefig(self.cwd + '/video/' + str(self.seed) + '/' + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
             ax.clear()
             frame_num += 1
-            # print('t_start, fx(t_start)' + str(t_start) + ',' + str(self.vehicles[0].fp.fx_spline(t_start)[0][0]))
-
+            
         return self
     
     
@@ -1605,19 +1226,8 @@ class Group(Environment):
 
         frame_num = 0
         for t in np.linspace(0, 1, 100):
-            # fig.clear()
-            # fig, ax = plt.subplots()
-
-            # First we plot the paths
-            # for i in range(len(self.vehicles)):
-                # ax = self.vehicles[i].plot_path_frames(ax, t)
-
-            # Then we plot the vehicles
             for i in range(len(self.vehicles)):
                 ax = self.vehicles[i].plot_moovie_frames(ax, t)
-
-            # Axis related stuff
-            # ax.set_title("Trajectories of the vehicles after iteration {} with seed {}".format(iternum, seed))
             ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
             ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
             # Or setting the ax limits 
@@ -1626,8 +1236,6 @@ class Group(Environment):
             ax.set_xlabel("x axis")
             ax.set_ylabel("y axis")
             ax.set_aspect('equal', adjustable='box')
-            
-            
             
             plt.axis('off')
             ax.axes.xaxis.set_visible(False)
@@ -1639,54 +1247,9 @@ class Group(Environment):
             ax.clear()
             frame_num += 1
             
-        # "Zoomed-out version #entire landscape"
-        # fig, ax = self.figures["figures"]
-
-        # frame_num = 0
-        # for t in np.linspace(0, 1, 100):
-        #     # fig.clear()
-        #     # fig, ax = plt.subplots()
-
-        #     # First we plot the paths
-        #     # for i in range(len(self.vehicles)):
-        #         # ax = self.vehicles[i].plot_path_frames(ax, t)
-
-        #     # Then we plot the vehicles
-        #     for i in range(len(self.vehicles)):
-        #         ax = self.vehicles[i].plot_moovie_frames(ax, t)
-
-        #     # Axis related stuff
-        #     # ax.set_title("Trajectories of the vehicles after iteration {} with seed {}".format(iternum, seed))
-        #     ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
-        #     ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
-        #     # Or setting the ax limits 
-        #     # ax.set_xlim(self.vehicles[0].fp.fx_spline(t)[0][0] - 2*2, self.vehicles[0].fp.fx_spline(t)[0][0] + 2*2)
-        #     # ax.set_ylim(self.vehicles[0].fp.fy_spline(t)[0][0] - 1*2, self.vehicles[0].fp.fy_spline(t)[0][0] + 1*2)
-        #     ax.set_xlabel("x axis")
-        #     ax.set_ylabel("y axis")
-        #     ax.set_aspect('equal', adjustable='box')
-            
-            
-            
-        #     plt.axis('off')
-        #     ax.axes.xaxis.set_visible(False)
-        #     ax.axes.yaxis.set_visible(False)
-            
-        #     # Saving figure to folder
-        #     fig.savefig(self.cwd + '/video/' + 'entire_{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.pdf', dpi = 200)
-        #     ax.clear()
-        #     frame_num += 1
-        
-
         return self
 
     def save_trajectory_to_csv(self, n_steps, t_desired = 1, t_hover = 0.1):
-        # for horizon_num in range(n_steps):
-        #         # self.vehicles[0].save_trajectory_to_csv(horizon_num, t_desired = t_desired, t_hover = t_hover)
-        #     for i in range(len(self.vehicles)):
-        #         self.vehicles[i].save_trajectory_to_csv(horizon_num, t_desired = t_desired, t_hover = t_hover)
-                
-                
         for i in range(len(self.vehicles)):
             self.vehicles[i].save_trajectory_to_csv_SINGLE(n_steps, t_desired = t_desired, t_hover = t_hover)
         return self
