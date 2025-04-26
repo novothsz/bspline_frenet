@@ -10,3 +10,5 @@ tamás/
 .DS_Store/
 *.png
 *.pickle
+__pycache__/
+.DS_Store
