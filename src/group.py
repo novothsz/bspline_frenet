@@ -12,7 +12,7 @@ import os
 from .obstacle import Obstacle
 
 class Group(Environment):
-    def __init__(self, n_vehicles : int, start_position = [-0.8, 0, 0], goal_position = [0.8, 0, 0], stage = 0):
+    def __init__(self, n_vehicles : int, start_position = [-0.8, 0, 0], goal_position = [0.8, 0, 0], stage = 0, seed = 0):
         self.vehicles = []
         for i in range(n_vehicles):
             vehicle = Vehicle()
@@ -22,6 +22,14 @@ class Group(Environment):
         self.start_position = start_position
         self.goal_position = goal_position
         self.stage = stage
+        self.seed = seed
+
+        random.seed(seed)
+
+        self.cwd = os.getcwd()
+        os.system("mkdir " + str(self.cwd) + '/video/' + str(self.seed))
+        os.system("mkdir " + str(self.cwd) + '/figures/' + str(self.seed))
+
         super().__init__()
         
         
@@ -99,15 +107,10 @@ class Group(Environment):
     ###########################################################################
     
     def ACC_MPC_t_param(self):
-        "To this end, we introduce, DFG-MPC... :))"
-        # We call the function BEFORE the simulation step, therefore to get the correct values for the next iteration, lets add a t_step to the values :)
-                
-        # Setting start & end times
-        # t_sweep_start = self.vehicles[0].t_start + self.vehicles[0].t_step
-        # t_sweep_end = self.vehicles[0].t_end + self.vehicles[0].t_step
+        "DFG-MPC algorithm"
+
         t_sweep_start = self.vehicles[0].t_start
         t_sweep_end = self.vehicles[0].t_end
-        
         
         # Okay, there is actually a little difference compared to the simple sweep:
             # 1. We need to clear the intermediate values before every sweep
@@ -820,73 +823,20 @@ class Group(Environment):
 
 
         if position_type == 'initial':
-            position = self.start_position
-            positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 6)
-            positions = self.ellipse_generator(centerpoint = position, n_positions = len(self.vehicles), a = self.vehicles[0].radious * 6, b = self.vehicles[0].radious * 3,
-                                               ellipse_rotation = math.pi / 2 + math.pi / 4)
+            positions = self.ellipse_generator(centerpoint = self.start_position, n_positions = len(self.vehicles), a = self.vehicles[0].radious * 9, b = self.vehicles[0].radious * 5,
+                                               ellipse_rotation = math.pi / 2)
             
-            
-        
-            if self.stage == 0:
-                yaml_dict = {'crazyflies' : []}
-                for i, vehicle in enumerate(self.vehicles):
-                    # initialPosition = [positions[i][j].tolist() for j in range(len(positions[i]))] + [targetHeight]
-                    initialPosition = [float(pos) for pos in positions[i]]
-                    initialPosition = initialPosition[:2] + [float(targetHeight)]
-                    yaml_dict['crazyflies'] += [{'id' : i, 'channel' : 100,
-                                                 'initialPosition' : initialPosition,
-                                                 'type' : 'default'
-                                                 }]
-                with open(self.cwd + "/yaml/initialPosition.yaml", "w") as file_descriptor:
-                    yaml.dump(yaml_dict, file_descriptor)
-
         elif position_type == 'final':
-            position = self.goal_position
-            positions = self.position_generator(centerpoint = position, n_positions = len(self.vehicles), r = self.vehicles[0].radious * 6)
-            positions = self.ellipse_generator(centerpoint = position, n_positions = len(self.vehicles), a = self.vehicles[0].radious * 6, b = self.vehicles[0].radious * 3,
-                                               ellipse_rotation = math.pi / 2 + math.pi / 4)
+            positions = self.ellipse_generator(centerpoint = self.goal_position, n_positions = len(self.vehicles), a = self.vehicles[0].radious * 9, b = self.vehicles[0].radious * 5,
+                                               ellipse_rotation = math.pi / 2)
             self.og_final_positions = positions
-            if self.stage == 0:
-                yaml_dict = {'crazyflies' : []}
-                for i, vehicle in enumerate(self.vehicles):
-                    # initialPosition = [positions[i][j].tolist() for j in range(len(positions[i]))] + [targetHeight]
-                    initialPosition = [float(pos) for pos in positions[i]]
-                    initialPosition = initialPosition[:2] + [float(targetHeight)]
-                    yaml_dict['crazyflies'] += [{'id' : i, 'channel' : 100,
-                                                 'finalPosition' : initialPosition,
-                                                 'type' : 'default'
-                                                 }]
-                with open(self.cwd + "/yaml/finalPosition.yaml", "w") as file_descriptor:
-                    yaml.dump(yaml_dict, file_descriptor)
         else:
             NotImplementedError()
 
-
+        # Apply the positions for all vehicles.
         for i in range(len(self.vehicles)):
             self.vehicles[i].set_position(position = positions[i], position_type = position_type)
 
-
-    
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    ###########################################################################
-    
-    def position_generator(self, centerpoint : list, n_positions : int, r : float):
-        positions = []
-        alpha = np.pi / 4.0 + np.pi / 8.0 # initial angle
-        alpha += centerpoint[2]
-        for i in range(n_positions):
-            positions += [ [centerpoint[0] + r * np.sin(alpha), centerpoint[1] + r * np.cos(alpha), centerpoint[2]] ] # [x, vx, y, vy, z, vz]
-            alpha = alpha - np.pi * 2.0 / n_positions
-
-        return positions
-    
-    # import functools
-    # @functools.lru_cache(maxsize=None)
     def ellipse_generator(self, centerpoint : list, n_positions : int, a : float, b : float, 
                           ellipse_rotation : float = 0, vehicles_rotation : float = math.pi / 4,
                           ellipse_scale_x : float = 1, ellipse_scale_y : float = 1):
@@ -1330,55 +1280,37 @@ class Group(Environment):
     ###########################################################################
     ###########################################################################
 
-    def generate_obstacles(self, seed : int = 42):
+    def generate_obstacles(self, seed : int = 0):
         # There are the following types of obstacles:
             # - obstacles on the path: these obstacles are created using the ellipse generator algorithm.
             # It's centerpoint, alpha, a, b is a random number in the Frenet frame (all of which in a defined bound).
             # Then, the corners are transformed from Frenet to Inertial.
+            # 
             # - gates: two corners of each obstacle, that form a gate are generated with the 
             # ellipse generator algorithm. However alpha is always zero and b has a minimum value.
-            # (both of these constarints ensure, that there is a tunner, kinda parallel with the Frenet path so that 
+            # (both of these constarints ensure, that there is a tunnel, kinda parallel with the Frenet path so that 
             # the DFG algorithm will be able to find a solution.)
             # The corners are transformed from Frenet to Inertial and extended to the environment limits.
+            #
             # - wall on one side: same as the gate, but drops one of the obstacle, that forms a gate.
         
         # Spacing of the obstacles:
             # randomly, but at least t_spacing between each obstacle.
             # no obstacle is allowed at the end
-            
-        # Ellipse generator input:
-            # def ellipse_generator(self, centerpoint : list, n_positions : int, a : float, b : float, 
-            #                       ellipse_rotation : float = 0, vehicles_rotation : float = math.pi / 4,
-            #                       ellipse_scale_x : float = 1, ellipse_scale_y : float = 1):
-             
-              
-        self.seed = seed
-        os.system("mkdir " + str(self.cwd) + '/video/' + str(self.seed))
-        os.system("mkdir " + str(self.cwd) + '/figures/' + str(self.seed))
         
-        
-        # variables
-        # t_spacing = 0.2
-        # t_free_begin = 0.2
-        # t_free_end = 0.2
-        
-        
-        n_obst_along = 2
-        random.seed(seed)
+        # Deviation from the path
         centerpoint_x_bound = [-0.1, 0.1]
         centerpoint_y_bound = [-0.1, 0.1]
-        
+        # Ellipse bounds
         a_bound = [0.1, 0.7]
         b_bound = [0.1, 0.7] # 1.5]
-        
         alpha_bound = [-math.pi/2, math.pi/2]
         
-        
+
         # Generate obstacles along the way
         obstacles = []
-        t_bound = []
         t_tmp = [0.35, 0.65]
-        for i in range(n_obst_along):
+        for i in range(len(t_tmp)):
             centerpoint = [random.uniform(centerpoint_x_bound[0], centerpoint_x_bound[1]), \
                            random.uniform(centerpoint_y_bound[0], centerpoint_y_bound[1]), 0 ]
                 
@@ -1396,22 +1328,17 @@ class Group(Environment):
             obstacles += [Obstacle(ID = i, corners = obstacle_corners)]
         
         # Generate gates
-        # Okay. We have generated obstacles along the way.
-        # Let's generate gates now! :)
-        n_obst_gate = 3
         gate_gap_bound = [3.5 * self.vehicles[0].radious, 10 * self.vehicles[0].radious]
-        gate_length_bound = 0.3 # 0.3
+        gate_length_bound = 0.3
         
-        
-        # obstacles = []
         t_tmp = [0.2, 0.5, 0.8]
-        for i in range(n_obst_gate):
+        for i in range(len(t_tmp)):
             gate_points_tmp = random.uniform(gate_gap_bound[0], gate_gap_bound[1])
             # The lower part of the gate
             # corners = [top-right, top_left]
             gate1_inside_corners = [ [gate_length_bound / 2, -gate_points_tmp], \
                                      [-gate_length_bound / 2, -gate_points_tmp] ]
-            
+            # The upper part of the gate
             # corners = [bottom-left, bottom-right]
             gate2_inside_corners = [ [gate_length_bound / 2, gate_points_tmp], \
                                      [-gate_length_bound / 2, gate_points_tmp] ]
@@ -1420,25 +1347,16 @@ class Group(Environment):
             g1 = [list(self.fp.frenet_to_inertial(corner[0], corner[1], t_tmp[i])) for corner in gate1_inside_corners]
             g2 = [list(self.fp.frenet_to_inertial(corner[0], corner[1], t_tmp[i])) for corner in gate2_inside_corners]
             
-            if i == -1:
-                pass
-            else:
-                # Extending till the edge of the environment
-                g1 = g1 + [[g1[-1][0], -6]] + [[g1[0][0], -6]]
-                g2 = g2 + [[g2[-1][0],  6]] + [[g2[0][0],  6]]
-                obstacles += [Obstacle(ID = 3+i*2, corners = g1)]
-                obstacles += [Obstacle(ID = 3+i*2 + 1, corners = g2)]
-                # Sharing ID-s between gate pairs
-                obstacles[-2].gate_pair_ID = obstacles[-1].ID
-                obstacles[-1].gate_pair_ID = obstacles[-2].ID
-        
-        # plt.figure()
-        # for pos in ellipse_corners:
-        #     plt.plot(pos[0], pos[1], 'ro')
-        # plt.show()
-            
-        
-        # [print(obst.corners) for obst in obstacles]
+            # Extending till the edge of the environment
+            g1 = g1 + [[g1[-1][0], -6]] + [[g1[0][0], -6]]
+            g2 = g2 + [[g2[-1][0],  6]] + [[g2[0][0],  6]]
+            obstacles += [Obstacle(ID = 3+i*2, corners = g1)]
+            obstacles += [Obstacle(ID = 3+i*2 + 1, corners = g2)]
+            # Sharing ID-s between gate pairs
+            obstacles[-2].gate_pair_ID = obstacles[-1].ID
+            obstacles[-1].gate_pair_ID = obstacles[-2].ID
+
+
         return obstacles
 
     ###########################################################################
@@ -1669,6 +1587,7 @@ class Group(Environment):
             ax.axes.yaxis.set_visible(False)
             # Saving figure to folder
             # fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
+            self.seed = 0
             fig.savefig(self.cwd + '/video/' + str(self.seed) + '/' + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
             ax.clear()
             frame_num += 1
