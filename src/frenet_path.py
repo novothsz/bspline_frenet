@@ -1,7 +1,7 @@
 import autograd.numpy as np
 import math
 from autograd import grad
-import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt
 # from numpy import trapz
 from math import hypot
 from numpy import interp

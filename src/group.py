@@ -362,7 +362,7 @@ class Group(Environment):
                     
                     if self.MPC_version == 'MPC_param':
                         # We need to account for the fact, that t_global_horizon != t_local_horizon
-                        t_local = interp(t,[t_sweep_start,t_sweep_end],[0,1])
+                        t_local = np.interp(t,[t_sweep_start,t_sweep_end],[0,1])
                         for i, vehicle in enumerate(self.vehicles):
                             vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
                             # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
@@ -445,7 +445,7 @@ class Group(Environment):
                 vehicle.x_intermediate_list += [vehicle_positions_original[i][0], vehicle_positions_original[i][1], self.cum_rotation]
                 vehicle.a_intermediate_list += [0, 0] * len(vehicle.obstacles)
                 # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions_original[i][0], vehicle_positions_original[i][1], 0]]
-                t_local = interp(t_sweep_end,[t_sweep_start,t_sweep_end],[0,1])
+                t_local = np.interp(t_sweep_end,[t_sweep_start,t_sweep_end],[0,1])
                 vehicle.t_intermediate_list += [t_local]
                 vehicle.t_real_intermediate_list += [t_sweep_end]
                 # vehicle.variable_history['t_intermediate_list'] += [1]
@@ -1517,7 +1517,7 @@ class Group(Environment):
         # https://stackoverflow.com/questions/34442791/pass-plot-to-function-matplotlib-python
 
         # Plotting frenet path
-        # self.vehicles[0].fp.plot_path(ax, 1) # t = interp(i,[0,N-1],[0,1])
+        # self.vehicles[0].fp.plot_path(ax, 1) # t = np.interp(i,[0,N-1],[0,1])
 
         # Plotting trajectory of the vehicles
         fig, ax = self.figures["figures"]
