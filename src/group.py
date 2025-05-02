@@ -206,36 +206,35 @@ class Group(Environment):
         t_step = 0.01
         
         # The initial configuration with which DFG calculates.
-        # This value is sometimes being changed in "ACC_MPC_t_param", that is in an MPC implementation.
-        vehicle_positions = []
-        for vehicle in self.vehicles:
-            # vehicle_positions += [vehicle.x0[:2]]
-            vehicle_positions += [vehicle.current_configuration_position[:2]]
+        # This value is sometimes being changed in "ACC_MPC_t_param".
+        vehicle_positions = [vehicle.current_configuration_position[:2] for vehicle in self.vehicles]
         vehicle_positions_original = np.array(vehicle_positions).tolist()
                 
         
-        # The DFG iteration!s
-        t_end = t_sweep_start # TODO: jajj, ne hívjuk már t_end-nek...
-        while t_end <= t_sweep_end + self.TOL:
+        # The DFG iteration!
+        t_sweep_current = t_sweep_start
+        while t_sweep_current <= t_sweep_end + self.TOL:
+            # --> TODO: simplify this part
             # Step 1: Check if inside danger zone at time t
-            # all_collisions, collision = self.check_collision_with_obstacles(vehicle_positions, self.get_obstacle_corners(t_end))
-            all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, self.get_scaled_obstacle_corners(t_end))
+            all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, self.get_scaled_obstacle_corners(t_sweep_current))
             
             # Let's check, with which obstacle we have collision.
             obstacle_idx = []
             for i, obstacle in enumerate(self.vehicles[0].obstacles):
                 is_collision = all_collisions[i]
                 if is_collision:
-                    all_collisions2, collision2 = self.check_collision_with_obstacles(vehicle_positions, np.array(self.get_obstacle_corners(t_end))[ [i] ].tolist()) 
+                    all_collisions2, collision2 = self.check_collision_with_obstacles(vehicle_positions, np.array(self.get_obstacle_corners(t_sweep_current))[ [i] ].tolist()) 
                     is_collision2 = collision2
                     if is_collision2:
                         obstacle_idx += [i]
                         
+            # <-- TODO: simplify this part
             # Step 2: If collision has been found, find t_danger_end time.
             if obstacle_idx != []:
-                t_danger_start = t_end
+                t_danger_start = t_sweep_current
                 t_danger_end = t_danger_start
-                t_danger_step = t_step / 10 # if collision is detected, we step this 'smoothly' until no danger is detected
+                t_danger_step = t_step / 10 # if collision is detected, we step this 'smoothly' until no danger is detected 
+                # TODO: We only look ahead for some time horizon anyway... Maybe we should simplyfy and look ahead until that time horizon and not fool around here?
                 while t_danger_end <= 1:
                     t_danger_end += t_danger_step
                     all_collisions, collision = self.check_danger_zone_with_obstacles(vehicle_positions, np.array(self.get_scaled_obstacle_corners(t_danger_end))[obstacle_idx].tolist())
@@ -244,6 +243,7 @@ class Group(Environment):
                         self.check_danger_zone_with_obstacles(vehicle_positions, np.array(self.get_scaled_obstacle_corners(t_danger_end))[obstacle_idx].tolist())
                         break
                     
+                # TODO: This is probably bullshit.
                 # Step 3: Find the right formation configuration for t \in [t_danger_start, t_danger_end]
                 # Form t_zizz
                 t = (t_danger_start + t_danger_end) / 2
@@ -253,6 +253,7 @@ class Group(Environment):
                                           (t+lookahead <= 1) * (t+lookahead) + (t+lookahead > 1) * 1,
                                           10)
                 
+                # TODO: Why do we save this? We will overwrite anyway.
                 # Get the least cost formation & ACTION_TAKEN
                 cum_rotation = self.cum_rotation
                 cum_scaling = self.cum_scaling
@@ -273,7 +274,6 @@ class Group(Environment):
                         t_local = np.interp(t,[t_sweep_start,t_sweep_end],[0,1])
                         for i, vehicle in enumerate(self.vehicles):
                             vehicle.x_intermediate_list += [vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]
-                            # vehicle.variable_history['x_intermediate_list'] += [[vehicle_positions[i][0], vehicle_positions[i][1], cum_rotation]]
                             vehicle.t_intermediate_list += [t_local]
                             t_cropped = t * (t <= t_sweep_end) + t_sweep_end * ( t > t_sweep_end )
                             vehicle.t_real_intermediate_list += [t_cropped]
@@ -325,10 +325,10 @@ class Group(Environment):
                     print("No solution has ben found. We need to halve the time. This should be implemented later :)")
                     assert 0
                 
-                t_end = t_danger_end + t_step
+                t_sweep_current = t_danger_end + t_step
                 
             elif obstacle_idx == []:
-                t_end += t_step
+                t_sweep_current += t_step
            
         tmp_len = len(self.vehicles[0].t_intermediate_list)
 
@@ -353,7 +353,7 @@ class Group(Environment):
 
     
     def intermediate_position_generator_SZILARD(self, vehicle_positions, cum_rotation, cum_scaling, t):
-        """ This function is called iteratively every ?t_step? -> What should this value be?. It check for collision. 
+        """ Checks for collision. 
         If no collision:
             - rotate/scale back -> save it to t&x_intermediate_list
             - do nothing
