@@ -780,17 +780,12 @@ class Group(Environment):
         """
 
         "Step 1: trajectory optimization"
-        # Initial optimization step (only finding the optimal trajectory,
-        # without considering formation)
         for i in range(len(self.vehicles)):
-            # Let's also do the initialization stuff here
-            
             self.vehicles[i].initialize_x()
 
         "Step 2: exchanging solution"
-        # Exchanging information
-        message_container = []
         # Collecting messages
+        message_container = []
         for i in range(len(self.vehicles)):
             message_container += self.vehicles[i].data_exchange_x_send()
 
@@ -803,9 +798,6 @@ class Group(Environment):
         for i in range(len(self.vehicles)):
             self.vehicles[i].initialize_values()
 
-        "Step 4: plotting"
-        # self.plot_initial_values()
-
     def prepare(self):
         """ Requests all vehicles to perform the preparation processes for
         creating the necessary variables and solver that are needed for the
@@ -813,9 +805,7 @@ class Group(Environment):
         """
 
         for i in range(len(self.vehicles)):
-            self.vehicles[i].prepare0()
-            self.vehicles[i].prepare1()
-            self.vehicles[i].prepare2()
+            self.vehicles[i].prepare()
 
         return self
     
@@ -927,9 +917,6 @@ class Group(Environment):
         for i in range(len(self.vehicles)):
             self.vehicles[i].x_update_posterior()
             
-        # self.plot_frenet_view()
-
-
         """
         2) data_exchange_x(), where these values are shared between agents.
         """
@@ -1072,34 +1059,6 @@ class Group(Environment):
         ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
         ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
         ax.set_aspect('equal', adjustable='box')
-
-    def plot_initial_values(self):
-        """This function plots initial trajectories generated only considering
-        collision avoidance with obstacles."""
-        flatten = lambda t: [item for sublist in t for item in sublist]
-        fig, ax = plt.subplots()
-        for i in range(len(self.vehicles)):
-            x, y = self.vehicles[i].astar_initials["y_astar"]
-            t = np.linspace(0, 1, 100)
-            x_t = [x(t_) for t_ in t]
-            y_t = [y(t_) for t_ in t]
-
-            x_t = flatten(x_t)
-            y_t = flatten(y_t)
-            ax.plot(x_t, y_t, 'b.')
-
-        # Axis related stuff
-        ax.set_title("Trajectories of the vehicles after iteration {} with seed {}".format(-1, "?"))
-        ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
-        ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
-        ax.set_xlabel("x axis")
-        ax.set_ylabel("y axis")
-        ax.set_aspect('equal', adjustable='box')
-        # Saving figure to folder
-        fig.savefig('figures/' + 'astar_stage' + '{:0>1d}'.format(self.stage) +'.png', dpi = 200)
-        fig.clear()
-
-        return self
 
     def plotter(self, iternum : int = 0, seed = ''):
         """This function plots the trajectories calculated by each of the agent.

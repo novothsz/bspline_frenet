@@ -258,8 +258,6 @@ class VehicleBasis(Environment):
         return self
 
     def update_PvX(self):
-        if self.stage == 14 and self.ID == 0:
-            kappa = True
         """Updating P0 parameter. Values, that are commented out are not
         currently updated. This can be changed later allowing additional functionality.
         Updated values are: T, x0, z_i, z_ji, lambda_ji
@@ -721,16 +719,9 @@ class VehicleBasis(Environment):
     ###########################################################################
     ###########################################################################
     "Preparation"
-    
-    def prepare0(self):
-        "TODO"
-
-    def prepare1(self):
+    def prepare(self):
         self.setup_x_update()
         self.setup_z_update()
-
-    def prepare2(self):
-        "TODO"
 
     ###########################################################################
     ###########################################################################

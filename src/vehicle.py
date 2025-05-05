@@ -823,11 +823,12 @@ class Vehicle(VehicleBasis):
             self.variable_history['first_time_success'] += [True]
         else:
             self.variable_history['first_time_success'] += [False]
-            
+            print(f"First time solver failed for vehicle {self.ID}, trying again.")
             self.arg['x0'] = self.solution["x"]
             self.solution = self.solver.call(self.arg)
             
             if self.solver.stats()['return_status'] != 'Solve_Succeeded':
+                print(f"Second time solver failed for vehicle {self.ID}, trying again.")
                 self.arg['x0'] = self.solution["x"]
                 self.solution = self.solver.call(self.arg) 
             
@@ -840,8 +841,6 @@ class Vehicle(VehicleBasis):
     def x_update_posterior(self):
         # Extracting the solution
         self.DvX.extract(self.solution)
-        if self.stage == 6 and self.ID == 2:
-            kappa = True
         self.variable_history["DvX_posterior"] += [copy.deepcopy(self.DvX)]
         feasibility_dict = self.check_feasibility_of_solution_x()
         feasibility_dict["IPOPT_SUCCESS"] = self.solver.stats()['success']

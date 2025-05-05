@@ -844,6 +844,47 @@ class FrenetPath(object):
         
         
     def equation_min_max(self, equation_name = ''):
+        """
+        Compute time-varying minimum and maximum feasible bounds for a velocity-related equation in the Frenet frame.
+
+        This function formulates and solves two optimization problems to determine the lower and upper bounds
+        (as B-spline curves) for the specified equation of motion (`'p'` for longitudinal or `'q'` for lateral velocity)
+        along the Frenet path. The bounds are computed under given physical constraints on velocity and acceleration,
+        and account for the path's curvature and orientation.
+
+        For each bound:
+        - The velocity components (vx, vy) are represented as B-splines with bounded coefficients.
+        - Acceleration constraints are enforced on the derivatives of these splines.
+        - The target equation (either p-dot or q-dot in the Frenet frame) is minimized or maximized over the trajectory
+            using nonlinear programming.
+        - The resulting minimum and maximum curves are further fitted with lower-complexity splines for efficient use.
+
+        Parameters
+        ----------
+        equation_name : str
+            The name of the equation to bound. Must be either:
+            - 'p': for the longitudinal velocity equation (v_p = vx * cos(theta) + vy * sin(theta))
+            - 'q': for the lateral velocity equation (v_q = -vx * sin(theta) + vy * cos(theta))
+
+        Returns
+        -------
+        equation_min_fitted : BSpline
+            B-spline representing the minimum feasible value of the specified equation along the path.
+        equation_max_fitted : BSpline
+            B-spline representing the maximum feasible value of the specified equation along the path.
+
+        Raises
+        ------
+        NotImplementedError
+            If `equation_name` is not 'p' or 'q'.
+
+        Notes
+        -----
+        - The returned bounds are dynamic and depend on the path geometry and imposed velocity/acceleration limits.
+        - These bounds are typically used as constraints in optimal control or trajectory planning problems
+        to ensure dynamic feasibility in the Frenet frame.
+        """
+                
         self.w, self.lbw, self.ubw = [], [], []
         self.g, self.lbg, self.ubg = [], [], []
         self.J = 0
