@@ -8,6 +8,7 @@ import os
 import functools
 import matplotlib.path as mpltPath
 from matplotlib.pyplot import cm
+import copy
 
 from .obstacle import Obstacle
 
@@ -82,6 +83,7 @@ class Group(Environment):
         t_sweep_end = self.vehicles[0].t_end
         
         # Step 1: Clear the intermediate lists
+        # TODO: Can we moove this to the consutrctor of the vehicle class?
         if self.stage == 0:
             for vehicle in self.vehicles:
                 vehicle.variable_history['x_intermediate_list'] = []
@@ -208,7 +210,7 @@ class Group(Environment):
         # The initial configuration with which DFG calculates.
         # This value is sometimes being changed in "ACC_MPC_t_param".
         vehicle_positions = [vehicle.current_configuration_position[:2] for vehicle in self.vehicles]
-        vehicle_positions_original = np.array(vehicle_positions).tolist()
+        vehicle_positions_original = copy.deepcopy(vehicle_positions)
                 
         
         # The DFG iteration!
