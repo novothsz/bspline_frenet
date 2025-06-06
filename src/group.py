@@ -193,7 +193,8 @@ class Group(Environment):
             vehicle.variable_history['t_real_intermediate_list'][-1] = vehicle.t_real_intermediate_list
             
         return self
-        
+
+
     
     # Check whether the obstacle has entered the danger zone.
     def sweep_ACC(self, t_sweep_start = 0, t_sweep_end = 1):
@@ -203,16 +204,273 @@ class Group(Environment):
             searches for collision
             if collision found, h... let's rather implemment it in a new function....
         """
+
+        plt.close('all') # Close all figures
+
+        def sat_overlap(corners1, corners2):
+            """
+            corners1: (1, 4, 2) - corners of the first rectangle
+            corners2: (n, 4, 2) - corners of the second rectangle
+            """
+            def get_axes(corners):
+                # Getting edge vectors
+                edges = corners[:, 1:, :] - corners[:, :-1, :]
+                edges = np.concatenate((edges, corners[:, :1, :] - corners[:, -1:, :]), axis=1)
+
+                # Compiute the norms and prevent division by zero
+                norms = np.linalg.norm(edges, axis=-1) + 1e-10
+                axes = edges / norms[..., np.newaxis]
+
+                return axes
+            
+            def project(corners, axes):
+                # Project corners onto the axes
+                return np.einsum('bij,bkj->bik', axes, corners)
+            
+            # corners1 = np.array([[0, 0], [0, 2], [2, 2], [2, 0]])[np.newaxis, ...]
+            # corners2 = np.array([[0, 1], [0, 3], [2, 3], [2, 1]])[np.newaxis, ...] # collision, but no inclusion
+            # corners2 = np.array([[0, 2.5], [0, 3], [2, 3], [2, 2.5]])[np.newaxis, ...] # no collision, no inclusion
+            # corners2 = np.array([[0.1, 0.1], [0.1, 1.9], [1.9, 1.9], [1.9, 0.1]])[np.newaxis, ...] # collision, but no inclusion
+
+
+            
+            axes1 = get_axes(corners1)
+            axes2 = get_axes(corners2)
+
+            # Because we are using rectangles, we only need to check 2 axes per box.
+            axes1 = axes1[:, [0, 1]]
+            axes2 = axes2[:, [0, 1]]
+
+            # Combine axes for SAT test
+            axes = np.concatenate((axes1, axes2), axis=1) # (n, 4, 2)
+
+            # Project corners onto all axes
+            projections1 = project(corners1, axes)
+            projections2 = project(corners2, axes)
+
+            # Finding the min and max projections
+            min1 = np.min(projections1, axis=-1)
+            max1 = np.max(projections1, axis=-1)
+            min2 = np.min(projections2, axis=-1)
+            max2 = np.max(projections2, axis=-1)
+
+            # Check for separating axes
+            amount_per_axes = np.min(np.concatenate(((max1 - min2)[..., np.newaxis], (max2 - min1)[..., np.newaxis]), axis=-1), axis=-1)
+            collision_cases = ~np.any(amount_per_axes <= 0, axis=-1) # (n, 4)
+
+            # # Inclusion check (for corners2 inside corners1)
+            # axes1_full = get_axes(corners1)  # Use all axes of corners1
+            # proj1 = project(corners1, axes1_full)  # Project corners1 onto its own axes
+            # proj2 = project(corners2, axes1_full)  # Project corners2 onto corners1's axes
+
+            # # Compute min/max projections
+            # min1_inc = np.min(proj1, axis=-1)  # (1, 4)
+            # max1_inc = np.max(proj1, axis=-1)  # (1, 4)
+            # min2_inc = np.min(proj2, axis=-1)  # (n, 4)
+            # max2_inc = np.max(proj2, axis=-1)  # (n, 4)
+
+            # # Check if all projections of corners2 are within corners1's bounds
+            # inclusion_cases = np.all(
+            #     (min2_inc >= min1_inc) & (max2_inc <= max1_inc),
+            #     axis=-1
+            # )  # Shape (n,)
+
+
+            # Inclusion check for corners2 inside corners1
+            axes1_full = get_axes(corners1)  # Shape (1, 4, 2)
+            proj1 = project(corners1, axes1_full)  # Shape (1, 4, 4)
+            proj2 = project(corners2, axes1_full)  # Shape (n, 4, 4)
+
+            # Min/max projections for both shapes
+            min1_inc = np.min(proj1, axis=-1)  # Shape (1, 4)
+            max1_inc = np.max(proj1, axis=-1)  # Shape (1, 4)
+            min2_inc = np.min(proj2, axis=-1)  # Shape (n, 4)
+            max2_inc = np.max(proj2, axis=-1)  # Shape (n, 4)
+
+            # Check containment and compute shrinkage amount
+            # partial_containment_mask = np.all((min2_inc >= min1_inc) | (max2_inc <= max1_inc), axis=-1) & ~ collision_cases
+            containment_mask = (min2_inc >= min1_inc) & (max2_inc <= max1_inc)  # Shape (n, 4)
+            all_contained = np.all(containment_mask, axis=-1)  # Shape (n,)
+
+            # Calculate shrinkage ratios for each axis (when contained)
+            current_lengths = max1_inc - min1_inc + 1e-10  # Avoid division by zero
+            required_lengths = max2_inc - min2_inc
+            c2_c1_size_ratios = required_lengths / current_lengths  # Shape (n, 4), larger than 1 means corners2 is larger than corners1 on the given axis
+
+            # Set shrink_ratios to 0 for axes where containment fails
+            shrink_ratios = np.where(containment_mask, c2_c1_size_ratios, 0)
+            shrinkage_amount = np.min(shrink_ratios, axis=-1)  # Shape (n,)
+            # shrinkage_amount = np.where(all_contained, shrinkage_amount, 0)
+
+            # Calculate growth factor for each axis (when not contained)
+            # For each axis, compute how much corners1 needs to grow
+            left_extension = np.maximum(0, min1_inc - min2_inc)  # How much to extend left
+            right_extension = np.maximum(0, max2_inc - max1_inc)  # How much to extend right
+            extension_needed = np.max(np.concatenate((left_extension[..., None], right_extension[..., None]), axis=-1), axis=-1)
+
+            # Calculate growth ratio: extension / current_length
+            growth_ratios = extension_needed / current_lengths  # Shape (n, 4)
+
+            # Find maximum growth ratio across all axes (minimum required growth)
+            growth_amount = np.max(growth_ratios, axis=-1)  # Shape (n,)
+
+            # Set growth_amount to 0 if already contained
+            growth_amount = np.where(all_contained, 0, growth_amount)
+
+
+            # print(f"Collision cases: {collision_cases} & Inclusion cases: {inclusion_cases}")
+            return {
+                "collision": {
+                    "axes": axes,
+                    "amount": amount_per_axes[..., np.newaxis],
+                    "cases": collision_cases
+                },
+                "inclusion": {
+                    "shrinkage": shrinkage_amount,
+                    "growth": growth_amount,
+                    "cases": all_contained
+                }
+            }
+        def batched_rotate_corners(
+            corners: np.ndarray,
+            angle_degrees: np.ndarray
+        ) -> np.ndarray:
+            """
+            Rotates each set of 4 corners in a batch by corresponding angles.
+
+            Args:
+                corners (np.ndarray): Input array of shape (batch_size, 4, 2)
+                angle_degrees (np.ndarray): Rotation angles in degrees, shape (batch_size, 1)
+
+            Returns:
+                np.ndarray: Rotated corners with same shape as input (batch_size, 4, 2)
+            """
+            angles = np.radians(angle_degrees.squeeze(-1))  # Convert to (B,)
+            
+            # Batch-wise trigonometric computations
+            cos_theta = np.cos(angles)
+            sin_theta = np.sin(angles)
+            
+            # Construct batched rotation matrices (B, 2, 2)
+            rotation_matrices = np.array([
+                [cos_theta, -sin_theta],
+                [sin_theta,  cos_theta]
+            ]).transpose(2, 0, 1)  # Reshape to (B, 2, 2)
+            
+            # Batched matrix multiplication using einsum
+            return np.einsum('bij,bjk->bik', corners, rotation_matrices)
+
         
         # The timestep of the DFG algorithm.
         t_step = 0.01
         
         # The initial configuration with which DFG calculates.
         # This value is sometimes being changed in "ACC_MPC_t_param".
-        vehicle_positions = [vehicle.current_configuration_position[:2] for vehicle in self.vehicles]
-        vehicle_positions_original = copy.deepcopy(vehicle_positions)
-                
+        t_sweep = np.arange(t_sweep_start, t_sweep_end + t_step, t_step)
+        # t_sweep_corners = np.array([self.get_obstacle_corners(t) for t in t_sweep]) # (t, n_obst, n_corners, 2)
+        t_sweep_corners = np.expand_dims(np.array([self.get_obstacle_corners(t)[0] for t in t_sweep]), axis=1) # (t, n_obst, n_corners, 2) with only 1 obstacle
+        vehicle_positions = np.array([vehicle.current_configuration_position[:2] for vehicle in self.vehicles])
+
+        t_sweep_corners *= 0
+        t_sweep_corners += vehicle_positions
+        # t_sweep_corners += 0.28 * 2
+        t_sweep_corners *= 0.9
+        # print(t_sweep_corners)
+
+
+
+        # Tiling corners1 to include various angles
+        corners1 = vehicle_positions[np.newaxis, ...]
+        rotation_angles = np.arange(0, 1, 1) #  np.arange(0, 360, 10)
+        # rotation_angles = np.arange(0, 360, 10)
+        batched_rotation_angles = np.repeat(rotation_angles, corners1.shape[0], axis=0)[:, np.newaxis]
+        corners1 = np.tile(corners1, (len(rotation_angles), 1, 1))
+        corners1 = batched_rotate_corners(corners1, batched_rotation_angles)
+
+        # Tiling corners1 to include various time steps
+        corners1 = np.tile(corners1, (len(t_sweep), 1, 1)) # (1*n_angle*n_t, 4, 2) --- [t_0:[angle0, angle1, angle2, ...], t_1:[angle0, angle1, angle2, ...], ...]
+
+        # Tiling corners1 to have the same shape as the future corners2
+        corners1 = np.tile(corners1, (t_sweep_corners.shape[1], 1, 1))    # [obst_0:[t_0:[angle0, angle1, angle2, ...], t_1:[angle0, angle1, angle2, ...], ...], obst_1:[....], ...]
+
+        # Tiling corners2 to include varoius angles and time steps
+        # corners2 = t_sweep_corners.reshape(-1, 4, 2) # (t*n_obst, 4, 2) --- [t_0:[obst_0, obst_1, obst_2, ...], t_1:[obst_0, obst_1, obst_2, ...], ...]
+        corners2 = t_sweep_corners # (t, n_obst, 4, 2)
+        corners2 = np.repeat(corners2, len(rotation_angles), axis=1) # (t, n_obst*n_angle, 4, 2)
+        corners2 = corners2.reshape(-1, 4, 2) # (t*n_obst*n_angle, 4, 2)
         
+        overlap_dict =  sat_overlap(corners1, corners2)
+
+        reshaped_overlap_dict = {}
+        for key, value in overlap_dict.items():
+            reshaped_overlap_dict[key] = {}
+            for key2, value2 in value.items():
+                    if key2 == "axes":
+                        reshaped_overlap_dict[key].update({key2 : value2.reshape(len(t_sweep), t_sweep_corners.shape[1], len(rotation_angles), -1, 2)})
+                    else:
+                        reshaped_overlap_dict[key].update({key2 : value2.reshape(len(t_sweep), t_sweep_corners.shape[1], len(rotation_angles), -1)})
+
+        for key, value in reshaped_overlap_dict.items():
+            for key2, value2 in value.items():
+                print(f"{key} - {key2}: {value2.shape}")
+
+
+        # reshaped_overlap_dict["collision"]["amount"][0, 0, 0, ...] 
+
+        # Check, if current formation has collision
+        def check_any_collision(coll_dict):
+            """Check if any collision occurs in the current formation."""
+            return np.any(coll_dict["collision"]["cases"][:, :, 0, :])
+        # Check, which rotation angle has no collision.
+        def get_safe_angles(coll_dict):
+            """Check, which rotation angle has collision."""
+            return np.where(~np.any(coll_dict["collision"]["cases"], axis=(0, 1, 3)))
+        # Check for the smallest amount of shrinkage or growth needed to avoid collision (for each angle).
+        def get_safe_size_delta(coll_dict):
+            """Get the smallest amount of shrinkage or growth needed to avoid collision."""
+            # Get the minimum shrinkage amount for each angle
+            min_shrinkage = np.min(coll_dict["inclusion"]["shrinkage"], axis=(0, 1, 3))
+            # Get the maximum growth amount for each angle
+            max_growth = np.max(coll_dict["inclusion"]["growth"], axis=(0, 1, 3))
+            # Combine them into a single array
+            return min_shrinkage, max_growth
+        # Compare the resulting rotation amount and scaling amount to the original formation and to the previous. 
+        # Select the one, that has the least amount of change compared to the previous formation.
+        get_safe_size_delta(reshaped_overlap_dict)
+        axes = axes.reshape(len(t_sweep), -1, 4, 2) # (t, n_obst*n_angle, 4, 2)
+        amount_per_axes = amount_per_axes.reshape(len(t_sweep), -1, 4, 1) # (t, n_obst*n_angle, 4, 2)
+        collision_cases = collision_cases.reshape(len(t_sweep), -1) # (t, n_obst*n_angle)
+        # inclusion_cases = inclusion_cases.reshape(len(t_sweep), -1) # (t, n_obst*n_angle)
+
+        axes = axes.reshape(len(t_sweep), t_sweep_corners.shape[1], -1, 4, 2) # (t, n_obst, n_angle, 4, 2)
+        amount_per_axes = amount_per_axes.reshape(len(t_sweep), t_sweep_corners.shape[1], -1, 4) # (t, n_obst, n_angle, 4,)
+        collision_cases = collision_cases.reshape(len(t_sweep), t_sweep_corners.shape[1], -1) # (t, n_obst, n_angle)
+        # inclusion_cases = inclusion_cases.reshape(len(t_sweep), t_sweep_corners.shape[1], -1) # (t, n_obst, n_angle)
+        # allowed_configuration = np.where(inclusion_cases == True, inclusion_cases, ~collision_cases) # (t, n_obst, n_angle)
+
+        if np.any(collision_cases[:, :, 0, :]):
+            # Find the first time step where collision occurs
+            problematic_indicies = np.where(~allowed_configuration[:, :, 0, :])
+            collision_indices = np.where(collision_cases[:, :, 0, :]) # tuple of arrays (t, n_obst, n_angle, 0)
+            collision_corners = t_sweep_corners[collision_indices[0], collision_indices[1], :, :]
+            collision_time = t_sweep[collision_indices[0]]
+            vehicle_positions = vehicle_positions[collision_indices[1], :]
+            axes = axes[collision_indices[0], collision_indices[1], :, :]
+            amount_per_axes = amount_per_axes[collision_indices[0], collision_indices[1], :, :]
+
+
+
+
+
+
+
+
+        axes = axes.reshape(t_sweep_corners.shape[0], -1, 4, 2)
+        amount_per_axes = amount_per_axes.reshape(t_sweep_corners.shape[0], -1, 4, 1)
+        amount_per_axes = np.clip(amount_per_axes, a_min=0, a_max=None)
+
+
+
         # The DFG iteration!
         t_sweep_current = t_sweep_start
         while t_sweep_current <= t_sweep_end + self.TOL:
