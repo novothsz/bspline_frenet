@@ -2,6 +2,7 @@ from .vehicle import Vehicle
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from .environment import Environment
 import random
 import os
@@ -207,33 +208,30 @@ class Group(Environment):
 
         plt.close('all') # Close all figures
 
+        def get_axes(corners):
+            # Getting edge vectors
+            edges = corners[:, 1:, :] - corners[:, :-1, :]
+            edges = np.concatenate((edges, corners[:, :1, :] - corners[:, -1:, :]), axis=1)
+
+            # Compiute the norms and prevent division by zero
+            norms = np.linalg.norm(edges, axis=-1) + 1e-10
+            axes = edges / norms[..., np.newaxis]
+
+            return axes
+        
+        def project(corners, axes):
+            # Project corners onto the axes
+            return np.einsum('bij,bkj->bik', axes, corners)
+        
         def sat_overlap(corners1, corners2):
             """
             corners1: (1, 4, 2) - corners of the first rectangle
             corners2: (n, 4, 2) - corners of the second rectangle
             """
-            def get_axes(corners):
-                # Getting edge vectors
-                edges = corners[:, 1:, :] - corners[:, :-1, :]
-                edges = np.concatenate((edges, corners[:, :1, :] - corners[:, -1:, :]), axis=1)
-
-                # Compiute the norms and prevent division by zero
-                norms = np.linalg.norm(edges, axis=-1) + 1e-10
-                axes = edges / norms[..., np.newaxis]
-
-                return axes
-            
-            def project(corners, axes):
-                # Project corners onto the axes
-                return np.einsum('bij,bkj->bik', axes, corners)
-            
-            # corners1 = np.array([[0, 0], [0, 2], [2, 2], [2, 0]])[np.newaxis, ...]
-            # corners2 = np.array([[0, 1], [0, 3], [2, 3], [2, 1]])[np.newaxis, ...] # collision, but no inclusion
-            # corners2 = np.array([[0, 2.5], [0, 3], [2, 3], [2, 2.5]])[np.newaxis, ...] # no collision, no inclusion
-            # corners2 = np.array([[0.1, 0.1], [0.1, 1.9], [1.9, 1.9], [1.9, 0.1]])[np.newaxis, ...] # collision, but no inclusion
 
 
             
+            ## Collision detection using SAT ##
             axes1 = get_axes(corners1)
             axes2 = get_axes(corners2)
 
@@ -258,28 +256,18 @@ class Group(Environment):
             amount_per_axes = np.min(np.concatenate(((max1 - min2)[..., np.newaxis], (max2 - min1)[..., np.newaxis]), axis=-1), axis=-1)
             collision_cases = ~np.any(amount_per_axes <= 0, axis=-1) # (n, 4)
 
-            # # Inclusion check (for corners2 inside corners1)
-            # axes1_full = get_axes(corners1)  # Use all axes of corners1
-            # proj1 = project(corners1, axes1_full)  # Project corners1 onto its own axes
-            # proj2 = project(corners2, axes1_full)  # Project corners2 onto corners1's axes
-
-            # # Compute min/max projections
-            # min1_inc = np.min(proj1, axis=-1)  # (1, 4)
-            # max1_inc = np.max(proj1, axis=-1)  # (1, 4)
-            # min2_inc = np.min(proj2, axis=-1)  # (n, 4)
-            # max2_inc = np.max(proj2, axis=-1)  # (n, 4)
-
-            # # Check if all projections of corners2 are within corners1's bounds
-            # inclusion_cases = np.all(
-            #     (min2_inc >= min1_inc) & (max2_inc <= max1_inc),
-            #     axis=-1
-            # )  # Shape (n,)
-
-
+            return {"sat_overlap": {
+                    "axes": axes,
+                    "amount": amount_per_axes[..., np.newaxis],
+                    "cases": collision_cases
+                    }}
+        
+        def inclusion_of_agent_by_ego(corners1, corners2):
+            ## Inclusion of agent by ego ##
             # Inclusion check for corners2 inside corners1
-            axes1_full = get_axes(corners1)  # Shape (1, 4, 2)
-            proj1 = project(corners1, axes1_full)  # Shape (1, 4, 4)
-            proj2 = project(corners2, axes1_full)  # Shape (n, 4, 4)
+            axes1_full = get_axes(corners1)         # Shape (1, 4, 2)
+            proj1 = project(corners1, axes1_full)   # Shape (1, 4, 4)
+            proj2 = project(corners2, axes1_full)   # Shape (n, 4, 4)
 
             # Min/max projections for both shapes
             min1_inc = np.min(proj1, axis=-1)  # Shape (1, 4)
@@ -288,7 +276,6 @@ class Group(Environment):
             max2_inc = np.max(proj2, axis=-1)  # Shape (n, 4)
 
             # Check containment and compute shrinkage amount
-            # partial_containment_mask = np.all((min2_inc >= min1_inc) | (max2_inc <= max1_inc), axis=-1) & ~ collision_cases
             containment_mask = (min2_inc >= min1_inc) & (max2_inc <= max1_inc)  # Shape (n, 4)
             all_contained = np.all(containment_mask, axis=-1)  # Shape (n,)
 
@@ -310,27 +297,17 @@ class Group(Environment):
 
             # Calculate growth ratio: extension / current_length
             growth_ratios = extension_needed / current_lengths  # Shape (n, 4)
-
-            # Find maximum growth ratio across all axes (minimum required growth)
-            growth_amount = np.max(growth_ratios, axis=-1)  # Shape (n,)
-
-            # Set growth_amount to 0 if already contained
-            growth_amount = np.where(all_contained, 0, growth_amount)
+            growth_amount = np.max(growth_ratios, axis=-1)  # Shape (n,) # Find maximum growth ratio across all axes (minimum required growth)
+            growth_amount = np.where(all_contained, 0, growth_amount) # Set growth_amount to 0 if already contained
 
 
             # print(f"Collision cases: {collision_cases} & Inclusion cases: {inclusion_cases}")
-            return {
-                "collision": {
-                    "axes": axes,
-                    "amount": amount_per_axes[..., np.newaxis],
-                    "cases": collision_cases
-                },
-                "inclusion": {
+            return {"inclusion_of_agent_by_ego": {
                     "shrinkage": shrinkage_amount,
                     "growth": growth_amount,
                     "cases": all_contained
-                }
-            }
+                    }}
+        
         def batched_rotate_corners(
             corners: np.ndarray,
             angle_degrees: np.ndarray
@@ -360,13 +337,13 @@ class Group(Environment):
             # Batched matrix multiplication using einsum
             return np.einsum('bij,bjk->bik', corners, rotation_matrices)
 
-        
         # The timestep of the DFG algorithm.
         t_step = 0.01
         
         # The initial configuration with which DFG calculates.
         # This value is sometimes being changed in "ACC_MPC_t_param".
-        t_sweep = np.arange(t_sweep_start, t_sweep_end + t_step, t_step)
+        # t_sweep = np.arange(t_sweep_start, t_sweep_end + t_step, t_step)
+        t_sweep = np.arange(t_sweep_start, t_sweep_start + t_step, t_step)
         # t_sweep_corners = np.array([self.get_obstacle_corners(t) for t in t_sweep]) # (t, n_obst, n_corners, 2)
         t_sweep_corners = np.expand_dims(np.array([self.get_obstacle_corners(t)[0] for t in t_sweep]), axis=1) # (t, n_obst, n_corners, 2) with only 1 obstacle
         vehicle_positions = np.array([vehicle.current_configuration_position[:2] for vehicle in self.vehicles])
@@ -374,9 +351,8 @@ class Group(Environment):
         t_sweep_corners *= 0
         t_sweep_corners += vehicle_positions
         # t_sweep_corners += 0.28 * 2
-        t_sweep_corners *= 0.9
+        # t_sweep_corners *= 1.1
         # print(t_sweep_corners)
-
 
 
         # Tiling corners1 to include various angles
@@ -398,21 +374,99 @@ class Group(Environment):
         corners2 = t_sweep_corners # (t, n_obst, 4, 2)
         corners2 = np.repeat(corners2, len(rotation_angles), axis=1) # (t, n_obst*n_angle, 4, 2)
         corners2 = corners2.reshape(-1, 4, 2) # (t*n_obst*n_angle, 4, 2)
-        
-        overlap_dict =  sat_overlap(corners1, corners2)
 
-        reshaped_overlap_dict = {}
-        for key, value in overlap_dict.items():
-            reshaped_overlap_dict[key] = {}
+        corners1 = np.tile(np.array([[0, 0], [0, 2], [2, 2], [2, 0]])[np.newaxis, ...], (corners1.shape[0], 1, 1)) 
+        # corners2 = np.tile(np.array([[0, 1], [0, 3], [2, 3], [2, 1]])[np.newaxis, ...], (corners2.shape[0], 1, 1)) # collision, but no inclusion
+        # corners2 = np.array([[0, 2.5], [0, 3], [2, 3], [2, 2.5]])[np.newaxis, ...] # no collision, no inclusion
+        corners2 = np.array([[0.1, 0.1], [0.1, 1.9], [1.9, 1.9], [1.9, 0.1]])[np.newaxis, ...] # collision, but with inclusion
+
+
+
+        overlap_dict =  sat_overlap(corners1, corners2)
+        agent_in_ego = inclusion_of_agent_by_ego(corners1, corners2)
+
+        all_dict = {}
+        all_dict.update(overlap_dict)
+        all_dict.update(agent_in_ego)
+
+
+        reshaped_all_dict = {}
+        for key, value in all_dict.items():
+            reshaped_all_dict[key] = {}
             for key2, value2 in value.items():
                     if key2 == "axes":
-                        reshaped_overlap_dict[key].update({key2 : value2.reshape(len(t_sweep), t_sweep_corners.shape[1], len(rotation_angles), -1, 2)})
+                        reshaped_all_dict[key].update({key2 : value2.reshape(len(t_sweep), t_sweep_corners.shape[1], len(rotation_angles), -1, 2)})
                     else:
-                        reshaped_overlap_dict[key].update({key2 : value2.reshape(len(t_sweep), t_sweep_corners.shape[1], len(rotation_angles), -1)})
+                        reshaped_all_dict[key].update({key2 : value2.reshape(len(t_sweep), t_sweep_corners.shape[1], len(rotation_angles), -1)})
 
-        for key, value in reshaped_overlap_dict.items():
+        for key, value in reshaped_all_dict.items():
             for key2, value2 in value.items():
-                print(f"{key} - {key2}: {value2.shape}")
+                print(f"{key}: \t {key2}_shape: {value2.shape}, \t {key2}_value: {value2}")
+
+        def plot_rectangles(corners1, corners2, results_dict):
+            """
+            Plots two rectangles with collision/inclusion annotations.
+            
+            Args:
+                corners1: (1, 4, 2) - Ego rectangle corners
+                corners2: (n, 4, 2) - Agent rectangle corners
+                results_dict: Dictionary containing collision and inclusion results
+            """
+            fig, ax = plt.subplots(figsize=(10, 8))
+            
+            # Plot ego rectangle (corners1)
+            ego_corners = corners1[0]
+            ego_rect = patches.Polygon(ego_corners, closed=True, 
+                                    edgecolor='blue', facecolor='lightblue', 
+                                    alpha=0.7, label='Ego')
+            ax.add_patch(ego_rect)
+            
+            # Plot agent rectangles (corners2)
+            for i, agent_corners in enumerate(corners2):
+                agent_rect = patches.Polygon(agent_corners, closed=True, 
+                                            edgecolor='red', facecolor='salmon', 
+                                            alpha=0.5, label=f'Agent {i+1}' if i==0 else "")
+                ax.add_patch(agent_rect)
+            
+            # Add annotations for collision results
+            collision_text = "Collision: " + ("Yes" if results_dict['sat_overlap']['cases'].any() else "No")
+            plt.text(0.05, 0.95, collision_text, transform=ax.transAxes, 
+                    fontsize=12, bbox=dict(facecolor='white', alpha=0.8))
+            
+            # Add annotations for inclusion results
+            agent_in_ego = results_dict['inclusion_of_agent_by_ego']['cases'].any()
+            # ego_in_agent = results_dict['inclusion_of_ego_by_agent']['cases'].any()
+            
+            inclusion_text = (
+                f"Agent in Ego: {'Yes' if agent_in_ego else 'No'}\n"
+                # f"Ego in Agent: {'Yes' if ego_in_agent else 'No'}"
+            )
+            plt.text(0.05, 0.85, inclusion_text, transform=ax.transAxes, 
+                    fontsize=12, bbox=dict(facecolor='white', alpha=0.8))
+            
+            # Configure plot
+            ax.set_aspect('equal')
+            ax.autoscale_view()
+            ax.set_title('Rectangle Collision/Containment Analysis')
+            ax.set_xlabel('X-axis')
+            ax.set_ylabel('Y-axis')
+            ax.legend(loc='upper right')
+            ax.grid(True, linestyle='--', alpha=0.7)
+            
+            # Add corner coordinates as text
+            for i, (x, y) in enumerate(ego_corners):
+                plt.text(x, y, f'E{i+1}({x:.1f},{y:.1f})', fontsize=9, ha='right')
+            
+            for agent_idx, agent in enumerate(corners2):
+                for i, (x, y) in enumerate(agent):
+                    plt.text(x, y, f'A{agent_idx+1}-{i+1}({x:.1f},{y:.1f})', 
+                            fontsize=9, ha='left')
+            
+            plt.tight_layout()
+            plt.show()
+        plot_rectangles(corners1, corners2, all_dict)
+
+
 
 
         # reshaped_overlap_dict["collision"]["amount"][0, 0, 0, ...] 
