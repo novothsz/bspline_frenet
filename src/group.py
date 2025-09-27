@@ -77,43 +77,76 @@ class Group(Environment):
             corners += [corners_tmp]
         return corners
     
-    def ACC_MPC_t_param(self):
-        "DFG-MPC algorithm"
-
-        t_sweep_start = self.vehicles[0].t_start
-        t_sweep_end = self.vehicles[0].t_end
-        
-        # Step 1: Clear the intermediate lists
-        # TODO: Can we moove this to the consutrctor of the vehicle class?
-        if self.stage == 0:
-            for vehicle in self.vehicles:
-                vehicle.history['x_intermediate'] = []
-                vehicle.history['a_intermediate'] = []
-                vehicle.history['t_intermediate'] = []
-                vehicle.history['t_real_intermediate'] = []
-                
-        for i, vehicle in enumerate(self.vehicles):
+    def reset_vehicle_history(self):
+        for vehicle in self.vehicles:
+            vehicle.history['x_intermediate'] = []
+            vehicle.history['a_intermediate'] = []
+            vehicle.history['t_intermediate'] = []
+            vehicle.history['t_real_intermediate'] = []
+        return self
+    
+    def reset_intermediate_lists(self):
+        for vehicle in self.vehicles:
             vehicle.x_intermediate = []
             vehicle.a_intermediate = []
             vehicle.t_intermediate = []
             vehicle.t_real_intermediate = []
             vehicle.t_real_activation = []
-        
-        # Step 2: Sweep
-        max_len_x = self.vehicles[0].n_waypoints * 3
-        max_len_a = self.vehicles[0].n_waypoints * len(self.vehicles[0].obstacles) * 2 
-        max_len_t = self.vehicles[0].n_waypoints
-        
-        # the cummulative values hold the relative formation rotation  scaling w.r.t. the original formation configuration
-        cum_rotation_old = self.cum_rotation
-        cum_scaling_old = self.cum_scaling
-        self.sweep_ACC(t_sweep_start = t_sweep_start, t_sweep_end = t_sweep_end)
-        # Setting back the cummulative values.
-        self.cum_rotation = cum_rotation_old
-        self.cum_scaling = cum_scaling_old
-        
-        
-        # Step 3: Update the "current_configuration_position"
+        return self
+    
+    def update_intermediate_lists(self):
+        n_waypoints = self.vehicles[0].n_waypoints
+        n_obstacles = len(self.vehicles[0].obstacles)
+        max_len_x = n_waypoints * 3
+        max_len_a = n_waypoints * n_obstacles * 2 
+        max_len_t = n_waypoints
+
+        for i, vehicle in enumerate(self.vehicles):
+            x_intermediate = vehicle.x_intermediate
+            a_intermediate = vehicle.a_intermediate
+            t_intermediate = vehicle.t_intermediate
+            
+            current_len_x = len(x_intermediate)
+            current_len_a = len(a_intermediate)
+            current_len_t = len(t_intermediate)
+            
+            single_len_a = len(self.vehicles[0].obstacles) * 2 
+            
+            # Truncation
+            if len(x_intermediate) > max_len_x:
+                vehicle.x_intermediate = x_intermediate[:int((current_len_x-max_len_x)/3)]
+                vehicle.a_intermediate = a_intermediate[:int((current_len_a-max_len_a)/2)]
+                vehicle.t_intermediate = vehicle.t_intermediate[:(current_len_t-max_len_t)]
+                vehicle.t_real_intermediate = vehicle.t_real_intermediate[:(current_len_t-max_len_t)]
+                
+            # Replication
+            if len(x_intermediate) < max_len_x:
+                diff_x = max_len_x - current_len_x
+                diff_a = max_len_a - current_len_a
+                diff_t = max_len_t - current_len_t
+                vehicle.x_intermediate = vehicle.x_intermediate + vehicle.x_intermediate[-3:] * int(diff_x/3)
+                vehicle.a_intermediate = vehicle.a_intermediate + vehicle.a_intermediate[-single_len_a:] * int(diff_a/single_len_a)
+                
+                if max_len_a != len(vehicle.a_intermediate):
+                    print('Baj van főnök!')
+                    vehicle.a_intermediate = np.zeros(max_len_a).tolist()
+                
+                vehicle.t_intermediate = vehicle.t_intermediate + [vehicle.t_intermediate[-1]] * diff_t
+                vehicle.t_real_intermediate = vehicle.t_real_intermediate + [vehicle.t_real_intermediate[-1]] * diff_t
+
+        return self
+            
+    def update_history(self):
+        for vehicle in self.vehicles:
+            # Updating the intermediate values, that have the correct length.
+            vehicle.history['x_intermediate'][-1] = vehicle.x_intermediate
+            vehicle.history['a_intermediate'][-1] = vehicle.a_intermediate
+            vehicle.history['t_intermediate'][-1] = vehicle.t_intermediate
+            vehicle.history['t_real_intermediate'][-1] = vehicle.t_real_intermediate
+        return self
+    
+    def update_current_configuration_position(self, t_sweep_start, cum_scaling_old):
+
         for vehicle in self.vehicles:
             greater_ = False
             index_ = 0
@@ -148,50 +181,39 @@ class Group(Environment):
                 self.cum_rotation = np.array(vehicle.history['x_intermediate'][-1]).reshape(-1)[idx].tolist()[2]
                 self.cum_scaling = cum_scaling_old # TODO: well, what to do with this?
             vehicle.history['current_configuration_position'] += [vehicle.current_configuration_position]
-                
+        
+
+    def ACC_MPC_t_param(self):
+        "DFG-MPC algorithm"
+
+        # Some parameters
+        t_sweep_start = self.vehicles[0].t_start
+        t_sweep_end = self.vehicles[0].t_end
+        
+        # Step 1: Clear history & intermediate lists
+        if self.stage == 0:
+            self.reset_vehicle_history()
+        self.reset_intermediate_lists()
+        
+        # Step 2: Sweep
+        # The cummulative values hold the relative formation rotation scaling w.r.t. the original formation configuration
+        cum_rotation_old = copy.copy(self.cum_rotation)
+        cum_scaling_old = copy.copy(self.cum_scaling)
+        self.sweep_ACC(t_sweep_start = t_sweep_start, t_sweep_end = t_sweep_end)
+        # Setting back the cummulative values.
+        self.cum_rotation = cum_rotation_old
+        self.cum_scaling = cum_scaling_old
+        
+        
+        # Step 3: Update the "current_configuration_position"
+        self.update_current_configuration_position(t_sweep_start, cum_scaling_old)
             
         # Step 3.5: 
         # For each obsacle, that is isn't doing any problems for us, put zeros
         
-        # Step 4: Replication/truncation    
-        for i, vehicle in enumerate(self.vehicles):
-            x_intermediate = vehicle.x_intermediate
-            a_intermediate = vehicle.a_intermediate
-            t_intermediate = vehicle.t_intermediate
-            
-            current_len_x = len(x_intermediate)
-            current_len_a = len(a_intermediate)
-            current_len_t = len(t_intermediate)
-            
-            single_len_a = len(self.vehicles[0].obstacles) * 2 
-            
-            # Truncation
-            if len(x_intermediate) > max_len_x:
-                vehicle.x_intermediate = x_intermediate[:int((current_len_x-max_len_x)/3)]
-                vehicle.a_intermediate = a_intermediate[:int((current_len_a-max_len_a)/2)]
-                vehicle.t_intermediate = vehicle.t_intermediate[:(current_len_t-max_len_t)]
-                vehicle.t_real_intermediate = vehicle.t_real_intermediate[:(current_len_t-max_len_t)]
-                
-            # Replication
-            if len(x_intermediate) < max_len_x:
-                diff_x = max_len_x - current_len_x
-                diff_a = max_len_a - current_len_a
-                diff_t = max_len_t - current_len_t
-                vehicle.x_intermediate = vehicle.x_intermediate + vehicle.x_intermediate[-3:] * int(diff_x/3)
-                vehicle.a_intermediate = vehicle.a_intermediate + vehicle.a_intermediate[-single_len_a:] * int(diff_a/single_len_a)
-                
-                if max_len_a != len(vehicle.a_intermediate):
-                    print('Baj van főnök!')
-                    vehicle.a_intermediate = np.zeros(max_len_a).tolist()
-                
-                vehicle.t_intermediate = vehicle.t_intermediate + [vehicle.t_intermediate[-1]] * diff_t
-                vehicle.t_real_intermediate = vehicle.t_real_intermediate + [vehicle.t_real_intermediate[-1]] * diff_t
-            
-            # Updating the intermediate lists with value, that have the correct length.
-            vehicle.history['x_intermediate'][-1] = vehicle.x_intermediate
-            vehicle.history['a_intermediate'][-1] = vehicle.a_intermediate
-            vehicle.history['t_intermediate'][-1] = vehicle.t_intermediate
-            vehicle.history['t_real_intermediate'][-1] = vehicle.t_real_intermediate
+        # Step 4: Replication/truncation of the intermediate lists
+        self.update_intermediate_lists()
+        self.update_history()
             
         return self
 
