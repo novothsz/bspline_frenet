@@ -212,7 +212,7 @@ class Vehicle(VehicleBasis):
         start_time = time.time()
         self.solution_z = self.solver_z.call(self.arg_z)
         final_time = time.time()
-        self.variable_history["z_update_time"] += [final_time - start_time]
+        self.history["z_update_time"] += [final_time - start_time]
         return self
     def z_update_posterior(self):
         # Extracting the solution
@@ -383,9 +383,9 @@ class Vehicle(VehicleBasis):
         
         "state suggestion"
         if self.MPC_version == False:
-            for i, t_intermediate in enumerate(self.t_intermediate_list):
+            for i, t_intermediate in enumerate(self.t_intermediate):
                 idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-                x_intermediate = np.array(self.x_intermediate_list)[idx].tolist()
+                x_intermediate = np.array(self.x_intermediate)[idx].tolist()
                 
                 
                 self.define_constraint([p(t_intermediate) - x_intermediate[0],
@@ -407,12 +407,12 @@ class Vehicle(VehicleBasis):
         elif self.MPC_version == True:
             # Non-forgetting version       
             n = self.n_of_saved_waypoints
-            assert n == len(self.t_intermediate_list) # Please generate the intermediate points first :)
-            for i, t_intermediate in enumerate(self.t_intermediate_list):
+            assert n == len(self.t_intermediate) # Please generate the intermediate points first :)
+            for i, t_intermediate in enumerate(self.t_intermediate):
                 idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
                 
                 # Define the parameter
-                x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += np.array(self.x_intermediate_list)[idx].tolist(); assert len(self.x_intermediate_list)/(self.state_len/2) == n  # [0] * int(self.state_len/2)
+                x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += np.array(self.x_intermediate)[idx].tolist(); assert len(self.x_intermediate)/(self.state_len/2) == n  # [0] * int(self.state_len/2)
                 lambda_ = np.power(np.linspace(1, 0, n), 1)
                 self.J += self.rho_intermediate * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
                 self.J += self.rho_intermediate * lambda_[i] *(q(t_intermediate) - x_intermediate[1])**2
@@ -434,16 +434,16 @@ class Vehicle(VehicleBasis):
         elif self.MPC_version == 'MPC_param':
             # Pretty much the same as the regular MPC version, but now we pass in t_intermediate as parameter and have hard-constraints, instead of cost function
             n = self.n_of_saved_waypoints
-            assert n == len(self.t_intermediate_list) # Please generate the intermediate points first :)
-            for i, t_intermediate in enumerate(self.t_intermediate_list):
+            assert n == len(self.t_intermediate) # Please generate the intermediate points first :)
+            for i, t_intermediate in enumerate(self.t_intermediate):
                 idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
                 # Define the parameter
                 x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2);
 
-                self.P0 += np.array(self.x_intermediate_list)[:2].tolist()
-                self.P0 += [np.cos(self.x_intermediate_list[2]).tolist()]
-                self.P0 += [np.sin(self.x_intermediate_list[2]).tolist()]
-                t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += [self.t_intermediate_list[i]]
+                self.P0 += np.array(self.x_intermediate)[:2].tolist()
+                self.P0 += [np.cos(self.x_intermediate[2]).tolist()]
+                self.P0 += [np.sin(self.x_intermediate[2]).tolist()]
+                t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += [self.t_intermediate[i]]
                 t_intermediate_idx += [len(self.P) - 1]
                                                 
                 # constraint on pq at t_intermediate
@@ -606,8 +606,8 @@ class Vehicle(VehicleBasis):
         Elements, defining parameters will be plotted with filled colors.
         Elements, defining decision variables will be plotted with opaque colors.
         """
-        DvX = self.variable_history["DvX_posterior"][stage]
-        PvX = self.variable_history["PvX"][stage]
+        DvX = self.history["DvX_posterior"][stage]
+        PvX = self.history["PvX"][stage]
         
         self_ID = self.plot_self_ID
         self_ID = 2
@@ -809,8 +809,8 @@ class Vehicle(VehicleBasis):
         # Updating the necessary arguments for the solver
         self.arg['x0'] = self.DvX.assemble()
         self.arg['p'] = self.PvX.assemble()
-        self.variable_history["DvX_prior"] += [copy.deepcopy(self.DvX)]
-        self.variable_history["PvX"] += [copy.deepcopy(self.PvX)]
+        self.history["DvX_prior"] += [copy.deepcopy(self.DvX)]
+        self.history["PvX"] += [copy.deepcopy(self.PvX)]
         return self
     
     def x_update(self):
@@ -820,9 +820,9 @@ class Vehicle(VehicleBasis):
         final_time = time.time()
         
         if self.solver.stats()['return_status'] == 'Solve_Succeeded':
-            self.variable_history['first_time_success'] += [True]
+            self.history['first_time_success'] += [True]
         else:
-            self.variable_history['first_time_success'] += [False]
+            self.history['first_time_success'] += [False]
             print(f"First time solver failed for vehicle {self.ID}, trying again.")
             self.arg['x0'] = self.solution["x"]
             self.solution = self.solver.call(self.arg)
@@ -832,26 +832,26 @@ class Vehicle(VehicleBasis):
                 self.arg['x0'] = self.solution["x"]
                 self.solution = self.solver.call(self.arg) 
             
-        self.variable_history["x_update_time"] += [final_time - start_time]
-        self.variable_history["solution"] += [self.solution]
-        self.variable_history["solver_stats"] += [self.solver.stats()]
+        self.history["x_update_time"] += [final_time - start_time]
+        self.history["solution"] += [self.solution]
+        self.history["solver_stats"] += [self.solver.stats()]
         
         return self
     
     def x_update_posterior(self):
         # Extracting the solution
         self.DvX.extract(self.solution)
-        self.variable_history["DvX_posterior"] += [copy.deepcopy(self.DvX)]
+        self.history["DvX_posterior"] += [copy.deepcopy(self.DvX)]
         feasibility_dict = self.check_feasibility_of_solution_x()
         feasibility_dict["IPOPT_SUCCESS"] = self.solver.stats()['success']
         feasibility_dict["IPOPT_RETURN_STATUS"] = self.solver.stats()['return_status']
-        self.variable_history["feasibility_dict"] += [feasibility_dict]
-        self.variable_history['y'] += [self.DvX.y]
-        self.variable_history['t_start'] += [self.t_start]
-        self.variable_history['t_end'] += [self.t_end]
-        self.variable_history['xf'] += [self.xf]
-        self.variable_history['a'] += [list(self.DvX.a)]
-        self.variable_history['b'] += [list(self.DvX.b)]
+        self.history["feasibility_dict"] += [feasibility_dict]
+        self.history['y'] += [self.DvX.y]
+        self.history['t_start'] += [self.t_start]
+        self.history['t_end'] += [self.t_end]
+        self.history['xf'] += [self.xf]
+        self.history['a'] += [list(self.DvX.a)]
+        self.history['b'] += [list(self.DvX.b)]
         return self
     
     
@@ -928,9 +928,9 @@ class Vehicle(VehicleBasis):
             
             # Creating the splines
             basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
-            solution = self.variable_history['y'][horizon_num]
+            solution = self.history['y'][horizon_num]
 
-            t_start = self.variable_history['t_start'][horizon_num]
+            t_start = self.history['t_start'][horizon_num]
             coeffs1 = solution[0:len(basis)]
             coeffs2 = solution[len(basis):len(basis)*2]
             p_solution = BSpline(basis, coeffs1)
@@ -946,7 +946,7 @@ class Vehicle(VehicleBasis):
             y_t_saved += [y_t]
             t_saved += [np.linspace(t_start, t_start + self.t_step, 100)]
             
-            y_j_all = self.variable_history['y_j'][horizon_num]
+            y_j_all = self.history['y_j'][horizon_num]
             y_j_all = np.array(y_j_all)
             
             x_j_saved_tmp = []
@@ -1023,9 +1023,9 @@ class Vehicle(VehicleBasis):
         horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
         # Creating the splines
         basis = self.define_knots(degree = 3, knot_intervals = self.knot_intervals)
-        solution = self.variable_history['y'][horizon_num]
-        t_start = self.variable_history['t_start'][horizon_num]
-        t_end = self.variable_history['t_end'][horizon_num]
+        solution = self.history['y'][horizon_num]
+        t_start = self.history['t_start'][horizon_num]
+        t_end = self.history['t_end'][horizon_num]
         coeffs1 = solution[0:len(basis)]
         coeffs2 = solution[len(basis):len(basis)*2]
         p_solution = BSpline(basis, coeffs1)
@@ -1057,19 +1057,19 @@ class Vehicle(VehicleBasis):
             ax.plot(x_t[idx:], y_t[idx:], c = 'cornflowerblue',lw=0.8,alpha = 0.5, zorder = 3)
 
         # Plotting intermediate positions
-        for i in range(len(self.variable_history['t_real_intermediate_list'][horizon_num_original])): 
+        for i in range(len(self.history['t_real_intermediate'][horizon_num_original])): 
             idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
             idx = np.arange(3*i,3*i+3)
-            x_, y_ = self.fp.frenet_to_inertial(np.array([self.variable_history['x_intermediate_list'][horizon_num_original]]).reshape(-1)[idx][0], 
-                                                np.array([self.variable_history['x_intermediate_list'][horizon_num_original]]).reshape(-1)[idx][1],
-                                                self.variable_history['t_real_intermediate_list'][horizon_num_original][i])
+            x_, y_ = self.fp.frenet_to_inertial(np.array([self.history['x_intermediate'][horizon_num_original]]).reshape(-1)[idx][0], 
+                                                np.array([self.history['x_intermediate'][horizon_num_original]]).reshape(-1)[idx][1],
+                                                self.history['t_real_intermediate'][horizon_num_original][i])
             ax.plot(x_,
                     y_
                     , 'go', markersize = 2, zorder = 4)
         
         # Also, we plot the current configuration positions
-        x_, y_ = self.fp.frenet_to_inertial(np.array([self.variable_history['current_configuration_position'][horizon_num_original]]).reshape(-1)[0], 
-                                                np.array([self.variable_history['current_configuration_position'][horizon_num_original]]).reshape(-1)[1],
+        x_, y_ = self.fp.frenet_to_inertial(np.array([self.history['current_configuration_position'][horizon_num_original]]).reshape(-1)[0], 
+                                                np.array([self.history['current_configuration_position'][horizon_num_original]]).reshape(-1)[1],
                                                 t_start)
         ax.plot(x_,
                 y_
@@ -1171,16 +1171,16 @@ class Vehicle(VehicleBasis):
             
         x_t, y_t = [], []
         i = 0
-        for t_intermediate_list, x_intermediate_list in zip(self.variable_history['t_real_intermediate_list'], self.variable_history['x_intermediate_list']):
+        for t_intermediate, x_intermediate in zip(self.history['t_real_intermediate'], self.history['x_intermediate']):
             for i in range(self.n_of_saved_waypoints):
                 idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
                 print(idx)
-                x = np.array([x_intermediate_list]).reshape(-1)[idx].tolist()
+                x = np.array([x_intermediate]).reshape(-1)[idx].tolist()
                 print(x[0])
                 print(x[1])
                 print(i)
-                print(t_intermediate_list)
-                x_, y_ = self.fp.frenet_to_inertial(x[0], x[1], t_intermediate_list[i])
+                print(t_intermediate)
+                x_, y_ = self.fp.frenet_to_inertial(x[0], x[1], t_intermediate[i])
                 x_t += [x_]
                 y_t += [y_]
                 
@@ -1210,9 +1210,9 @@ class Vehicle(VehicleBasis):
         
         # Sampling
         x_t, y_t = [], []
-        for i, t_ in enumerate(self.t_intermediate_list):
+        for i, t_ in enumerate(self.t_intermediate):
             idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-            p_solution_, q_solution_ = np.array(self.x_intermediate_list)[idx][0], np.array(self.x_intermediate_list)[idx][1]
+            p_solution_, q_solution_ = np.array(self.x_intermediate)[idx][0], np.array(self.x_intermediate)[idx][1]
             x_, y_ = self.fp.frenet_to_inertial(p_solution_, q_solution_, t_)
             x_t += [x_]
             y_t += [y_]

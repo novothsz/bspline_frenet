@@ -9,3 +9,4 @@ from .spline_extra import *
 from .spline import *
 from .vehicle import *
 from .gurobi_spline import *
+from .utils import *

@@ -28,11 +28,11 @@ class VehicleBasis(Environment):
     def __init__(self):
         super().__init__()
         
-        self.x_intermediate_list = []
-        self.t_intermediate_list = []
-        self.a_intermediate_list = []
+        self.x_intermediate = []
+        self.t_intermediate = []
+        self.a_intermediate = []
         self.a_intermediate_ID_list = []
-        self.t_real_intermediate_list = []
+        self.t_real_intermediate = []
         self.t_real_activation_list = []
         
         self.stage = []
@@ -126,16 +126,16 @@ class VehicleBasis(Environment):
         # self.options_z = {'print_time': False, 'ipopt': {'print_level' : 0, 'max_iter': 30, 'max_cpu_time': 100}}
 
         self.initial_values = {}
-        # variable_history
-        self.variable_history =  {'y' : [],         # x_update
+        # history
+        self.history =  {'y' : [],         # x_update
                                   'y_j' : [],       # data_exchange_x_receive
                                   't_start' : [],
                                   't_end' : [],
                                   'xf': [],
-                                  'x_intermediate_list' : [],
-                                  'a_intermediate_list' : [],
-                                  't_intermediate_list' : [],
-                                  't_real_intermediate_list' : [],
+                                  'x_intermediate' : [],
+                                  'a_intermediate' : [],
+                                  't_intermediate' : [],
+                                  't_real_intermediate' : [],
                                   't_real_activation_list' : [],
                                   'current_configuration_position' : [],
                                   'x_update_time' : [],
@@ -192,7 +192,7 @@ class VehicleBasis(Environment):
         elif position_type == 'final':
             self.xf = position + [0] * len(position)
             # self.xf[2] = 1
-            self.variable_history['xf'] += [self.xf]
+            self.history['xf'] += [self.xf]
         else:
             raise NotImplementedError()
 
@@ -299,20 +299,20 @@ class VehicleBasis(Environment):
                     for corner in obstacle.corners_spline:
                         self.PvX.obst += [corner[0](t_).tolist()[0][0], corner[1](t_).tolist()[0][0]]
                         
-        self.PvX.x_intermediate = self.x_intermediate_list
-        self.PvX.a_intermediate = self.a_intermediate_list
-        # We need to enrich the x_intermediate_list, because DFG only puts in the phi values.
+        self.PvX.x_intermediate = self.x_intermediate
+        self.PvX.a_intermediate = self.a_intermediate
+        # We need to enrich the x_intermediate, because DFG only puts in the phi values.
         # However, in optimization we have cos_phi and sin_phi.
-        # x_intermediate_list = np.array(copy.deepcopy(self.x_intermediate_list)).reshape(-1,3).transpose()
-        # x_intermediate_list = np.vstack((x_intermediate_list,x_intermediate_list[-1, :]))
-        # x_intermediate_list = x_intermediate_list.transpose()
-        # x_intermediate_list[:, 2] = np.cos(x_intermediate_list[:, 2])
-        # x_intermediate_list[:, 3] = np.sin(x_intermediate_list[:, 3])
-        # x_intermediate_list = x_intermediate_list.reshape(-1,).tolist()
-        # assert len(self.x_intermediate_list) != self.n_dimensions * self.n_of_saved_waypoints
-        # self.PvX.x_intermediate = x_intermediate_list
+        # x_intermediate = np.array(copy.deepcopy(self.x_intermediate)).reshape(-1,3).transpose()
+        # x_intermediate = np.vstack((x_intermediate,x_intermediate[-1, :]))
+        # x_intermediate = x_intermediate.transpose()
+        # x_intermediate[:, 2] = np.cos(x_intermediate[:, 2])
+        # x_intermediate[:, 3] = np.sin(x_intermediate[:, 3])
+        # x_intermediate = x_intermediate.reshape(-1,).tolist()
+        # assert len(self.x_intermediate) != self.n_dimensions * self.n_of_saved_waypoints
+        # self.PvX.x_intermediate = x_intermediate
         
-        self.PvX.t_intermediate = self.t_intermediate_list
+        self.PvX.t_intermediate = self.t_intermediate
         
         try:
             self.PvX.z_ji = self.message_in['z_ji']
@@ -681,7 +681,7 @@ class VehicleBasis(Environment):
         self.message_in['y_j'] = y_j
 
         # Saving some variables
-        self.variable_history['y_j'] += [y_j]
+        self.history['y_j'] += [y_j]
         return self
 
     ###########################################################################
@@ -1148,7 +1148,7 @@ class VehicleBasis(Environment):
     def save_trajectory_to_csv_SINGLE(self, n_steps, t_desired = 1, t_hover = 0.1):
         flatten = lambda t: [item for sublist in t for item in sublist]
         t_steps = 100     
-        hist = self.variable_history
+        hist = self.history
         basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
         x_t_saved = []
         y_t_saved = []
@@ -1233,7 +1233,7 @@ class VehicleBasis(Environment):
         horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
         
         
-        hist = self.variable_history
+        hist = self.history
 
         # Creating the splines
         basis = self.define_knots(degree = self.state_degree, knot_intervals = self.knot_intervals)
@@ -1426,15 +1426,15 @@ class VehicleBasis(Environment):
         # (this step is actually not necessary)
         self.DvX = []
         self.message_in = {}
-        self.variable_history =  {'y' : [],         # x_update
+        self.history =  {'y' : [],         # x_update
                                   'y_j' : [],       # data_exchange_x_receive
                                   't_start' : [],
                                   't_end' : [],
                                   'xf': [],
-                                  'x_intermediate_list' : [],
-                                  'a_intermediate_list' : [],
-                                  't_intermediate_list' : [],
-                                  't_real_intermediate_list' : [],
+                                  'x_intermediate' : [],
+                                  'a_intermediate' : [],
+                                  't_intermediate' : [],
+                                  't_real_intermediate' : [],
                                   't_real_activation_list' : [],
                                   'current_configuration_position' : [],
                                   'x_update_time' : [],

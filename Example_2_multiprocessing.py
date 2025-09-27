@@ -253,7 +253,7 @@ if __name__ == '__main__':
                 for i in range(4):
                     group.vehicles[i] = group.vehicles[i].x_update_prior()
                 args = [vehicle.arg for vehicle in group.vehicles]
-                args_history = [vehicle.variable_history for vehicle in group.vehicles]
+                args_history = [vehicle.history for vehicle in group.vehicles]
                     
                 futures = [pool.submit(target_function, [arg, arg_history, j]) for j, (arg, arg_history) in enumerate(zip(args, args_history))]
                 res = [f.result() for f in as_completed(futures)]
@@ -265,9 +265,9 @@ if __name__ == '__main__':
                 
                 for i in range(4):
                     group.vehicles[i].solution = res_dicitonary[i][0]
-                    group.vehicles[i].variable_history = res_dicitonary[i][1]
-                    group.vehicles[i].variable_history["x_update_time"] += [res_dicitonary[i][2]]
-                    group.vehicles[i].variable_history["solver_stats"] += [res_dicitonary[i][3]]
+                    group.vehicles[i].history = res_dicitonary[i][1]
+                    group.vehicles[i].history["x_update_time"] += [res_dicitonary[i][2]]
+                    group.vehicles[i].history["solver_stats"] += [res_dicitonary[i][3]]
                     
                 for i in range(4):
                     group.vehicles[i] = group.vehicles[i].x_update_posterior()
@@ -291,7 +291,7 @@ if __name__ == '__main__':
                 
                 for i in range(4):
                     group.vehicles[i].solution_z = res_dicitonary[i][0]
-                    group.vehicles[i].variable_history["z_update_time"] += [res_dicitonary[i][1]]
+                    group.vehicles[i].history["z_update_time"] += [res_dicitonary[i][1]]
                     
                 for i in range(4):
                     group.vehicles[i] = group.vehicles[i].z_update_posterior()
@@ -317,20 +317,20 @@ if __name__ == '__main__':
     
     vehicle_stats = []
     for vehicle in group.vehicles:
-        vehicle_stats += [vehicle.variable_history["feasibility_dict"]]
+        vehicle_stats += [vehicle.history["feasibility_dict"]]
         
         
     veh = 3
-    len_ = len(group.vehicles[veh].variable_history['y'])
+    len_ = len(group.vehicles[veh].history['y'])
     for veh in range(4):
         print("")
         print("vehicle " + str(veh) + "---------------------")
-        a_fes = group.vehicles[veh].variable_history["feasibility_dict"]
-        success = [group.vehicles[veh].variable_history["feasibility_dict"][i]["IPOPT_SUCCESS"] for i in range(len_)]
+        a_fes = group.vehicles[veh].history["feasibility_dict"]
+        success = [group.vehicles[veh].history["feasibility_dict"][i]["IPOPT_SUCCESS"] for i in range(len_)]
         
         
-        status = [group.vehicles[veh].variable_history["feasibility_dict"][i]["IPOPT_RETURN_STATUS"] for i in range(len_)]
-        first_time = [group.vehicles[veh].variable_history["first_time_success"][i] for i in range(len_)]
+        status = [group.vehicles[veh].history["feasibility_dict"][i]["IPOPT_RETURN_STATUS"] for i in range(len_)]
+        first_time = [group.vehicles[veh].history["first_time_success"][i] for i in range(len_)]
         
         for i, (stat, first) in enumerate(zip(status, first_time)):
             if first == False and stat == "Solve_Succeeded":
@@ -338,7 +338,7 @@ if __name__ == '__main__':
             elif first == False and stat != "Solve_Succeeded":
                 print(str(i) +" - Did not help")
     
-    a_fes = group.vehicles[1].variable_history["feasibility_dict"][18]
+    a_fes = group.vehicles[1].history["feasibility_dict"][18]
 
 
 

@@ -258,20 +258,20 @@ if __name__ == '__main__':
 
 vehicle_stats = []
 for vehicle in group.vehicles:
-    vehicle_stats += [vehicle.variable_history["feasibility_dict"]]
+    vehicle_stats += [vehicle.history["feasibility_dict"]]
     
     
 veh = 3
-len_ = len(group.vehicles[veh].variable_history['y'])
+len_ = len(group.vehicles[veh].history['y'])
 for veh in range(4):
     print("")
     print("vehicle " + str(veh) + "---------------------")
-    a_fes = group.vehicles[veh].variable_history["feasibility_dict"]
-    success = [group.vehicles[veh].variable_history["feasibility_dict"][i]["IPOPT_SUCCESS"] for i in range(len_)]
+    a_fes = group.vehicles[veh].history["feasibility_dict"]
+    success = [group.vehicles[veh].history["feasibility_dict"][i]["IPOPT_SUCCESS"] for i in range(len_)]
     
     
-    status = [group.vehicles[veh].variable_history["feasibility_dict"][i]["IPOPT_RETURN_STATUS"] for i in range(len_)]
-    first_time = [group.vehicles[veh].variable_history["first_time_success"][i] for i in range(len_)]
+    status = [group.vehicles[veh].history["feasibility_dict"][i]["IPOPT_RETURN_STATUS"] for i in range(len_)]
+    first_time = [group.vehicles[veh].history["first_time_success"][i] for i in range(len_)]
     
     for i, (stat, first) in enumerate(zip(status, first_time)):
         if first == False and stat == "Solve_Succeeded":
@@ -279,7 +279,7 @@ for veh in range(4):
         elif first == False and stat != "Solve_Succeeded":
             print(str(i) +" - Did not help")
 
-a_fes = group.vehicles[2].variable_history["feasibility_dict"][5]
+a_fes = group.vehicles[2].history["feasibility_dict"][5]
     
     
     
@@ -298,17 +298,17 @@ a_fes = group.vehicles[2].variable_history["feasibility_dict"][5]
 # Only then can we assemble and compare the results.
 
 
-kappa_real = group.vehicles[0].variable_history['t_real_intermediate_list']
-kappa_pos = group.vehicles[0].variable_history['x_intermediate_list']
-kappa_act = group.vehicles[0].variable_history['t_real_activation_list']
-kappa_local = group.vehicles[0].variable_history['t_intermediate_list']
-kappa_current = group.vehicles[0].variable_history['current_configuration_position']
+kappa_real = group.vehicles[0].history['t_real_intermediate']
+kappa_pos = group.vehicles[0].history['x_intermediate']
+kappa_act = group.vehicles[0].history['t_real_activation_list']
+kappa_local = group.vehicles[0].history['t_intermediate']
+kappa_current = group.vehicles[0].history['current_configuration_position']
 
-kappa_real = self.vehicles[0].variable_history['t_real_intermediate_list']
-kappa_pos = self.vehicles[0].variable_history['x_intermediate_list']
-kappa_act = self.vehicles[0].variable_history['t_real_activation_list']
-kappa_local = self.vehicles[0].variable_history['t_intermediate_list']
-kappa_current = self.vehicles[0].variable_history['current_configuration_position']
+kappa_real = self.vehicles[0].history['t_real_intermediate']
+kappa_pos = self.vehicles[0].history['x_intermediate']
+kappa_act = self.vehicles[0].history['t_real_activation_list']
+kappa_local = self.vehicles[0].history['t_intermediate']
+kappa_current = self.vehicles[0].history['current_configuration_position']
 
 
 current_configuration_position

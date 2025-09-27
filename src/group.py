@@ -10,7 +10,7 @@ import functools
 import matplotlib.path as mpltPath
 from matplotlib.pyplot import cm
 import copy
-from utils import sat_overlap, inclusion_of_agent_by_ego, batched_rotate_corners
+from .utils import sat_overlap, inclusion_of_agent_by_ego, batched_rotate_corners
 
 from .obstacle import Obstacle
 
@@ -86,7 +86,7 @@ class Group(Environment):
             vehicle.history['t_real_intermediate'] = []
         return self
     
-    def reset_intermediate_lists(self):
+    def reset_intermediates(self):
         for vehicle in self.vehicles:
             vehicle.x_intermediate = []
             vehicle.a_intermediate = []
@@ -95,7 +95,7 @@ class Group(Environment):
             vehicle.t_real_activation = []
         return self
     
-    def update_intermediate_lists(self):
+    def update_intermediates(self):
         n_waypoints = self.vehicles[0].n_waypoints
         n_obstacles = len(self.vehicles[0].obstacles)
         max_len_x = n_waypoints * 3
@@ -188,13 +188,14 @@ class Group(Environment):
         "DFG-MPC algorithm"
 
         # Some parameters
+        plt.close('all') # Close all figures
         t_sweep_start = self.vehicles[0].t_start
         t_sweep_end = self.vehicles[0].t_end
         
         # Step 1: Clear history & intermediate lists
         if self.stage == 0:
             self.reset_vehicle_history()
-        self.reset_intermediate_lists()
+        self.reset_intermediates()
         
         # Step 2: Sweep
         # The cummulative values hold the relative formation rotation scaling w.r.t. the original formation configuration
@@ -213,7 +214,7 @@ class Group(Environment):
         # For each obsacle, that is isn't doing any problems for us, put zeros
         
         # Step 4: Replication/truncation of the intermediate lists
-        self.update_intermediate_lists()
+        self.update_intermediates()
         self.update_history()
             
         return self
@@ -221,22 +222,14 @@ class Group(Environment):
 
     
     # Check whether the obstacle has entered the danger zone.
-    def sweep_ACC(self, t_sweep_start = 0, t_sweep_end = 1):
-        """This is the function, described as Dynamic Formaiton Generator(DFG), that was described in the ACC paper.
+    def sweep_ACC(self, t_sweep_start = 0, t_sweep_end = 1, t_step = 0.01):
+        """This is the function, described as Dynamic Formation Generator(DFG), that was described in the ACC paper.
         It works as follows:
-            sweeps the time interval t \in [t_sweep_start, t_sweep_in]
-            searches for collision
-            if collision found, h... let's rather implemment it in a new function....
+            - Sweeps the time interval t \in [t_sweep_start, t_sweep_in]
+            - Searches for collision
+            - If collision found, h... let's rather implemment it in a new function....
         """
-
-        plt.close('all') # Close all figures
-
-        # The timestep of the DFG algorithm.
-        t_step = 0.01
         
-        # The initial configuration with which DFG calculates.
-        # This value is sometimes being changed in "ACC_MPC_t_param".
-        # t_sweep = np.arange(t_sweep_start, t_sweep_end + t_step, t_step)
         t_sweep = np.arange(t_sweep_start, t_sweep_start + t_step, t_step)
         # t_sweep_corners = np.array([self.get_obstacle_corners(t) for t in t_sweep]) # (t, n_obst, n_corners, 2)
         t_sweep_corners = np.expand_dims(np.array([self.get_obstacle_corners(t)[0] for t in t_sweep]), axis=1) # (t, n_obst, n_corners, 2) with only 1 obstacle
