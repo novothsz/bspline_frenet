@@ -15,6 +15,7 @@ dependencies = [
     { name = "matplotlib" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "pillow" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
@@ -24,6 +25,7 @@ requires-dist = [
     { name = "casadi", specifier = ">=3.6" },
     { name = "matplotlib", specifier = ">=3.4" },
     { name = "numpy", specifier = ">=1.21" },
+    { name = "pillow", specifier = ">=9.0" },
     { name = "scipy", specifier = ">=1.7" },
 ]
 

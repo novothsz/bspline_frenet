@@ -76,9 +76,7 @@ def run(config=None):
 if __name__ == "__main__":
     group, times = run()
 
-    # Plot results
-    try:
-        from src.visualization import plot_frenet_view
-        plot_frenet_view(group, "./frenet_view.png")
-    except Exception as e:
-        print(f"Plotting failed: {e}")
+    # Render video
+    from src.visualization import render_movie, plot_frenet_view
+    render_movie(group, 'formation.gif', fps=15, dpi=150)
+    plot_frenet_view(group, 'frenet_view.png')

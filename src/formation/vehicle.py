@@ -36,6 +36,8 @@ class Vehicle:
         # History for analysis
         self.history = {
             'y': [],
+            't_start': [],
+            't_end': [],
             'x_update_time': [],
             'z_update_time': [],
             'solver_stats': [],
@@ -102,6 +104,8 @@ class Vehicle:
         self.admm.unpack_x_decision(sol)
 
         self.history['y'].append(list(self.admm.y))
+        self.history['t_start'].append(self.t_start)
+        self.history['t_end'].append(self.t_end)
         self.history['x_update_time'].append(elapsed)
         self.history['solver_stats'].append(stats)
         self.history['feasibility'].append(stats.get('return_status', 'unknown'))

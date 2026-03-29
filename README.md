@@ -26,6 +26,7 @@ uv pip install -r pyproject.toml
 | numpy      | Numerical arrays                              |
 | scipy      | Sparse matrices, linear algebra               |
 | matplotlib | Plotting trajectories and formation snapshots  |
+| Pillow     | Animated GIF rendering                         |
 
 No commercial solvers required. The old Gurobi and autograd dependencies have been removed.
 
@@ -49,6 +50,23 @@ Vehicle 0: 88/100 succeeded
 ```
 
 On first run, the Frenet path splines are fitted and cached to `coeffs.pickle`. Subsequent runs load from cache.
+
+After the simulation completes, two files are generated:
+
+- `formation.gif` -- animated top-down view with a camera following the Frenet frame, showing drone icons, predicted trajectories, and obstacles
+- `frenet_view.png` -- static plot of vehicle positions (p, q) in the Frenet frame over time
+
+The GIF output can be customised in code:
+
+```python
+from src.visualization import render_movie
+
+# Change resolution, framerate, or switch to a fixed wide-angle camera
+render_movie(group, 'formation.gif', fps=20, dpi=200, follow_camera=False)
+
+# Or export individual PNGs instead of a GIF
+render_movie(group, 'frames/', dpi=200)
+```
 
 ## Configuration
 

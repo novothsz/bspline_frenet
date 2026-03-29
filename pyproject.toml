@@ -8,6 +8,7 @@ dependencies = [
     "matplotlib>=3.4",
     "numpy>=1.21",
     "scipy>=1.7",
+    "Pillow>=9.0",
 ]
 
 [tool.uv]
