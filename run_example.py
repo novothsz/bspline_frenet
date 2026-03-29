@@ -79,6 +79,6 @@ if __name__ == "__main__":
     # Plot results
     try:
         from src.visualization import plot_frenet_view
-        plot_frenet_view(group)
+        plot_frenet_view(group, "./frenet_view.png")
     except Exception as e:
         print(f"Plotting failed: {e}")
