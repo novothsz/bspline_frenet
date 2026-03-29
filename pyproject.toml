@@ -1,0 +1,14 @@
+[project]
+name = "bspline-frenet"
+version = "2.0.0"
+description = "Distributed motion planning for multi-vehicle formation control using B-splines in a moving Serret-Frenet frame"
+requires-python = ">=3.10"
+dependencies = [
+    "casadi>=3.6",
+    "matplotlib>=3.4",
+    "numpy>=1.21",
+    "scipy>=1.7",
+]
+
+[tool.uv]
+dev-dependencies = []
