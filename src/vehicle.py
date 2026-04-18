@@ -11,7 +11,7 @@ from casadi import MX, SX, Function, vertcat, nlpsol, cos, sin, norm_2 #, dot
 from casadi import dot
 from .bspline import BSpline, BSplineBasis, definite_integral
 from .environment import Environment
-from .vehicle_basis import VehicleBasis as _LegacyVehicleBasis
+from .vehicle_runtime_mixin import VehicleRuntimeMixin
 from .solver_state import ParamValX, ParamValZ, DecisionVarX, DecisionVarZ
 import time
 
@@ -19,10 +19,10 @@ from matplotlib.collections import LineCollection
 from matplotlib.pyplot import cm
 import copy
 
-class Vehicle(Environment):
+class Vehicle(VehicleRuntimeMixin, Environment):
     def __init__(self):
-        legacy_state = _LegacyVehicleBasis()
-        self.__dict__.update(legacy_state.__dict__)
+        super().__init__()
+        self._init_runtime_state()
         
         self.t_start = 0.0
         self.t_step = 0.04 # 0.04 # Changed in simulation_step() upon first call
@@ -1487,14 +1487,3 @@ class Vehicle(Environment):
         ax.add_patch(rectangle)
 
         return ax
-
-
-def _inject_legacy_vehicle_basis_methods():
-    for name, member in _LegacyVehicleBasis.__dict__.items():
-        if name == "__init__" or name.startswith("_"):
-            continue
-        if callable(member) and name not in Vehicle.__dict__:
-            setattr(Vehicle, name, member)
-
-
-_inject_legacy_vehicle_basis_methods()
