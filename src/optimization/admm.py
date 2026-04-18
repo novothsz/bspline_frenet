@@ -93,11 +93,22 @@ class ADMMState:
             parts.append(np.array(waypoint_positions[idx_start:idx_end]))
             parts.append(np.array([waypoint_times[i]]))
 
-        # Obstacle corner spline coefficients
-        parts.append(np.array(obstacle_params))
+        # Obstacle spline coefficients are declared per obstacle as:
+        # corners, then center. Keep this exact order when packing.
+        obstacle_params = np.array(obstacle_params)
+        obstacle_center_params = np.array(obstacle_center_params)
+        if self.n_obstacles > 0:
+            center_block = len(obstacle_center_params) // self.n_obstacles
+            corner_block = len(obstacle_params) // self.n_obstacles
 
-        # Obstacle center spline coefficients
-        parts.append(np.array(obstacle_center_params))
+            for i in range(self.n_obstacles):
+                c0 = i * corner_block
+                c1 = c0 + corner_block
+                parts.append(obstacle_params[c0:c1])
+
+                z0 = i * center_block
+                z1 = z0 + center_block
+                parts.append(obstacle_center_params[z0:z1])
 
         # ADMM consensus parameters: z_i, lambda_i, z_ji, lambda_ji
         parts.append(self.z_i)

@@ -42,16 +42,18 @@ class FormationWarmStarter:
         all_wp_times = []
 
         t_current = t_start
-        while t_current <= t_end + 1e-7:
+        t_limit = min(t_end, 1.0)
+        while t_current <= t_limit + 1e-7:
+            t_eval = min(max(t_current, 0.0), 1.0)
             # Check for collision at current time
             colliding = self._find_colliding_obstacles(
-                positions, scaled_corners_fn(t_current))
+                positions, scaled_corners_fn(t_eval))
 
             if colliding:
                 # Find danger end time
-                t_danger_start = t_current
+                t_danger_start = t_eval
                 t_danger_end = self._find_danger_end(
-                    positions, scaled_corners_fn, colliding, t_danger_start, t_end)
+                    positions, scaled_corners_fn, colliding, t_danger_start, t_limit)
 
                 t_mid = (t_danger_start + t_danger_end) / 2
                 t_check = np.linspace(
@@ -138,7 +140,7 @@ class FormationWarmStarter:
         else:
             back_scale = 1 + deviance
         if 0.9 <= back_scale <= 1.1 and back_scale != 1.0:
-            back_scale = 1.0 / self.cum_scaling * (1.0 / self.cum_scaling if self.cum_scaling >= 1 else self.cum_scaling)
+            back_scale = 1.0 / self.cum_scaling
 
         back_pos = self._rotate(self._scale(positions, back_scale), back_rot)
         if not self._any_collision(back_pos, corners_fn, t_check):

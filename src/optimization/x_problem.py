@@ -66,7 +66,7 @@ class XProblem:
             b.add_constraint_eval(
                 [(p(t_wp) - x_wp[0]) ** 2, (q(t_wp) - x_wp[1]) ** 2],
                 [0, 0],
-                [(config.radius * 2) ** 2, (config.radius * 2) ** 2]
+                [config.radius ** 2, config.radius ** 2]
             )
             # Rotation must be near waypoint
             b.add_constraint_eval(
@@ -75,8 +75,9 @@ class XProblem:
                 [5 / 360 * math.pi * 2]
             )
 
-        # Cost: end position close to last waypoint
-        b.cost += (p(1) - x_wp[0]) ** 2 + (q(1) - x_wp[1]) ** 2
+        # Keep lateral speed zero at the horizon end.
+        q_dot = y_dot[1]
+        b.add_constraint_final([q_dot], [0], [0])
 
         # --- Obstacle avoidance ---
         for i in range(n_obstacles):
@@ -87,14 +88,12 @@ class XProblem:
                 corners.append(corner)
 
             # Center spline as parameter
-            center = b.add_spline_param('obst_center', obs_basis, 2)
-            circle_rad = obstacle_radii[i] * 0.8
-            center_circle = [center, circle_rad]
+            b.add_spline_param('obst_center', obs_basis, 2)
 
             b.add_hyperplane_avoidance(
                 [p, q], corners,
-                radius=config.radius,
-                center_circle=center_circle,
+                radius=0.0,
+                center_circle=None,
                 config=config
             )
 
