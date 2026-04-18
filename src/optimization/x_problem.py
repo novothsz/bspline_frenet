@@ -147,16 +147,17 @@ class XProblem:
 
         start = time.time()
         sol = self.solver.call(arg)
-        elapsed = time.time() - start
-
         stats = self.solver.stats()
         sol_flat = sol['x'].full().flatten()
 
-        # Retry on failure
-        if stats['return_status'] != 'Solve_Succeeded':
+        # Keep one extra retry to mirror legacy robustness around hard windows.
+        for _ in range(2):
+            if stats.get('return_status') == 'Solve_Succeeded':
+                break
             arg['x0'] = sol_flat
             sol = self.solver.call(arg)
             stats = self.solver.stats()
             sol_flat = sol['x'].full().flatten()
 
+        elapsed = time.time() - start
         return sol_flat, stats, elapsed
