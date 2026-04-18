@@ -1007,17 +1007,6 @@ class Vehicle(Environment):
         # fig.savefig('figures/' + 'cc' + '{:0>1d}'.format(self.stage) +'.pdf', dpi = 200)
         
         return ax
-    
-
-    def distributed_x_update(self, list_):
-        args, idx = list_
-        return {idx: self.solver.call(args)}
-
-    def distributed_z_update(self, list_):
-        args, idx = list_
-        return {idx: self.solver_z.call(args)}
-
-
     def x_update_prior(self):
         self.update_PvX()
         if self.shift_enabled == True:
