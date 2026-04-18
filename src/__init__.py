@@ -8,4 +8,4 @@ from .param import *
 from .spline_extra import *
 from .spline import *
 from .vehicle import *
-from .gurobi_spline import *
+# from .gurobi_spline import *  # removed: gurobipy dependency

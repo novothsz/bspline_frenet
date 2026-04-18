@@ -4,7 +4,7 @@ import math
 import matplotlib.pyplot as plt
 from .frenet_path import FrenetPath
 from .environment import Environment
-import yaml
+yaml = None
 from numpy import interp
 import time
 import csv
@@ -1512,8 +1512,9 @@ class Group(Environment):
                                                  'initialPosition' : initialPosition,
                                                  'type' : 'default'
                                                  }]
-                with open(self.cwd + "/yaml/initialPosition.yaml", "w") as file_descriptor:
-                    yaml.dump(yaml_dict, file_descriptor)
+                if yaml is not None:
+                    with open(self.cwd + "/yaml/initialPosition.yaml", "w") as file_descriptor:
+                        yaml.dump(yaml_dict, file_descriptor)
 
             # "But actually we want to read in :)"
 
@@ -1541,8 +1542,9 @@ class Group(Environment):
                                                  'finalPosition' : initialPosition,
                                                  'type' : 'default'
                                                  }]
-                with open(self.cwd + "/yaml/finalPosition.yaml", "w") as file_descriptor:
-                    yaml.dump(yaml_dict, file_descriptor)
+                if yaml is not None:
+                    with open(self.cwd + "/yaml/finalPosition.yaml", "w") as file_descriptor:
+                        yaml.dump(yaml_dict, file_descriptor)
         else:
             NotImplementedError()
 

@@ -1,4 +1,8 @@
 import numpy as np
+
+def locate(iterable, pred):
+    return [i for i, x in enumerate(iterable) if pred(x)]
+
 class ParamValX():
     def __init__(self, P0_list, P0):
         
@@ -42,7 +46,6 @@ class ParamValX():
         P0_assemble : array
             A list of parameter values for the x optimization solver.
         """
-        from more_itertools import locate
         assemble_list = self.P0_list
         idx_T = list(locate(assemble_list, lambda a: a == 'T'))
         idx_x0 = list(locate(assemble_list, lambda a: a == 'x0'))
@@ -178,7 +181,6 @@ class ParamValZ():
         P0_z_assemble : array
             A list of parameter values for the z optimization solver.
         """
-        from more_itertools import locate
         assemble_list = self.P0_z_list
         idx_x_i = list(locate(assemble_list, lambda a: a == 'y'))
         idx_x_j = list(locate(assemble_list, lambda a: a == 'y_j'))
@@ -244,7 +246,6 @@ class DecisionVarZ():
             The solution, from which we have to gather the data.
         """
         flatten = lambda t: [item for sublist in t for item in sublist]
-        from more_itertools import locate
         extract_list = self.w_z_list
         
         try:
@@ -277,7 +278,6 @@ class DecisionVarZ():
         DvZ_assemble : array
             A list of parameter values for the x optimization solver.
         """
-        from more_itertools import locate
         assemble_list = self.w_z_list
         
     
@@ -320,7 +320,6 @@ class DecisionVarX():
         
     def check_g_fulfilment(self, solution):
         flatten = lambda t: [item for sublist in t for item in sublist]
-        from more_itertools import locate
         
         try:
             w_opt = solution['x'].full() 
@@ -346,7 +345,6 @@ class DecisionVarX():
             The solution, from which we have to gather the data.
         """
         flatten = lambda t: [item for sublist in t for item in sublist]
-        from more_itertools import locate
         
         try:
             w_opt = solution['x'].full() 
@@ -388,7 +386,6 @@ class DecisionVarX():
         DvX_assemble : array
             A list of parameter values for the x optimization solver.
         """
-        from more_itertools import locate
         assemble_list = self.w_list
         
     

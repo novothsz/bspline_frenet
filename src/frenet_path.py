@@ -1,6 +1,5 @@
-import autograd.numpy as np
+import numpy as np
 import math
-from autograd import grad
 import matplotlib.pyplot as plt
 # from numpy import trapz
 from math import hypot
@@ -40,15 +39,7 @@ class FrenetPath(object):
         self.state_degree = 3
         
 
-        "Function derivatives"
-        self.fx_d = grad(self.fx)
-        self.fy_d = grad(self.fy)
-        self.fz_d = grad(self.fz)
-
-        "Function 2nd derivatives"
-        self.fx_dd = grad(self.fx_d)
-        self.fy_dd = grad(self.fy_d)
-        self.fz_dd = grad(self.fz_d)
+        pass
         
         self.fit_all()
         # Ezt is csináljuk meg, hamár :)
@@ -91,10 +82,16 @@ class FrenetPath(object):
             self.cos_f_theta_spline = BSpline(basis, coeffs["cos_f_theta_spline"])
             self.sin_f_theta_spline = BSpline(basis, coeffs["sin_f_theta_spline"])
                         
-            self.equation_min_p = BSpline(basis, coeffs["equation_min_p"])
-            self.equation_max_p = BSpline(basis, coeffs["equation_max_p"])
-            self.equation_min_q = BSpline(basis, coeffs["equation_min_q"])
-            self.equation_max_q = BSpline(basis, coeffs["equation_max_q"])
+            if "equation_min_p" in coeffs:
+                self.equation_min_p = BSpline(basis, coeffs["equation_min_p"])
+                self.equation_max_p = BSpline(basis, coeffs["equation_max_p"])
+                self.equation_min_q = BSpline(basis, coeffs["equation_min_q"])
+                self.equation_max_q = BSpline(basis, coeffs["equation_max_q"])
+            else:
+                self.equation_min_p = None
+                self.equation_max_p = None
+                self.equation_min_q = None
+                self.equation_max_q = None
             
             return self
 
@@ -120,18 +117,10 @@ class FrenetPath(object):
             
             
             
-            self.equation_min_p = []
-            self.equation_max_p = []
-            self.equation_min_q = []
-            self.equation_max_q = []
-            print("Starting equation_min_max (frenet path/fit_all")
-            [equation_min_p, equation_max_p] = self.equation_min_max('p')
-            [equation_min_q, equation_max_q] = self.equation_min_max('q')
-            
-            self.equation_min_p, self.equation_max_p = equation_min_p, equation_max_p
-            self.equation_min_q, self.equation_max_q = equation_min_q, equation_max_q
-            print("Ending equation_min_max (frenet path/fit_all")
-            
+            self.equation_min_p = None
+            self.equation_max_p = None
+            self.equation_min_q = None
+            self.equation_max_q = None
 
             coeffs = {
                 "fx_spline" : self.fx_spline.coeffs,
@@ -145,10 +134,6 @@ class FrenetPath(object):
                 "fz_c_spline" : self.fz_c_spline.coeffs,
                 "cos_f_theta_spline" : self.cos_f_theta_spline.coeffs,
                 "sin_f_theta_spline" : self.sin_f_theta_spline.coeffs,
-                "equation_min_p" : self.equation_min_p.coeffs,
-                "equation_max_p" : self.equation_max_p.coeffs,
-                "equation_min_q" : self.equation_min_q.coeffs,
-                "equation_max_q" : self.equation_max_q.coeffs
                 }
             import pickle
             pickle_out = open("coeffs.pickle", "wb")
@@ -229,10 +214,23 @@ class FrenetPath(object):
     def fz(self, tau):
         return 0.1 * tau
 
+    def fx_d(self, tau):
+        return 1.0
+    def fy_d(self, tau):
+        return np.cos(tau / (math.pi / 2.0)) / (math.pi / 2.0)
+    def fz_d(self, tau):
+        return 0.1
+
+    def fx_dd(self, tau):
+        return 0.0
+    def fy_dd(self, tau):
+        return -np.sin(tau / (math.pi / 2.0)) / (math.pi / 2.0)**2
+    def fz_dd(self, tau):
+        return 0.0
+
     def f_theta(self, tau):
         return math.atan2(self.fy_d(tau)/self.fx_d(tau), 1)
 
-    "Curvature of the functions"
     def fx_c(self, tau):
         return abs(self.fx_dd(tau)) * (1 + self.fx_d(tau)**2)**-1.5
     def fy_c(self, tau):

@@ -33,7 +33,8 @@ class Obstacle(Environment):
         
         self.scaled_corners_spline = []
         self.scaled_corners_t = []
-            
+        self.center_spline = []
+
         self.spline_position_in_frenet() # This function creates the self.corners_spline values.
         self.gate_pair_ID = []
         

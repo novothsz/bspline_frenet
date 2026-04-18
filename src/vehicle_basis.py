@@ -272,10 +272,11 @@ class VehicleBasis(Environment):
         t_evaluation = np.linspace(self.t_start, self.t_start + self.t_window_size, self.t_resolution_length)
         self.PvX.v_s = [self.fp.fx_d_spline(t_).tolist()[0][0] + self.fp.fy_d_spline(t_).tolist()[0][0] for t_ in t_evaluation]
         self.PvX.curvature = [self.fp.fy_c_spline(t_).tolist()[0][0] for t_ in t_evaluation]
-        self.PvX.equation_min_p = [self.fp.equation_min_p(t_).tolist()[0][0] for t_ in t_evaluation]
-        self.PvX.equation_max_p = [self.fp.equation_max_p(t_).tolist()[0][0] for t_ in t_evaluation]
-        self.PvX.equation_min_q = [self.fp.equation_min_q(t_).tolist()[0][0] for t_ in t_evaluation]
-        self.PvX.equation_max_q = [self.fp.equation_max_q(t_).tolist()[0][0] for t_ in t_evaluation]
+        if self.fp.equation_min_p is not None:
+            self.PvX.equation_min_p = [self.fp.equation_min_p(t_).tolist()[0][0] for t_ in t_evaluation]
+            self.PvX.equation_max_p = [self.fp.equation_max_p(t_).tolist()[0][0] for t_ in t_evaluation]
+            self.PvX.equation_min_q = [self.fp.equation_min_q(t_).tolist()[0][0] for t_ in t_evaluation]
+            self.PvX.equation_max_q = [self.fp.equation_max_q(t_).tolist()[0][0] for t_ in t_evaluation]
         self.PvX.obst = []
         
         

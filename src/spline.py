@@ -27,7 +27,6 @@ from scipy.sparse import csr_matrix
 # from scipy.sparse.linalg import spsolve
 from collections import Counter
 import hashlib
-from gurobipy import *
 
 def md5(data):
   m = hashlib.md5()
@@ -120,33 +119,6 @@ class csr_matrix_alt(csr_matrix):
             #     A.data, A.row.tolist(), A.col.tolist(), A.shape
             #     )
             # return B * other
-        elif get_module(other) in ['gurobipy']:
-            # import scipy.sparse as sp
-            # dictionary = {}
-            # other_csr = {}
-            # k = 0
-            # multip = 0
-            # for i, j in zip(self.indices, self.indptr):
-            #     dictionary[i, j] = self.data[k]
-                
-            #     k = k + 1
-            
-            # other_csr = {}  
-            # for i in range(len(other)):
-            #     other_csr[i, 0] = other[i]
-            # res = other_csr.prod(dictionary)
-            # res = other.prod(dictionary)
-            # kappa = sp.csr_matrix(self.toarray()) * other
-            
-            #
-            res = {}
-            matrix = self.toarray()
-            for i in range(matrix.shape[0]):
-                res[i] = 0
-                for j in range(matrix.shape[0]):
-                    if matrix[i, j] != 0:
-                        res[i] += matrix[i, j] * other[j]
-            return list(res.values())
         else:
             try:  # Scipy sparse matrix
                 return super(csr_matrix_alt, self).dot(other)
@@ -499,27 +471,10 @@ class BSpline(Spline):
                 #     coeffs_dict = {}
                         
                         
-                if get_module(other.coeffs[0]) in ['gurobipy']:
-                # if True:
-                    coeffs_product = np.array([(self.coeffs[pairs[0].tolist()[i]] \
-                                      * \
-                                      other.coeffs[pairs[1].tolist()[i]]) for i in range(len(pairs[0].tolist()))])
-                    
-                    def gurobi_sparse(T,coeffs_product):
-                        res = np.array(np.zeros((T.shape[0],))).tolist()
-                        for i in range(T.shape[0]):
-                            for j in range(T.shape[1]):
-                                if T[i, j] != 0:
-                                    res[i] = res[i] + T[i, j] * coeffs_product[j]
-                        return np.array(res)
-    
-                    return self.__class__(basis, gurobi_sparse(T,coeffs_product))
-                else:
-                    
-                    coeffs_product = (self.coeffs[pairs[0].tolist()] *
-                                      other.coeffs[pairs[1].tolist()])
-                    
-                    return self.__class__(basis, T.dot(coeffs_product))
+                coeffs_product = (self.coeffs[pairs[0].tolist()] *
+                                  other.coeffs[pairs[1].tolist()])
+
+                return self.__class__(basis, T.dot(coeffs_product))
             
             except:  # cvxopt, cvxpy, assuming other.coeffs is not a variable
                 S = np.zeros((len(pairs[0]), len(self)))
@@ -563,19 +518,7 @@ class BSpline(Spline):
         else:
             Bd, Pd = self.basis.derivative(o=o)
             
-            if get_module(self.coeffs[0]) in ['gurobipy']:
-            # if True:
-                def gurobi_sparse(T,coeffs_product):
-                    res = np.array(np.zeros((T.shape[0],))).tolist()
-                    for i in range(T.shape[0]):
-                        for j in range(T.shape[1]):
-                            if T[i, j] != 0:
-                                res[i] = res[i] + T[i, j] * coeffs_product[j]
-                    return np.array(res)
-                
-                return self.__class__(Bd, gurobi_sparse(Pd, self.coeffs))
-            else:
-                return self.__class__(Bd, Pd.dot(self.coeffs))
+            return self.__class__(Bd, Pd.dot(self.coeffs))
 
     def insert_knots(self, knots):
         """Returns an equivalent spline with knot insertion"""
