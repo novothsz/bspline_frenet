@@ -349,29 +349,26 @@ class Vehicle(Environment):
                                 name="dy0")
         feasibility_dict[key] = value
         
-        if self.MPC_version == False:
-            raise NotImplementedError()
-        elif self.MPC_version == True:
-            raise NotImplementedError()
-        elif self.MPC_version == 'MPC_param':
-            n = self.n_of_saved_waypoints
-            for i, t_intermediate in enumerate(PvX.t_intermediate):
-                idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-                x_intermediate = PvX.x_intermediate
-                
-                key, value = self.check_constraint([(p(t_intermediate) - x_intermediate[0])**2, (q(t_intermediate) - x_intermediate[1])**2],
-                                        [0, 0],
-                                        [(self.radious*1)**2, (self.radious*1)**2],
-                                        constraint_type='time',
-                                        name="pq_intermediate" + str(i))
-                feasibility_dict[key] = value
-        
-                key, value = self.check_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
-                                        [0], # self.slack, # 
-                                        [5 / 360 * math.pi * 2],
-                                        constraint_type='time',
-                                        name="phi_intermediate" + str(i))
-                feasibility_dict[key] = value
+        if self.MPC_version != 'MPC_param':
+            raise NotImplementedError("Only MPC_param is supported.")
+
+        n = self.n_of_saved_waypoints
+        for i, t_intermediate in enumerate(PvX.t_intermediate):
+            x_intermediate = PvX.x_intermediate
+
+            key, value = self.check_constraint([(p(t_intermediate) - x_intermediate[0])**2, (q(t_intermediate) - x_intermediate[1])**2],
+                                    [0, 0],
+                                    [(self.radious*1)**2, (self.radious*1)**2],
+                                    constraint_type='time',
+                                    name="pq_intermediate" + str(i))
+            feasibility_dict[key] = value
+
+            key, value = self.check_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
+                                    [0],
+                                    [5 / 360 * math.pi * 2],
+                                    constraint_type='time',
+                                    name="phi_intermediate" + str(i))
+            feasibility_dict[key] = value
                 
                 
                 
@@ -483,125 +480,35 @@ class Vehicle(Environment):
                                 constraint_type='initial_param',
                                 name=["dy0"] * self.n_dimensions)
         
-        "state suggestion"
-        if self.MPC_version == False:
-            for i, t_intermediate in enumerate(self.t_intermediate_list):
-                idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-                x_intermediate = np.array(self.x_intermediate_list)[idx].tolist()
-                
-                
-                self.define_constraint([p(t_intermediate) - x_intermediate[0],
-                                        q(t_intermediate) - x_intermediate[1],
-                                        phi(t_intermediate) - x_intermediate[2]],
-                                        [0.0 - self.radious * 10, 0.0 - self.radious * 10, 0.0 - 0.1],
-                                        [0.0 + self.radious * 10, 0.0 + self.radious * 10, 0.0 + 0.1],
-                                        constraint_type='time',
-                                        name=["guidence" + str(i)] * 1)
-                if t_intermediate == 1:
-                    self.define_constraint([p(t_intermediate) - x_intermediate[0],
-                                            q(t_intermediate) - x_intermediate[1],
-                                            phi(t_intermediate) - x_intermediate[2]],
-                                            [0.0 - self.radious * 10, 0.0 - self.radious * 10, 0.0 - 0.1],
-                                            [0.0 + self.radious * 10, 0.0 + self.radious * 10, 0.0 + 0.1],
-                                            constraint_type='time',
-                                            name=["guidence" + str(i)] * 1)
-                    
-        elif self.MPC_version == True:
-            # Non-forgetting version       
-            n = self.n_of_saved_waypoints
-            assert n == len(self.t_intermediate_list) # Please generate the intermediate points first :)
-            for i, t_intermediate in enumerate(self.t_intermediate_list):
-                idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-                
-                # Define the parameter
-                x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2); self.P0 += np.array(self.x_intermediate_list)[idx].tolist(); assert len(self.x_intermediate_list)/(self.state_len/2) == n  # [0] * int(self.state_len/2)
-                lambda_ = np.power(np.linspace(1, 0, n), 1)
-                self.J += self.rho_intermediate * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
-                self.J += self.rho_intermediate * lambda_[i] *(q(t_intermediate) - x_intermediate[1])**2
-                self.J += self.rho_intermediate * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
-                
-            # Final state constraint
-            self.define_constraint([p, q],
-                                    xf[:self.n_dimensions_old] - [self.radious*1, self.radious*1],
-                                    xf[:self.n_dimensions_old] + [self.radious*1, self.radious*1],
-                                    constraint_type='final_param',
-                                    name=["yf"] * self.n_dimensions)
-            self.define_constraint([phi],
-                                    xf[self.n_dimensions] - [5 / 360 * math.pi * 2], # self.slack, # 
-                                    xf[self.n_dimensions] + [5 / 360 * math.pi * 2], # self.slack, # 
-                                    constraint_type='final_param',
-                                    name=["phif"] * self.n_dimensions)
-                                            
-            
-        elif self.MPC_version == 'MPC_param':
-            # Pretty much the same as the regular MPC version, but now we pass in t_intermediate as parameter and have hard-constraints, instead of cost function
-            n = self.n_of_saved_waypoints
-            assert n == len(self.t_intermediate_list) # Please generate the intermediate points first :)
-            for i, t_intermediate in enumerate(self.t_intermediate_list):
-                idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-                # Define the parameter
-                x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2);
-                # self.P0 += np.array(self.x_intermediate_list)[idx].tolist()
-                # the above line has to be changed, because x_intermediate_list actually holds only 3 values
-                # the last one is phi, from which 2 values will be generated --> cos_phi, sin_phi
-                # TODO: We don't use this cos, sin anymore, right?
-                self.P0 += np.array(self.x_intermediate_list)[:2].tolist()
-                self.P0 += [np.cos(self.x_intermediate_list[2]).tolist()]
-                self.P0 += [np.sin(self.x_intermediate_list[2]).tolist()]
-                t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += [self.t_intermediate_list[i]]
-                t_intermediate_idx += [len(self.P) - 1]
-                # "Cost-function version"
-                # lambda_ = np.power(np.linspace(1, 0, n), 1)
-                # self.J += self.rho_intermediate * lambda_[i] *(p(t_intermediate) - x_intermediate[0])**2
-                # self.J += self.rho_intermediate * lambda_[i] *(q(t_intermediate) - x_intermediate[1])**2
-                # self.J += self.rho_intermediate * lambda_[i] *(phi(t_intermediate) - x_intermediate[2])**2
-                
-            
-                                                
-                # constraint on pq at t_intermediate
-                self.define_constraint([(p(t_intermediate) - x_intermediate[0])**2, (q(t_intermediate) - x_intermediate[1])**2],
-                                        [0, 0],
-                                        [(self.radious*1)**2, (self.radious*1)**2],
-                                        constraint_type='time',
-                                        name=["pq_intermediate" + str(i)] * 2)
-                
-                # constraint on phi at t_intermediate
-                self.define_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
-                                        [0], # self.slack, # 
-                                        [5 / 360 * math.pi * 2],
-                                        constraint_type='time',
-                                        name=["phi_intermediate" + str(i)] * 1)
-                # self.define_constraint([(cos_phi(t_intermediate) - x_intermediate[2])**2, (sin_phi(t_intermediate) - x_intermediate[3])**2],
-                #                         [0, 0],
-                #                         [5 / 360 * math.pi * 2, 5 / 360 * math.pi * 2],
-                #                         constraint_type='time',
-                #                         name=["phi_intermediate" + str(i)] * 1)
-                
-                # Here we actually should integrate in between t_intermediate values and 
-                # make the optimizer run for its money. definite_integral(cost, 0, t_intermediate[j])
-                if i == n-1:
-                    """
-                    cost = 0
-                    for j in range(len(pq)):
-                        cost += (pq[j] - x_intermediate[j])**2
-                        # cost += (pq_dot[j])**2
-                        # self.J += dot(pq_dotdot[i].coeffs,pq_dotdot[i].coeffs)
-                    self.J += self.rho_intermediate * 100 * definite_integral(cost, 0, 1)
-                    """
-                    
-                    # Cost on p directional velocity
-                    # self.J += self.rho_intermediate * p_dot(t_intermediate)**2
-                    # Constraint on q directional velocity (on the LAST intermediate position)
-                    
-                    # self.define_constraint([q_dot(t_intermediate)],
-                    #                         [0],
-                    #                         [0],
-                    #                         constraint_type='time',
-                    #                         name=["q_dot_at_intermediate" + str(i)] * 1)
-                    
-                
-        else:
-            raise NotImplementedError()
+        # Only the MPC_param pathway is maintained.
+        if self.MPC_version != 'MPC_param':
+            raise NotImplementedError("Only MPC_param is supported.")
+
+        n = self.n_of_saved_waypoints
+        assert n == len(self.t_intermediate_list) # Please generate the intermediate points first :)
+        for i, t_intermediate in enumerate(self.t_intermediate_list):
+            # Define the parameter
+            x_intermediate = MX.sym('x_intermediate', int(self.state_len/2)); self.P += [x_intermediate]; self.P_list += ['x_intermediate'] * int(self.state_len/2);
+            # the below defaults mirror previous MPC_param behavior
+            self.P0 += np.array(self.x_intermediate_list)[:2].tolist()
+            self.P0 += [np.cos(self.x_intermediate_list[2]).tolist()]
+            self.P0 += [np.sin(self.x_intermediate_list[2]).tolist()]
+            t_intermediate = MX.sym('t_intermediate', 1); self.P += [t_intermediate]; self.P_list += ['t_intermediate'] * 1; self.P0 += [self.t_intermediate_list[i]]
+            t_intermediate_idx += [len(self.P) - 1]
+
+            # constraint on pq at t_intermediate
+            self.define_constraint([(p(t_intermediate) - x_intermediate[0])**2, (q(t_intermediate) - x_intermediate[1])**2],
+                                    [0, 0],
+                                    [(self.radious*1)**2, (self.radious*1)**2],
+                                    constraint_type='time',
+                                    name=["pq_intermediate" + str(i)] * 2)
+
+            # constraint on phi at t_intermediate
+            self.define_constraint([(phi(t_intermediate) - x_intermediate[2])**2],
+                                    [0],
+                                    [5 / 360 * math.pi * 2],
+                                    constraint_type='time',
+                                    name=["phi_intermediate" + str(i)] * 1)
             
         # At the end we should have horizontal speed (or at least no vertical :) )
         self.define_constraint([q_dot],
@@ -657,56 +564,36 @@ class Vehicle(Environment):
                                     name=["q_dot_max"])
         """    
         a_list = []
-        # Collision avoidance with obstacles (coefficient based)
-        if self.MPC_version == 'MPC_param':
-            # We have a different collision-avoidance constraint if we are using the MPC_param version.
-            for i, obstacle in enumerate(self.obstacles):
-                obst_corners = []
-                deg = self.n_obstacle_cropped_degree
-                corner1 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knot_intervals, n_spl = 2,
-                           lower_bound = [], upper_bound = [],
-                           name = ['obst'] * 2,
-                           category = 'parameter')
-                
-                
-                corner2 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knot_intervals, n_spl = 2,
-                           lower_bound = [], upper_bound = [],
-                           name = ['obst'] * 2,
-                           category = 'parameter')
-                
-                corner3 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knot_intervals, n_spl = 2,
-                           lower_bound = [], upper_bound = [],
-                           name = ['obst'] * 2,
-                           category = 'parameter')
-                
-                corner4 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knot_intervals, n_spl = 2,
-                           lower_bound = [], upper_bound = [],
-                           name = ['obst'] * 2,
-                           category = 'parameter')
-                
-                obst_corners += [corner1, corner2, corner3, corner4]
-            
-                tmp_a = self.collision_avoidance_hyperplane([p, q], obst_corners,
-                                                    radious=self.radious * 0, name="obst_" + str(i),
-                                                    constraint_type='obstacle')
-                a_list += [tmp_a]
-                
-            
-        # Collision avoidance with obstacles (time-sampling based)
-        else:
-            for i, obstacle in enumerate(self.obstacles):
-                obst_corners = []
-                for j, t in enumerate(np.linspace(0, 1, self.t_resolution_length)):
-                    corner1 = MX.sym('obst_' + str(i) + '_corner1', 2); self.P += [corner1]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
-                    corner2 = MX.sym('obst_' + str(i) + '_corner2', 2); self.P += [corner2]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
-                    corner3 = MX.sym('obst_' + str(i) + '_corner3', 2); self.P += [corner3]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
-                    corner4 = MX.sym('obst_' + str(i) + '_corner4', 2); self.P += [corner4]; self.P_list += ['obst'] * 2; self.P0 += [0] * 2
-                    obst_corners += [[corner1, corner2, corner3, corner4]]
-            
-                self.collision_avoidance_hyperplane([p, q], obst_corners,
-                                                    radious=self.radious, name="obst_" + str(i),
-                                                    constraint_type='spline_obstacle_param',
-                                                    n_samples=self.t_resolution_length)
+        # Collision avoidance with obstacles (coefficient based MPC_param path)
+        for i, obstacle in enumerate(self.obstacles):
+            obst_corners = []
+            deg = self.n_obstacle_cropped_degree
+            corner1 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knot_intervals, n_spl = 2,
+                       lower_bound = [], upper_bound = [],
+                       name = ['obst'] * 2,
+                       category = 'parameter')
+
+            corner2 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knot_intervals, n_spl = 2,
+                       lower_bound = [], upper_bound = [],
+                       name = ['obst'] * 2,
+                       category = 'parameter')
+
+            corner3 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knot_intervals, n_spl = 2,
+                       lower_bound = [], upper_bound = [],
+                       name = ['obst'] * 2,
+                       category = 'parameter')
+
+            corner4 = self.define_MX_spline(degree = deg, knot_intervals = self.n_obstacle_cropped_knot_intervals, n_spl = 2,
+                       lower_bound = [], upper_bound = [],
+                       name = ['obst'] * 2,
+                       category = 'parameter')
+
+            obst_corners += [corner1, corner2, corner3, corner4]
+
+            tmp_a = self.collision_avoidance_hyperplane([p, q], obst_corners,
+                                                radious=self.radious * 0, name="obst_" + str(i),
+                                                constraint_type='obstacle')
+            a_list += [tmp_a]
                 
         """
         # Okay boss! Let's implement this hyperplane intermediate suggestion thingy.
