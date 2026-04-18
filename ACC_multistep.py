@@ -193,6 +193,6 @@ group.plot_moovie_frames(n_steps, iternum=0, seed=0)
 # """
 # group.vehicles[0].calculate_formation_error()
 # group.calculate_formation_error()
-group.save_trajectory_to_csv(n_steps)
+# group.save_trajectory_to_csv(n_steps)
 "This is not good like this! We need to save the final plots for the various n_intermediate_ADMM values and run the code multiple times"
 "Only then can we assemble and compare the results."
