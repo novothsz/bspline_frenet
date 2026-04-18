@@ -139,6 +139,8 @@ class Vehicle:
         y0 = [float(s(t_eval)) for s in y_splines]
         y_dot0 = [float(s(t_eval)) for s in y_dot]
         self.x0 = y0 + y_dot0
+        # Keep current formation position synchronized with shifted state.
+        self.current_position = list(y0)
 
         # Shift coefficient arrays
         self.admm.y = self._shift_flat(self.admm.y, nd, basis, t_shift)

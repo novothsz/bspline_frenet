@@ -175,6 +175,28 @@ class FormationWarmStarter:
         if best_result:
             return best_result
 
+        # Step 2: Fallback coarse grid search when analytical candidates fail.
+        # This keeps the fast path while improving robustness in hard geometries.
+        fallback_scales = [0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5]
+        fallback_angles = [
+            math.radians(deg)
+            for deg in range(-180, 181, 5)
+            if deg != 0
+        ]
+
+        for scale in fallback_scales:
+            scaled_pos = self._scale(positions, scale)
+            for angle in fallback_angles:
+                rotated = self._rotate(scaled_pos, angle)
+                if not self._any_collision(rotated, corners_fn, t_check):
+                    cost = self._formation_cost(angle, scale)
+                    if cost < best_cost:
+                        best_cost = cost
+                        best_result = (rotated, angle, scale, 'yes')
+
+        if best_result:
+            return best_result
+
         # Fallback: no solution found
         return positions, 0, 1, 'no_solution_found'
 
@@ -229,17 +251,29 @@ class FormationWarmStarter:
 
     @staticmethod
     def _point_in_polygon(point, corners):
-        """Fast point-in-polygon using cross products (winding number)."""
+        """Point-in-convex-polygon test robust to CW/CCW corner order."""
         n = len(corners)
-        inside = True
+        if n < 3:
+            return False
+
+        tol = 1e-12
+        has_pos = False
+        has_neg = False
+
         for i in range(n):
             x1, y1 = corners[i][0], corners[i][1]
             x2, y2 = corners[(i + 1) % n][0], corners[(i + 1) % n][1]
             cross = (x2 - x1) * (point[1] - y1) - (y2 - y1) * (point[0] - x1)
-            if cross > 0:
-                inside = False
-                break
-        return inside
+
+            if cross > tol:
+                has_pos = True
+            elif cross < -tol:
+                has_neg = True
+
+            if has_pos and has_neg:
+                return False
+
+        return True
 
     @staticmethod
     def _rotate(positions, angle):
