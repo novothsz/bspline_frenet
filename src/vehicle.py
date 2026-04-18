@@ -1363,7 +1363,7 @@ class Vehicle(VehicleBasis):
     def plot_moovie_frames_mooving_horizon(self, ax, horizon_num):
         t_steps = 100     
         self_ID = 3
-        obst_IDX = 6
+        obst_IDX = min(6, len(self.obstacles) - 1) if self.obstacles else 0
         horizon_num_original = int(horizon_num)    
         horizon_num = int(horizon_num * self.n_intermediate_ADMM + self.n_intermediate_ADMM - 1)
         # Creating the splines
