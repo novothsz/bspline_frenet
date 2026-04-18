@@ -1009,14 +1009,15 @@ class Vehicle(VehicleBasis):
         
         return ax
     
+
     def distributed_x_update(self, list_):
         args, idx = list_
         return {idx: self.solver.call(args)}
-    
+
     def distributed_z_update(self, list_):
         args, idx = list_
         return {idx: self.solver_z.call(args)}
-        
+
 
     def x_update_prior(self):
         self.update_PvX()
@@ -1084,137 +1085,6 @@ class Vehicle(VehicleBasis):
     ###########################################################################
     ###########################################################################
     "Plotting"
-    
-    def plot_vehicle_frenet_trajectories(self, ax):
-        flatten = lambda t: [item for sublist in t for item in sublist]
-
-        # Plotting the environment
-        ax = self.plot_environment(ax, self.t_start)
-
-        # Creating the splines
-        basis = self.define_knots(degree = 3, knot_intervals = self.knot_intervals)
-        solution = self.solution['x'].full()
-        coeffs1 = flatten([solution[x] for x in np.arange(0, len(basis))])
-        coeffs2 = flatten([solution[x] for x in np.arange(len(basis), len(basis)*2)])
-
-        p_solution = BSpline(basis, coeffs1)
-        q_solution = BSpline(basis, coeffs2)
-        kappa = True
-        # Just for testing:
-        # t_solution = np.linspace(0, 1, 100)
-        # plt.figure()
-        # plt.plot(t_solution, p_solution(t_solution))
-        # plt.plot(p_solution.basis.knots[2:-2], p_solution.coeffs, 'ro')
-        # p_solution = p_solution.insert_knots([0.13, 0.73, 0.9])
-        # plt.plot(t_solution, p_solution(t_solution), ':')
-        # plt.plot(p_solution.basis.knots[2:-2], p_solution.coeffs, 'go')
-        # plt.show()
-        # p_solution.integral()
-        # definite_integral(p_solution, 0, 1)
-        # p_solution(0) + q_solution(1)
-        
-        # from .spline_extra import shift_spline
-        # p_solution.basis, p_solution.coeffs = shift_spline(p_solution.coeffs, 0.5, p_solution.basis)
-        # plt.plot(np.linspace(0.5, 1, 100), p_solution(np.linspace(0.5, 1, 100)), 'k*')
-        
-        # p_solution2 = p_solution.scale(1, -0.5)
-        # p_solution2 = p_solution2.scale(2, 0)
-        # plt.plot(np.linspace(0.0, 1, 100), p_solution2(np.linspace(0.0, 1, 100)), 'b.')
-        # plt.plot(np.linspace(0.5, 1, 100), p_solution2(np.linspace(0.0, 1, 100)), 'g.')
-        
-        # from .spline_extra import extrapolate
-        # p_solution.basis, p_solution.coeffs = extrapolate(p_solution.coeffs, 0.5, p_solution.basis)
-        # plt.plot(np.linspace(0.0, 1.5, 100), p_solution(np.linspace(0.0, 1.5, 100)), 'k.')
-        
-        # from .spline_extra import shift_over_knot
-        # basis, p_solution.coeffs = shift_over_knot(p_solution.coeffs, p_solution.basis)
-        # plt.plot(np.linspace(0.13, 1+0.09999999999999998, 100), p_solution(np.linspace(0, 1, 100)), 'k.')
-        
-        
-        
-        # 0.13: difference between 0 and "first knot"
-        # 0.1: difference between the "last knot" and 1
-        
-        
-        
-        # p_solution.roots()
-        # from .spline_extra import shift_spline
-        # p_solution.coeffs = shift_spline(p_solution.coeffs, 0.4, p_solution.basis)
-        # q_solution.coeffs = shift_spline(q_solution.coeffs, 0.4, q_solution.basis)
-        
-        # print(p_solution.coeffs)
-        # print(q_solution.coeffs)
-        # (p_solution*q_solution).coeffs
-        
-        # Sampling
-        t_solution = np.linspace(0, 1, 100)
-        t = np.linspace(self.t_start, self.t_end, 100)
-        
-        x_t, y_t = [], []
-        for t_, t_solution_ in zip(t, t_solution):
-            p_solution_, q_solution_ = p_solution(t_solution_)[0], q_solution(t_solution_)[0]
-            x_, y_ = self.fp.frenet_to_inertial(p_solution_, q_solution_, t_)
-            # x_, y_ = p_solution_, q_solution_
-            x_t += [x_]
-            y_t += [y_]
-        """
-        "Below is the same as for the generic plot_vehicle_trajecotries()"
-        
-        # Fitting a polynome of degree 7 onto the spline
-        poly7_x = np.poly1d(np.polyfit(t, x_t, deg=7))
-        poly7_y = np.poly1d(np.polyfit(t, y_t, deg=7))
-
-        # Now, the 7 degree polynomials are calculated such that upon evaluation
-        # between t = [0, 1] we get correct values. Outside this range, they don't
-        # represent the trajectories we calculated.
-        # Below we rescale the polynomials such that they give correct values
-        # between t = [0, t_desired]
-        # Remember: x^7 --> x^7 / t_desired^7
-        power = 0
-        for i in range(len(poly7_x.coeffs)-1, 0-1, -1):
-            poly7_x.coeffs[i] = poly7_x.coeffs[i] / pow(self.T, power)
-            poly7_y.coeffs[i] = poly7_y.coeffs[i] / pow(self.T, power)
-            power += 1
-
-        # Let's now sample from this, for the sake of plotting
-        tp7 = np.linspace(0, self.T, 100)
-        poly7_x_t = [poly7_x(t_) for t_ in tp7]
-        poly7_y_t = [poly7_y(t_) for t_ in tp7]
-
-        # The path !!! now with correct arrangement of the coefficients !!!
-        # Storing the coefficients in the format, that crazyswarm requires
-        # (x^0, x^1, x^2, ...)
-        poly7_x = poly7_x.coeffs.tolist()
-        poly7_x.reverse()
-        poly7_y = poly7_y.coeffs.tolist()
-        poly7_y.reverse()
-        # self.write_csv(self.T, poly7_x, poly7_y)
-
-        # Adding an extra 7 degree polynomial for hoowering at the end
-        final_x = poly7_x_t[-1]
-        final_y = poly7_y_t[-1]
-        however_x = [final_x] + [0] * 7
-        however_y = [final_y] + [0] * 7
-
-        # Combining the polinomials into a list
-        T_list = [[self.T], [2]]
-        poly7_x_list = [poly7_x, however_x]
-        poly7_y_list = [poly7_y, however_y]
-
-        # Writing the list to file
-        self.write_csv(T_list, poly7_x_list, poly7_y_list)
-        """
-        # ax.plot(poly7_x_t, poly7_y_t, 'k*')
-
-        # Plotting of spline & control points
-        # ax.plot(coeffs1, coeffs2, 'ro')
-        ax.plot(x_t, y_t, 'k')
-
-        # Plotting of obstacle
-        for obstacle in self.obstacles:
-            obstacle.plot_obstacle(ax)
-
-        return ax
     
     ###########################################################################
     ###########################################################################
@@ -1599,28 +1469,6 @@ class Vehicle(VehicleBasis):
 
         return ax
         
-    def plot_configurations(self, ax):
-        
-        # Plotting of obstacle
-        for obstacle in self.obstacles:
-            obstacle.plot_obstacle(ax)
-            
-        x_t, y_t = [], []
-        i = 0
-        for t_intermediate_list, x_intermediate_list in zip(self.variable_history['t_real_intermediate_list'], self.variable_history['x_intermediate_list']):
-            for i in range(self.n_of_saved_waypoints):
-                idx = np.arange(int(self.state_len/2)*i,int(self.state_len/2)*i+int(self.state_len/2))
-                print(idx)
-                x = np.array([x_intermediate_list]).reshape(-1)[idx].tolist()
-                print(x[0])
-                print(x[1])
-                print(i)
-                print(t_intermediate_list)
-                x_, y_ = self.fp.frenet_to_inertial(x[0], x[1], t_intermediate_list[i])
-                x_t += [x_]
-                y_t += [y_]
-                
-        ax.plot(x_t, y_t, 'ro')
 
     def plot_moovie_frames(self, ax, t):
         # https://nickcharlton.net/posts/drawing-animating-shapes-matplotlib.html
