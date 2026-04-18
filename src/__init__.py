@@ -6,7 +6,7 @@ from .spline_fitter import *
 from .group import *
 from .obstacle import *
 # from .optitrack_vrpn_listener import *
-from .param import *
+from .solver_state import *
 from .run_utils import *
 # from .read_optitrack import *
 from .spline_extra import *

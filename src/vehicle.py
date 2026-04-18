@@ -12,7 +12,7 @@ from casadi import dot
 from .bspline import BSpline, BSplineBasis, definite_integral
 from .environment import Environment
 from .vehicle_basis import VehicleBasis as _LegacyVehicleBasis
-from .param import ParamValX, ParamValZ, DecisionVarX, DecisionVarZ
+from .solver_state import ParamValX, ParamValZ, DecisionVarX, DecisionVarZ
 import time
 
 from matplotlib.collections import LineCollection
