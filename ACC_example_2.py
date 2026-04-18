@@ -38,6 +38,7 @@ def run_optimization(start_position, goal_position, stage=0):
         n_of_saved_waypoints=5,
         back_scaling_factor=0.3,
         back_rotation_factor=0.4,
+        dfg_mode="legacy",  # Change to "analytic" to use analytic DFG candidate search.
         dfm_lookahead_ratio=0.2,
         dfm_lookback_ratio=0.3,
     ).apply(group)

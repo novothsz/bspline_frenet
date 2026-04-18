@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 
 
+_VALID_DFG_MODES = {"legacy", "analytic"}
+
+
 @dataclass
 class GroupRuntimeConfig:
     n_intermediate_ADMM: int = 1
@@ -16,10 +19,15 @@ class GroupRuntimeConfig:
     n_of_saved_waypoints: int = 5
     back_scaling_factor: float = 0.3
     back_rotation_factor: float = 0.4
+    dfg_mode: str = "legacy"
     dfm_lookahead_ratio: float = 0.2
     dfm_lookback_ratio: float = 0.3
 
     def apply(self, group):
+        dfg_mode = self.dfg_mode.strip().lower()
+        if dfg_mode not in _VALID_DFG_MODES:
+            raise ValueError(f"Invalid dfg_mode '{self.dfg_mode}'. Expected one of {_VALID_DFG_MODES}.")
+
         group.set_var({"n_intermediate_ADMM": self.n_intermediate_ADMM})
         group.set_var({"t_step": self.t_step})
         group.set_var({"t_window_size": self.t_window_size})
@@ -31,6 +39,7 @@ class GroupRuntimeConfig:
         group.set_var({"rho_final_value": self.rho_final_value})
         group.set_var({"MPC_version": self.mpc_version})
         group.set_var({"n_of_saved_waypoints": self.n_of_saved_waypoints})
+        group.set_var({"dfg_mode": dfg_mode})
 
         group.back_scaling_factor = self.back_scaling_factor
         group.back_rotation_factor = self.back_rotation_factor

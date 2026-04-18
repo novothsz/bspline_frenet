@@ -35,6 +35,9 @@ def simulation_step(group):
 
 
 def set_var(group, var):
+    if 'dfg_mode' in var:
+        group.dfg_mode = var['dfg_mode']
+
     for idx, vehicle in enumerate(group.vehicles):
         if 'n_intermediate_ADMM' in var:
             vehicle.n_intermediate_ADMM = var['n_intermediate_ADMM']

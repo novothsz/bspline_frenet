@@ -16,6 +16,7 @@ except Exception:
 from .admm import data_exchange_x as run_data_exchange_x
 from .admm import lambda_update_data_exchange_z as run_lambda_update_data_exchange_z
 from .admm import solve as run_solve
+from .dfg import find_analytic_candidate
 from .group_lifecycle import initialize_values as run_initialize_values
 from .group_lifecycle import prepare as run_prepare
 from .group_lifecycle import set_simulation as run_set_simulation
@@ -52,6 +53,7 @@ class Group(Environment):
         self.og_final_positions = []
         self.back_scaling_factor = 0.2 * 0
         self.back_rotation_factor = 0.2 * 0
+        self.dfg_mode = "legacy"
         
         self.DFM_division = 12
         self.DFM_lookback = 1 / self.DFM_division / 2
@@ -600,6 +602,15 @@ class Group(Environment):
             else:
                 ACTION_TAKEN = "back_transformation"
             return vehicle_positions_scaled_rotated, cum_rotation + rotation_angle, cum_scaling * scaling_factor, ACTION_TAKEN
+
+        if getattr(self, "dfg_mode", "legacy") == "analytic":
+            analytic_candidate = find_analytic_candidate(self, vehicle_positions, t)
+            if analytic_candidate is not None:
+                best_positions, best_rotation, best_scaling = analytic_candidate
+                cum_rotation += best_rotation
+                cum_scaling *= best_scaling
+                ACTION_TAKEN = "yes"
+                return best_positions, cum_rotation, cum_scaling, ACTION_TAKEN
         
         # Otherwise, if we cannot rotate&scale back, find something else:
         # Step 1: generate possible rotation angles & scaling factors
@@ -1184,8 +1195,15 @@ class Group(Environment):
         for vector in edge_vectors:
             vector = np.array(vector)
             x_axis = np.array([1, 0])
-            alpha = math.acos( np.dot(vector, x_axis) / (np.linalg.norm(vector) * 1))
+            norm = np.linalg.norm(vector)
+            if norm <= self.TOL:
+                continue
+            ratio = np.dot(vector, x_axis) / norm
+            ratio = max(-1.0, min(1.0, ratio))
+            alpha = math.acos(ratio)
             angles = np.append(angles, alpha)
+        if angles.size == 0:
+            return 0.0
         angles_degree = angles / math.pi * 180
         min_rot_angle = max(angles)
         for angle in angles:
