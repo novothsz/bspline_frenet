@@ -124,24 +124,28 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     group.set_var({'rho': 50})
     group.set_var({'rho_input': 200})
     group.set_var({'rho_final_value': 5000})
-    group.set_var({'MPC_version': True})
-    
+    group.set_var({'MPC_version': 'MPC_param'})
+    group.set_var({'n_of_saved_waypoints': 5})
+    group.back_scaling_factor = 0.3
+    group.back_rotation_factor = 0.4
+
     "Changing default rotation for initial position"
     positions = group.ellipse_generator(centerpoint = start_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 6, b = group.vehicles[0].radious * 3,
                                                ellipse_rotation = math.pi / 2)
     for i in range(len(group.vehicles)):
             group.vehicles[i].set_position(position = positions[i], position_type = 'initial')
-            
-            
+
+
     "Changing default rotation for final position"
     positions = group.ellipse_generator(centerpoint = goal_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 6, b = group.vehicles[0].radious * 3,
                                                ellipse_rotation = math.pi / 2)
     for i in range(len(group.vehicles)):
             group.vehicles[i].set_position(position = positions[i], position_type = 'final')
-    
-    
-    # group.intermediate_position_generator_SINGLE_RUN()
+
+
+    group.ACC_MPC_t_param()
     group.prepare()
+    group.ACC_MPC_t_param()
     
     import time
     t_iter = time.time()
@@ -150,22 +154,18 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     n_steps = math.floor(1 / group.vehicles[0].t_step)
     for i in range(0, n_steps):
-        
+
         group.set_var({'stage': i})
         for j in range(n_intermediate_ADMM):
+            group.ACC_MPC_t_param()
             group.solve()
-            # group.frenet_plotter(iternum = j, seed = seed)
             group.set_simulation(False)
-        
-        # group.save_trajectory_to_csv(t_desired = 3, t_hover = 0)
-        
+
         # Time-related things
         iteration_times += [time.time() - t_iter]
         print(str(i) + "th iteration time: " + str(time.time() - t_iter) + " seconds")
         t_iter = time.time()
-        
-        group.intermediate_position_generator()
-        group.frenet_plotter(iternum = i, seed = seed)
+
         group.simulation_step()
             
 

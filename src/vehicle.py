@@ -1060,8 +1060,12 @@ class Vehicle(VehicleBasis):
         self.DvX.extract(self.solution)
         self.variable_history["DvX_posterior"] += [copy.deepcopy(self.DvX)]
         feasibility_dict = self.check_feasibility_of_solution_x()
-        feasibility_dict["IPOPT_SUCCESS"] = self.solver.stats()['success']
-        feasibility_dict["IPOPT_RETURN_STATUS"] = self.solver.stats()['return_status']
+        try:
+            solver_stats = self.solver.stats()
+        except RuntimeError:
+            solver_stats = self.variable_history.get("solver_stats", [{}])[-1] if self.variable_history.get("solver_stats") else {}
+        feasibility_dict["IPOPT_SUCCESS"] = solver_stats.get('success', False)
+        feasibility_dict["IPOPT_RETURN_STATUS"] = solver_stats.get('return_status', 'unknown')
         self.variable_history["feasibility_dict"] += [feasibility_dict]
         self.variable_history['y'] += [self.DvX.y]
         self.variable_history['t_start'] += [self.t_start]

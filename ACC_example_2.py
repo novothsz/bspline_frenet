@@ -279,11 +279,3 @@ kappa_act = group.vehicles[0].variable_history['t_real_activation_list']
 kappa_local = group.vehicles[0].variable_history['t_intermediate_list']
 kappa_current = group.vehicles[0].variable_history['current_configuration_position']
 
-kappa_real = self.vehicles[0].variable_history['t_real_intermediate_list']
-kappa_pos = self.vehicles[0].variable_history['x_intermediate_list']
-kappa_act = self.vehicles[0].variable_history['t_real_activation_list']
-kappa_local = self.vehicles[0].variable_history['t_intermediate_list']
-kappa_current = self.vehicles[0].variable_history['current_configuration_position']
-
-
-current_configuration_position
