@@ -18,6 +18,11 @@ from .obstacle import Obstacle
 from .admm import data_exchange_x as run_data_exchange_x
 from .admm import lambda_update_data_exchange_z as run_lambda_update_data_exchange_z
 from .admm import solve as run_solve
+from .group_lifecycle import initialize_values as run_initialize_values
+from .group_lifecycle import prepare as run_prepare
+from .group_lifecycle import set_simulation as run_set_simulation
+from .group_lifecycle import set_var as run_set_var
+from .group_lifecycle import simulation_step as run_simulation_step
 from .timing import write_iteration_times as run_write_iteration_times
 from .warm_start import run_acc_mpc_t_param
 from .visualization import plot_frenet_view as render_plot_frenet_view
@@ -1505,124 +1510,18 @@ class Group(Environment):
     ###########################################################################
     ###########################################################################
     def initialize_values(self):
-        """ This function performs a single optimization step, whereas the
-        decision variables and parameters that will be used later in the ADMM iteration
-        are initialized.
-        It lets the vehicles to generate a trajectory from the starting position
-        to the goal position, without regarding each other, but avoiding the obstacles.
-        The duplicate variables are set to equal their original counterparts,
-        the a, b and d_tau values are initialized with the values found in this
-        optimization stepd and all lambda values are set to 1.
-        The data_exchange functions are reused here to exchange the data between
-        the agents.
-        
-        Besides the below step the following steps have to be taken in the 
-        vehicle group:
-            - define initialize_x()
-            - define initialize_values()
-            - update DvX.w0, DvZ.w0, PvX, PvZ before creating the solver in setup_x_update() and setup_y_update()
-        """
-
-        "Step 1: trajectory optimization"
-        # Initial optimization step (only finding the optimal trajectory,
-        # without considering formation)
-        for i in range(len(self.vehicles)):
-            # Let's also do the initialization stuff here
-            
-            self.vehicles[i].initialize_x()
-
-        "Step 2: exchanging solution"
-        # Exchanging information
-        message_container = []
-        # Collecting messages
-        for i in range(len(self.vehicles)):
-            message_container += self.vehicles[i].data_exchange_x_send()
-
-        # Broadcasting messages
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].data_exchange_x_receive(message_container)
-
-        "Step 3: initializing decision variables & parameters"
-        # Initializing decision variables and parameters.
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].initialize_values()
-
-        "Step 4: plotting"
-        # self.plot_initial_values()
+        return run_initialize_values(self)
 
     def prepare(self):
-        """ Requests all vehicles to perform the preparation processes for
-        creating the necessary variables and solver that are needed for the
-        ADMM iteration.
-        """
-
-        # Extra step: we initialize decision variables and parameters for faster convergence
-        # self.initialize_values()
-
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].prepare0()
-            self.vehicles[i].prepare1()
-            self.vehicles[i].prepare2()
-
-        return self
+        return run_prepare(self)
     
     def simulation_step(self):
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].simulation_step()
+        return run_simulation_step(self)
             
     def set_var(self, var):
-        for i in range(len(self.vehicles)):
-            if 'n_intermediate_ADMM' in var:
-                self.vehicles[i].n_intermediate_ADMM = var['n_intermediate_ADMM']
-                self.n_intermediate_ADMM = var['n_intermediate_ADMM']
-            if 'stage' in var:
-                self.vehicles[i].stage = var['stage']
-                self.stage = var['stage']
-                
-            if 'new_positions' in var:
-                self.vehicles[i].vehicle_positions_new['stage'] += [var['new_positions']['stage']]
-                if var['new_positions']['vehicle_positions_new'] != []:
-                    self.vehicles[i].vehicle_positions_new['vehicle_positions_new'] += [var['new_positions']['vehicle_positions_new'][i]]
-                else:
-                    self.vehicles[i].vehicle_positions_new['vehicle_positions_new'] += [var['new_positions']['vehicle_positions_new']]
-            if 'new_times' in var:
-                self.vehicles[i].vehicle_positions_new['stage'] += [var['new_times']['stage']]
-                if var['new_times']['vehicle_times_new'] != []:
-                    self.vehicles[i].vehicle_positions_new['vehicle_times_new'] += [var['new_times']['vehicle_times_new'][i]]
-                else:
-                    self.vehicles[i].vehicle_positions_new['vehicle_times_new'] += [var['new_times']['vehicle_times_new']]
-                    
-            if 't_step' in var:
-                self.vehicles[i].t_step = var['t_step']
-            if 't_window_size' in var:
-                self.vehicles[i].t_window_size = var['t_window_size']
-            if 't_end' in var:
-                self.vehicles[i].t_end = var['t_end']
-            if 'knot_intervals' in var:
-                self.vehicles[i].knot_intervals = var['knot_intervals']
-            if 't_resolution_length' in var:
-                self.vehicles[i].t_resolution_length = var['t_resolution_length']
-            if 'rho' in var:
-                self.vehicles[i].rho = var['rho']
-            if 'rho_input' in var:
-                self.vehicles[i].rho_input = var['rho_input']
-            if 'rho_final_value' in var:
-                self.vehicles[i].rho_final_value = var['rho_final_value']
-                
-            if 'MPC_version' in var:
-                self.vehicles[i].MPC_version = var['MPC_version']
-                self.MPC_version = var['MPC_version']
-            if 'n_of_saved_waypoints' in var:
-                self.vehicles[i].n_of_saved_waypoints = var['n_of_saved_waypoints']
-                
-                
-                
-                
-                
+        return run_set_var(self, var)
     def set_simulation(self, simulation = False):
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].simulation = simulation
-            self.vehicles[i].shift_enabled = simulation
+        return run_set_simulation(self, simulation=simulation)
         
     def data_exchange_x(self):
         return run_data_exchange_x(self)
