@@ -1,120 +1,72 @@
-"""
-Main function
-
-Ways to improve:
-    - hyperparam optimization
-"""
-
-import time
-from src import *
-import matplotlib.pyplot as plt
-import numpy as np
-
-import random
-import sys
 import math
+import random
+import time
 
-import os
-os.system("mkdir log")
-os.system("mkdir urdf")
-os.system("mkdir csv")
-os.system("mkdir figures")
-os.system("mkdir video")
-os.system("mkdir yaml")
+import matplotlib.pyplot as plt
 
-
-
-
-
-def run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage):
-
-
-    def writing_parameters_to_file(iteration_times):
-        """
-        Writing parameteres to file
-        """
-        cwd = os.getcwd()
-        log_file = open(cwd + "/log/" + "log.txt", "w")
-    
-        # Writing time required for iteration into file
-        log_file.writelines('\n')
-        log_file.writelines('Iteration times: \n')
-        for i in range(len(iteration_times)):
-            log_file.writelines(str(iteration_times[i]) + '\n')
-    
-        log_file.writelines('Final time: \n')
-        log_file.writelines(str(np.sum(iteration_times)))
+from src import (
+    GroupRuntimeConfig,
+    Obstacle,
+    attach_obstacles,
+    create_group,
+    ensure_output_dirs,
+    set_ellipse_initial_final,
+    warmup_mpc,
+)
 
 
-    targetHeight = 0.8
+def _default_obstacles():
     obstacles = []
-    
-    plt.close('all')
-    random.seed(64)
-    seed = 64
-    print("Seed was:", 64)
 
-    
-    "Obstacles"
-    obstacles = []
-    # Obstacle 1
-    corners = ([0.0, -0.3], [0.5,-0.3], [0.5, 0.3], [0.0, 0.3])
-    delta = 0.25
-    corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
-    # obstacles += [Obstacle(ID = 0, corners = corners)]
-    # Obstacle 1 NEW
-    corners = ([0.0, -0.3], [0.5,-0.3], [0.5, 0.3], [0.0, 0.3])
-    delta = 0.15
-    corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
-    corners = ([0.15, -0.15], [0.5, 0.053], [0.25, 0.38], [-0.145, 0.145])
-    corners = ([0.2, -0.25], [0.52, -0.02  ], [0.15, 0.5], [-0.2, 0.23])
-    obstacles += [Obstacle(ID = 0, corners = corners)]
-    
-    # Obstacle 2
+    obstacles.append(
+        Obstacle(
+            ID=0,
+            corners=([0.2, -0.25], [0.52, -0.02], [0.15, 0.5], [-0.2, 0.23]),
+        )
+    )
+
     dx = 0.3
     dy = 0.3
-    tmp_obs = ([-2.4674-dx, -1-dy],
-             [-2.4674+dx, -1-dy],
-             [-2.4674+dx, -6],
-             [-2.4674-dx, -6])
-    obstacles += [Obstacle(ID = 1, corners = tmp_obs)]
-    
-    # Obstacle 3
-    tmp_obs = ([-2.4674-dx, -1+dy],
-             [-2.4674+dx, -1+dy],
-             [-2.4674+dx, 6],
-             [-2.4674-dx, 6])
-    obstacles += [Obstacle(ID = 2,  corners = tmp_obs)]
-    
-    # Obstacle 4
-    tmp_obs = ([2.474-dx, 1-dy],
-              [2.474+dx, 1-dy],
-              [2.474+dx, -6],
-              [2.474-dx, -6])
-    obstacles += [Obstacle(ID = 3, corners = tmp_obs)]
-    # Obstacle 5
-    tmp_obs = ([2.474-dx, 1+dy],
-              [2.474+dx, 1+dy],
-              [2.474+dx, 6],
-              [2.474-dx, 6])
-    obstacles += [Obstacle(ID = 4, corners = tmp_obs)]
-    
-    
-            
-    # Create group
-    group = Group(n_vehicles=4, start_position = start_position, goal_position = goal_position, stage = stage)
-    group.set_group_position(
-        position=group.start_position,targetHeight = targetHeight, position_type='initial')
-    group.set_group_position(
-        position=group.goal_position, targetHeight = targetHeight, position_type='final')
-    group.add_obstacles(obstacles)
-    group.organise_neighbours()
-    
-    
-    
-    n_intermediate_ADMM = 1
-    config = GroupRuntimeConfig(
-        n_intermediate_ADMM=n_intermediate_ADMM,
+    obstacles.append(
+        Obstacle(
+            ID=1,
+            corners=([-2.4674 - dx, -1 - dy], [-2.4674 + dx, -1 - dy], [-2.4674 + dx, -6], [-2.4674 - dx, -6]),
+        )
+    )
+    obstacles.append(
+        Obstacle(
+            ID=2,
+            corners=([-2.4674 - dx, -1 + dy], [-2.4674 + dx, -1 + dy], [-2.4674 + dx, 6], [-2.4674 - dx, 6]),
+        )
+    )
+    obstacles.append(
+        Obstacle(
+            ID=3,
+            corners=([2.474 - dx, 1 - dy], [2.474 + dx, 1 - dy], [2.474 + dx, -6], [2.474 - dx, -6]),
+        )
+    )
+    obstacles.append(
+        Obstacle(
+            ID=4,
+            corners=([2.474 - dx, 1 + dy], [2.474 + dx, 1 + dy], [2.474 + dx, 6], [2.474 - dx, 6]),
+        )
+    )
+
+    return obstacles
+
+
+def run_optimization(start_position, goal_position, stage=0):
+    plt.close("all")
+    seed = 64
+    random.seed(seed)
+    print("Seed was:", seed)
+
+    group = create_group(start_position=start_position, goal_position=goal_position, stage=stage, target_height=0.8)
+    attach_obstacles(group, _default_obstacles())
+
+    n_intermediate_admm = 1
+    GroupRuntimeConfig(
+        n_intermediate_ADMM=n_intermediate_admm,
         t_step=0.1,
         t_window_size=0.2,
         t_end=0.2,
@@ -123,77 +75,54 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         rho=50,
         rho_input=200,
         rho_final_value=5000,
-        mpc_version='MPC_param',
+        mpc_version="MPC_param",
         n_of_saved_waypoints=5,
         back_scaling_factor=0.3,
         back_rotation_factor=0.4,
+    ).apply(group)
+
+    set_ellipse_initial_final(
+        group,
+        start_position=start_position,
+        goal_position=goal_position,
+        a_scale=6,
+        b_scale=3,
+        ellipse_rotation=math.pi / 2,
     )
-    config.apply(group)
+    warmup_mpc(group)
 
-    "Changing default rotation for initial position"
-    positions = group.ellipse_generator(centerpoint = start_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 6, b = group.vehicles[0].radious * 3,
-                                               ellipse_rotation = math.pi / 2)
-    for i in range(len(group.vehicles)):
-            group.vehicles[i].set_position(position = positions[i], position_type = 'initial')
-
-
-    "Changing default rotation for final position"
-    positions = group.ellipse_generator(centerpoint = goal_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 6, b = group.vehicles[0].radious * 3,
-                                               ellipse_rotation = math.pi / 2)
-    for i in range(len(group.vehicles)):
-            group.vehicles[i].set_position(position = positions[i], position_type = 'final')
-
-
-    group.ACC_MPC_t_param()
-    group.prepare()
-    group.ACC_MPC_t_param()
-    
-    import time
     t_iter = time.time()
-    iteration_times = []
-    
-    
     n_steps = math.floor(1 / group.vehicles[0].t_step)
-    for i in range(0, n_steps):
 
-        group.set_var({'stage': i})
-        for j in range(n_intermediate_ADMM):
+    for i in range(n_steps):
+        group.set_var({"stage": i})
+        for _ in range(n_intermediate_admm):
             group.ACC_MPC_t_param()
             group.solve()
             group.set_simulation(False)
 
-        # Time-related things
-        iteration_times += [time.time() - t_iter]
-        print(str(i) + "th iteration time: " + str(time.time() - t_iter) + " seconds")
+        dt = time.time() - t_iter
+        print(str(i) + "th iteration time: " + str(dt) + " seconds")
         t_iter = time.time()
-
         group.simulation_step()
-            
 
-    # group.plot_moovie_frames(iternum=i, seed=seed)
-    
-    # writing_parameters_to_file(iteration_times)
-    
     return n_steps, group
-    
-# """    
-group_stages = []
-corners_list = []
-min_iterations = 2
-max_iterations = 2
 
 
-# Stage 0
-stage = 0
-start_position = [0.0, 0.0, 0.0]
-goal_position = [0.0, 0.0, 0.0]
-n_steps, group = run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage)
-group.plot_moovie_frames(n_steps, iternum=0, seed=0)
-# group.plot_moovie_frames_old(iternum=0, seed=0)
+# Compatibility alias used by older ad-hoc tooling.
+run_optimizaiton = run_optimization
 
-# """
-# group.vehicles[0].calculate_formation_error()
-# group.calculate_formation_error()
-# group.save_trajectory_to_csv(n_steps)
-"This is not good like this! We need to save the final plots for the various n_intermediate_ADMM values and run the code multiple times"
-"Only then can we assemble and compare the results."
+
+def main():
+    ensure_output_dirs()
+
+    n_steps, group = run_optimization(
+        start_position=[0.0, 0.0, 0.0],
+        goal_position=[0.0, 0.0, 0.0],
+        stage=0,
+    )
+    group.plot_moovie_frames(n_steps, iternum=0, seed=0)
+
+
+if __name__ == "__main__":
+    main()

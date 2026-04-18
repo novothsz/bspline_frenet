@@ -1,148 +1,31 @@
-"""
-Main function
-
-Ways to improve:
-    - hyperparam optimization
-"""
-
-import time
-from src import *
-import matplotlib.pyplot as plt
-import numpy as np
-
-import random
-import sys
 import math
+import random
+import time
 
-import os
-os.system("mkdir log")
-os.system("mkdir urdf")
-os.system("mkdir csv")
-os.system("mkdir figures")
-os.system("mkdir video")
-os.system("mkdir yaml")
+import matplotlib.pyplot as plt
 
-
-
-
-
-def run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage):
-
-
-    def writing_parameters_to_file(iteration_times):
-        """
-        Writing parameteres to file
-        """
-        cwd = os.getcwd()
-        log_file = open(cwd + "/log/" + "log.txt", "w")
-    
-        # Writing time required for iteration into file
-        log_file.writelines('\n')
-        log_file.writelines('Iteration times: \n')
-        for i in range(len(iteration_times)):
-            log_file.writelines(str(iteration_times[i]) + '\n')
-    
-        log_file.writelines('Final time: \n')
-        log_file.writelines(str(np.sum(iteration_times)))
+from src import (
+    GroupRuntimeConfig,
+    attach_random_obstacles,
+    create_group,
+    ensure_output_dirs,
+    set_ellipse_initial_final,
+    warmup_mpc,
+)
 
 
-    targetHeight = 0.8
-    obstacles = []
-    
-    plt.close('all')
-    random.seed(64)
+def run_optimization(start_position, goal_position, stage=0):
+    plt.close("all")
     seed = 64
-    print("Seed was:", 64)
+    random.seed(seed)
+    print("Seed was:", seed)
 
-    """
-    "Obstacles"
-    obstacles = []
-    # Obstacle 1
-    corners = ([0.0, -0.3], [0.5,-0.3], [0.5, 0.3], [0.0, 0.3])
-    delta = 0.25
-    corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
-    # obstacles += [Obstacle(ID = 0, corners = corners)]
-    # Obstacle 1 NEW
-    corners = ([0.0, -0.3], [0.5,-0.3], [0.5, 0.3], [0.0, 0.3])
-    delta = 0.15
-    corners = ([0.0+delta, -delta], [1+delta,0.6-delta], [1-delta, 0.6+delta], [0.0-delta, delta])
-    corners = ([0.15, -0.15], [0.5, 0.053], [0.25, 0.38], [-0.145, 0.145])
-    corners = ([0.2, -0.25], [0.52, -0.02  ], [0.15, 0.5], [-0.2, 0.23])
-    corners = ([-0.323, -0.2], [-0.18, -0.4  ], [0.5, 0.0], [0.323, 0.2]) # ACC
-    corners = ([-0.323, -0.2], [0, -0.6  ], [0.658, -0.174], [0.323, 0.2]) # ACC
-    delta_x = 0.03
-    delta_y = -0.1
-    corners = ([-0.323 + delta_x, -0.2 + delta_y], [0 + delta_x, -0.6  + delta_y ], [0.658 + delta_x, -0.174 + delta_y], [0.323 + delta_x, 0.2 + delta_y]) # ACC
-    
-    
-    delta_x = 0.03 * -1
-    delta_y = -0.1 * -1
-    delta_x = 0.03 * -0
-    delta_y = -0.1 * -0
-    corners = ([-0.132, -0.2], [0.182, -0.6  ], [0.495, -0.4], [0.185, 0.0]) # ACC
-    corners = ([-0.132 + delta_x, -0.2 + delta_y], [0.182 + delta_x, -0.6 + delta_y], [0.495 + delta_x, -0.4 + delta_y], [0.185 + delta_x, 0.0 + delta_y]) # ACC
-    obstacles += [Obstacle(ID = 0, corners = corners)]
-    
-    # Obstacle 2
-    dx = 0.3
-    dy = 0.4
-    tmp_obs = ([-2.4674-dx, -1-dy],
-             [-2.4674+dx, -1-dy],
-             [-2.4674+dx, -6],
-             [-2.4674-dx, -6])
-    obstacles += [Obstacle(ID = 1, corners = tmp_obs)]
-    
-    # Obstacle 3
-    tmp_obs = ([-2.4674-dx, -1+dy],
-             [-2.4674+dx, -1+dy],
-             [-2.4674+dx, 6],
-             [-2.4674-dx, 6])
-    obstacles += [Obstacle(ID = 2,  corners = tmp_obs)]
-    
-    # Obstacle 4
-    tmp_obs = ([2.474-dx, 1-dy],
-              [2.474+dx, 1-dy],
-              [2.474+dx, -6],
-              [2.474-dx, -6])
-    obstacles += [Obstacle(ID = 3, corners = tmp_obs)]
-    # Obstacle 5
-    # tmp_obs = ([2.474-dx, 1+dy],
-    #           [2.474+dx, 1+dy],
-    #           [2.474+dx, 6],
-    #           [2.474-dx, 6])
-    # obstacles += [Obstacle(ID = 4, corners = tmp_obs)]
-    
-    
-    dx = 0.3
-    dy = 0.4
-    tmp_obs = ([2.474-dx, 1-dy],
-              [2.474+dx, 1-dy],
-              [2.474+dx, 1+dy],
-              [2.474-dx, 1+dy])
-    
-    # obstacles += [Obstacle(ID = 5, corners = tmp_obs)]
-    """
-    
-            
-    # Create group
-    group = Group(n_vehicles=4, start_position = start_position, goal_position = goal_position, stage = stage)
-    group.set_group_position(
-        position=group.start_position,targetHeight = targetHeight, position_type='initial')
-    group.set_group_position(
-        position=group.goal_position, targetHeight = targetHeight, position_type='final')
-    
-    # obstacles = group.generate_obstacles()
-    # group.add_obstacles(obstacles)
-    
-    obstacles = group.generate_obstacles(42)
-    group.add_obstacles(obstacles)
-    group.organise_neighbours()
-    
-    
-    
-    n_intermediate_ADMM = 1
-    config = GroupRuntimeConfig(
-        n_intermediate_ADMM=n_intermediate_ADMM,
+    group = create_group(start_position=start_position, goal_position=goal_position, stage=stage, target_height=0.8)
+    attach_random_obstacles(group, seed=42)
+
+    n_intermediate_admm = 1
+    GroupRuntimeConfig(
+        n_intermediate_ADMM=n_intermediate_admm,
         t_step=0.01,
         t_window_size=0.2,
         t_end=0.2,
@@ -151,127 +34,61 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
         rho=50,
         rho_input=200,
         rho_final_value=5000,
-        mpc_version='MPC_param',
+        mpc_version="MPC_param",
         n_of_saved_waypoints=5,
         back_scaling_factor=0.3,
         back_rotation_factor=0.4,
         dfm_lookahead_ratio=0.2,
         dfm_lookback_ratio=0.3,
+    ).apply(group)
+
+    set_ellipse_initial_final(
+        group,
+        start_position=start_position,
+        goal_position=goal_position,
+        a_scale=9,
+        b_scale=5,
+        ellipse_rotation=math.pi / 2,
     )
-    config.apply(group)
-    
-    
-    
-    
-    
-    
-    "Changing default rotation for initial position"
-    positions = group.ellipse_generator(centerpoint = start_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 9, b = group.vehicles[0].radious * 5,
-                                               ellipse_rotation = math.pi / 2)
-    for i in range(len(group.vehicles)):
-            group.vehicles[i].set_position(position = positions[i], position_type = 'initial')
-            
-            
-    "Changing default rotation for final position"
-    positions = group.ellipse_generator(centerpoint = goal_position, n_positions = len(group.vehicles), a = group.vehicles[0].radious * 9, b = group.vehicles[0].radious * 5,
-                                               ellipse_rotation = math.pi / 2)
-    for i in range(len(group.vehicles)):
-            group.vehicles[i].set_position(position = positions[i], position_type = 'final')
-    
-    new_version = True
-    
-    if new_version == False:
-        group.intermediate_position_generator_PENI_MPC()
-    else:
-        # group.ACC_MPC()
-        group.ACC_MPC_t_param()
-    # group.ACC_MPC_t_param()    
-    group.prepare()
-    if new_version == False:
-        group.intermediate_position_generator_PENI_MPC()
-    else:
-        # group.ACC_MPC()
-        group.ACC_MPC_t_param()
-       
-       
-    
-    import time
+    warmup_mpc(group)
+
     t_iter = time.time()
     iteration_times = []
-    
-    # group.intermediate_position_generator()
     n_steps = math.floor(1 / group.vehicles[0].t_step)
-    for i in range(0, n_steps):
-    # for i in range(19):
-        
-        group.set_var({'stage': i})
-        for j in range(n_intermediate_ADMM):
-            
+
+    for i in range(n_steps):
+        group.set_var({"stage": i})
+        for _ in range(n_intermediate_admm):
             group.ACC_MPC_t_param()
             group.solve()
-            # group.frenet_plotter(iternum = j, seed = seed)
             group.set_simulation(False)
-        
-        # group.save_trajectory_to_csv(t_desired = 3, t_hover = 0)
-        
-        # Time-related things
-        iteration_times += [time.time() - t_iter]
-        # print(str(i) + "th iteration time: " + str(time.time() - t_iter) + " seconds")
-        print(str(time.time() - t_iter) + " seconds")
-        # print(" ")
+
+        dt = time.time() - t_iter
+        iteration_times.append(dt)
+        print(str(dt) + " seconds")
         t_iter = time.time()
-              
-        # import time
-        # t_peni_mpc = time.time()
-        # if new_version == False:
-        #     group.intermediate_position_generator_PENI_MPC()
-        # else:
-        #     # group.ACC_MPC()
-        #     # print("Stage == " + str(group.stage))
-        #     # if group.stage == 7:
-        #     #     kappa = True
-        #     group.ACC_MPC_t_param()
-        # print('peni intermediate time: ' + str(time.time() - t_peni_mpc))
-        # group.intermediate_position_generator()
-        # group.frenet_plotter(iternum = i, seed = seed)
         group.simulation_step()
-            
 
-    # group.plot_moovie_frames(iternum=i, seed=seed)
-    
-    # writing_parameters_to_file(iteration_times)
-    
     return n_steps, group, iteration_times
-    
-# """    
-group_stages = []
-corners_list = []
-min_iterations = 2
-max_iterations = 2
 
 
-# Stage 0
-stage = 0
-start_position = [0.0, 0.0, 0.0]
-goal_position = [0.0, 0.0, 0.0]
-n_steps, group, iteration_times = run_optimizaiton(corners_list, start_position, goal_position, min_iterations, max_iterations, stage)
-
-group.write_iteration_times(prefix = 'single_core_')
-group.plot_moovie_frames(n_steps, iternum=0, seed=0)
-group.plot_frenet_view()
-# group.plot_moovie_frames_old(iternum=0, seed=0)
-
-# """
-# group.vehicles[0].calculate_formation_error()
-# group.calculate_formation_error()
-# group.save_trajectory_to_csv(n_steps)
-"This is not good like this! We need to save the final plots for the various n_intermediate_ADMM values and run the code multiple times"
-"Only then can we assemble and compare the results."
+# Compatibility alias used by older ad-hoc tooling.
+run_optimizaiton = run_optimization
 
 
-kappa_real = group.vehicles[0].variable_history['t_real_intermediate_list']
-kappa_pos = group.vehicles[0].variable_history['x_intermediate_list']
-kappa_act = group.vehicles[0].variable_history['t_real_activation_list']
-kappa_local = group.vehicles[0].variable_history['t_intermediate_list']
-kappa_current = group.vehicles[0].variable_history['current_configuration_position']
+def main():
+    ensure_output_dirs()
+
+    n_steps, group, _ = run_optimization(
+        start_position=[0.0, 0.0, 0.0],
+        goal_position=[0.0, 0.0, 0.0],
+        stage=0,
+    )
+    group.write_iteration_times(prefix="single_core_")
+    group.plot_moovie_frames(n_steps, iternum=0, seed=0)
+    group.plot_frenet_view()
+
+
+if __name__ == "__main__":
+    main()
 

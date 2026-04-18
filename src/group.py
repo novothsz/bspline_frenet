@@ -2,14 +2,18 @@ from .vehicle import Vehicle
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-from .frenet_path import FrenetPath
 from .environment import Environment
-yaml = None
 from numpy import interp
 import time
 import csv
 import random
 import copy
+
+try:
+    import yaml as _yaml
+    yaml = _yaml if hasattr(_yaml, "dump") else None
+except Exception:
+    yaml = None
 
 from .obstacle import Obstacle
 from .warm_start import run_acc_mpc_t_param
