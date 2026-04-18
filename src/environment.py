@@ -1,9 +1,9 @@
 from matplotlib.patches import Polygon
 import numpy as np
 from .frenet_path import FrenetPath
-from .frenet_spline import SplineFitter
+from .spline_fitter import SplineFitter
 import os
-from .spline import BSpline, BSplineBasis
+from .bspline import BSpline, BSplineBasis
 
 # import pickle
 # import dill

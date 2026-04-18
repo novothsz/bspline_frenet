@@ -4,9 +4,7 @@ from matplotlib.patches import Polygon
 import numpy as np
 from numpy import interp
 from .environment import Environment
-from .spline import BSpline, BSplineBasis
-
-from .spline_extra import shift_spline, shift_knot1_fwd, crop_spline, extrapolate
+from .bspline import BSpline, BSplineBasis, crop_spline, extrapolate, shift_knot1_fwd, shift_spline
 
 
 class Obstacle(Environment):

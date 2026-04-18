@@ -141,28 +141,24 @@ def run_optimizaiton(corners_list, start_position, goal_position, min_iterations
     
     
     n_intermediate_ADMM = 1
-    "n_steps = math.floor(1 / group.vehicles[0].t_step)"
-    # n_steps = 10
-    group.set_var({'n_intermediate_ADMM': n_intermediate_ADMM})
-    group.set_var({'t_step': 0.01})
-    group.set_var({'t_window_size': 0.2})
-    group.set_var({'t_end': 0 + 0.2})
-    group.set_var({'knot_intervals': 5})
-    group.set_var({'t_resolution_length': 10})
-    group.set_var({'rho': 50})
-    group.set_var({'rho_input': 200})
-    group.set_var({'rho_final_value': 5000})
-    group.back_scaling_factor = 0.3
-    group.back_rotation_factor = 0.4
-    group.DFM_lookahead = group.vehicles[0].t_window_size * 0.2
-    group.DFM_lookback = group.vehicles[0].t_window_size * 0.3
-    
-    # group.set_var({'MPC_version': True})
-    group.set_var({'MPC_version': 'MPC_param'}) 
-    # group.set_var({'n_of_saved_waypoints': int(group.vehicles[0].t_window_size / group.vehicles[0].t_step) + 1}) 
-    group.set_var({'n_of_saved_waypoints': 5}) 
-    # print(np.linspace(group.vehicles[0].t_step, 1, group.vehicles[0].n_of_saved_waypoints).tolist())
-    # print(group.vehicles[0].n_of_saved_waypoints)
+    config = GroupRuntimeConfig(
+        n_intermediate_ADMM=n_intermediate_ADMM,
+        t_step=0.01,
+        t_window_size=0.2,
+        t_end=0.2,
+        knot_intervals=5,
+        t_resolution_length=10,
+        rho=50,
+        rho_input=200,
+        rho_final_value=5000,
+        mpc_version='MPC_param',
+        n_of_saved_waypoints=5,
+        back_scaling_factor=0.3,
+        back_rotation_factor=0.4,
+        dfm_lookahead_ratio=0.2,
+        dfm_lookback_ratio=0.3,
+    )
+    config.apply(group)
     
     
     

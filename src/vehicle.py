@@ -9,11 +9,9 @@ import matplotlib.pyplot as plt
 
 from casadi import MX, SX, Function, vertcat, nlpsol, cos, sin, norm_2 #, dot
 from casadi import dot
-from .spline import BSpline, BSplineBasis
-from .spline_extra import definite_integral
-
-
-from .vehicle_basis import VehicleBasis
+from .bspline import BSpline, BSplineBasis, definite_integral
+from .environment import Environment
+from .vehicle_basis import VehicleBasis as _LegacyVehicleBasis
 from .param import ParamValX, ParamValZ, DecisionVarX, DecisionVarZ
 import time
 
@@ -21,9 +19,10 @@ from matplotlib.collections import LineCollection
 from matplotlib.pyplot import cm
 import copy
 
-class Vehicle(VehicleBasis):
+class Vehicle(Environment):
     def __init__(self):
-        super().__init__()
+        legacy_state = _LegacyVehicleBasis()
+        self.__dict__.update(legacy_state.__dict__)
         
         self.t_start = 0.0
         self.t_step = 0.04 # 0.04 # Changed in simulation_step() upon first call
@@ -1612,3 +1611,14 @@ class Vehicle(VehicleBasis):
         ax.add_patch(rectangle)
 
         return ax
+
+
+def _inject_legacy_vehicle_basis_methods():
+    for name, member in _LegacyVehicleBasis.__dict__.items():
+        if name == "__init__" or name.startswith("_"):
+            continue
+        if callable(member) and name not in Vehicle.__dict__:
+            setattr(Vehicle, name, member)
+
+
+_inject_legacy_vehicle_basis_methods()

@@ -12,6 +12,9 @@ import random
 import copy
 
 from .obstacle import Obstacle
+from .warm_start import run_acc_mpc_t_param
+from .visualization import plot_frenet_view as render_plot_frenet_view
+from .visualization import plot_moovie_frames as render_plot_moovie_frames
 
 class Group(Environment):
     def __init__(self, n_vehicles : int, start_position = [-0.8, 0, 0], goal_position = [0.8, 0, 0], stage = 0):
@@ -96,194 +99,9 @@ class Group(Environment):
     ###########################################################################
     
     def ACC_MPC_t_param(self):
-        "To this end, we introduce, DFG-MPC... :))"
-        # We call the function BEFORE the simulation step, therefore to get the correct values for the next iteration, lets add a t_step to the values :)
-                
-        # Setting start & end times
-        # t_sweep_start = self.vehicles[0].t_start + self.vehicles[0].t_step
-        # t_sweep_end = self.vehicles[0].t_end + self.vehicles[0].t_step
-        t_sweep_start = self.vehicles[0].t_start
-        t_sweep_end = self.vehicles[0].t_end
-        
-        
-        # Okay, there is actually a little difference compared to the simple sweep:
-            # 1. We need to clear the intermediate values before every sweep
-            # 2. Sweep
-            # 3. Update the "current_configuration_position" value so we know with what starting position we want to start the next DFG iteration.
-            # 4. We need to replicate (or truncate) the last values of the intermediate list so that the length is consistent. 
+        return run_acc_mpc_t_param(self)
 
-        # Clear the history, if this is the first stage still... (because anything we have saved before
-        # is irrelevant)
-        if self.stage == 0:
-            for vehicle in self.vehicles:
-                vehicle.variable_history['x_intermediate_list'] = []
-                vehicle.variable_history['a_intermediate_list'] = []
-                vehicle.variable_history['t_intermediate_list'] = []
-                vehicle.variable_history['t_real_intermediate_list'] = []
-                
-                
-            
-            
-        # Step 1: Clear the intermediate lists
-        for i, vehicle in enumerate(self.vehicles):
-            vehicle.x_intermediate_list = []
-            vehicle.a_intermediate_list = []
-            vehicle.t_intermediate_list = []
-            vehicle.t_real_intermediate_list = []
-            vehicle.t_real_activation_list = []
-        
-        # Step 2: Sweep
-        max_len_x = self.vehicles[0].n_of_saved_waypoints * 3
-        max_len_a = self.vehicles[0].n_of_saved_waypoints * len(self.vehicles[0].obstacles) * 2 
-        max_len_t = self.vehicles[0].n_of_saved_waypoints
-        
-        if self.stage == 13:
-            kappa = True
-            
-        # the cummulative values hold the relative formation rotation  scaling w.r.t. the original formation configuration
-        cum_rotation_old = self.cum_rotation
-        cum_scaling_old = self.cum_scaling
-        self.sweep_ACC(t_sweep_start = t_sweep_start, t_sweep_end = t_sweep_end)
-        cum_rotation_new = self.cum_rotation
-        cum_scaling_new = self.cum_scaling
-        # Let's set back the cummulative values.
-        # We accept the cummultive value in Step 3, if we update the current_configuration_position
-        self.cum_rotation = cum_rotation_old
-        self.cum_scaling = cum_scaling_old
-        
-        
-        # Step 3: Update the "current_configuration_position"
-        # Before we do this duplication stuff, we need to find the next "current_configuration_position" value
-        # What do we do? So if in the next step we will be in between some intermediate-calculated values, then we shall
-        # use the formation configuration valid at that timestep as a starting-point for the next DFG iteration.
-        
-        # How do we do that?
-        # So if history of t_real_intermediate_list doesn't exist, we don't do anything.
-        # If it does, then, we search for the highest index in the list, that is lower, than t_sweep_start.
-        # Use that index to extract the correct x_intermediate_list. This will serve as a starting configuration for the DFG.
-        for v, vehicle in enumerate(self.vehicles):
-            greater_ = False
-            index_ = 0
-            change_of_current_configuration_needed = False
-            if len(vehicle.variable_history['t_real_intermediate_list']) > 0: # Meaning: not the first iteration...
-                # If in the next iteration we enter the active zone of an intermediate formation, then the next iteration of the DFG should assume,
-                # that at the beginning of its iteration we will start from that specific formation.
-                # This is reasonable, because we can assume, that the previously generated trajectories have already brought
-                # the vehicles in a formation that is close-enough to it.
-                for i, t in enumerate(vehicle.variable_history['t_real_activation_list'][-1]):
-                    greater_new = (t[0] <= t_sweep_start + vehicle.t_step)
-                    # If before we were in the activation zone of an intermediate formation, but now we are not anymore. We have stepped out of it.
-                    # TODO: is it correct like this?
-                    if (greater_ == True) and (greater_new == False):
-                        index_ = i-1 # We have already stepped out if it. So the previous i gives us the index of the formation configuration we are searching for.
-                        change_of_current_configuration_needed = True
-                        break
-                    greater_ = greater_new
-                # What happens when we step into an activation zone, but the list has only a single element, 
-                # therefore greater_new will never be false again, hence we will not use the configuration?
-                # Then we take the last index.
-                if greater_ == True and greater_new == True:
-                    index_ = len(vehicle.variable_history['t_real_activation_list'][-1]) - 1
-                    change_of_current_configuration_needed = True
-                
-                
-            # We only change the "current_configuration_position" value, if 1) it needs to be changed 3) we don't get error when indexing
-            if change_of_current_configuration_needed ==  True and index_ >= 0 and len(vehicle.variable_history['t_real_intermediate_list']) > 0:
-                idx = np.arange(int(vehicle.state_len/2)*index_,int(vehicle.state_len/2)*index_+int(vehicle.state_len/2))
-                idx = np.arange(3*index_,3*index_+3)
-                vehicle.current_configuration_position = np.array(vehicle.variable_history['x_intermediate_list'][-1]).reshape(-1)[idx].tolist()[:3]
-                self.cum_rotation = np.array(vehicle.variable_history['x_intermediate_list'][-1]).reshape(-1)[idx].tolist()[2]
-                self.cum_scaling = cum_scaling_old # TODO: well, what to do with this?
-            vehicle.variable_history['current_configuration_position'] += [vehicle.current_configuration_position]
-                
-            
-        # Step 3.5: Okay, so we habe the a_intermediate_list
-        # For each obsacle, that is isn't doing any problems for us, put zeros
-        # Otherwise yeah... ;)
-        
-        """
-        for i, vehicle in enumerate(self.vehicles):
-            a_intermediate_list = copy.deepcopy(vehicle.a_intermediate_list)
-            a_intermediate_ID_list = vehicle.a_intermediate_ID_list
-            
-            # Blowing up, just in case :)
-            a_intermediate_list = a_intermediate_list + [0 , 0] * len(self.vehicles[0].obstacles)
-            a_intermediate_ID_list = a_intermediate_ID_list + [0] * len(self.vehicles[0].obstacles)
-            
-            a_intermediate_list_new = []
-            
-            for j in range(len(self.vehicles[0].obstacles)):
-                if j == a_intermediate_ID_list[0]:
-                    a_intermediate_list_new += a_intermediate_list[:2]
-                    a_intermediate_list = a_intermediate_list[2:]
-                    a_intermediate_ID_list = a_intermediate_ID_list[1:]
-                else:
-                    a_intermediate_list_new += [0, 0]
-        """
-                    
-            
-        
-        
-        
-        # Step 4: Replication/truncation    
-        for i, vehicle in enumerate(self.vehicles):
-            x_intermediate_list = vehicle.x_intermediate_list
-            a_intermediate_list = vehicle.a_intermediate_list
-            t_intermediate_list = vehicle.t_intermediate_list
-            
-            current_len_x = len(x_intermediate_list)
-            current_len_a = len(a_intermediate_list)
-            current_len_t = len(t_intermediate_list)
-            
-            single_len_a = len(self.vehicles[0].obstacles) * 2 
-            
-            # Truncation
-            if len(x_intermediate_list) > max_len_x:
-                vehicle.x_intermediate_list = x_intermediate_list[:int((current_len_x-max_len_x)/3)]
-                vehicle.a_intermediate_list = a_intermediate_list[:int((current_len_a-max_len_a)/2)]
-                vehicle.t_intermediate_list = vehicle.t_intermediate_list[:(current_len_t-max_len_t)]
-                vehicle.t_real_intermediate_list = vehicle.t_real_intermediate_list[:(current_len_t-max_len_t)]
-                
-            # Replication
-            if len(x_intermediate_list) < max_len_x:
-                diff_x = max_len_x - current_len_x
-                diff_a = max_len_a - current_len_a
-                diff_t = max_len_t - current_len_t
-                vehicle.x_intermediate_list = vehicle.x_intermediate_list + vehicle.x_intermediate_list[-3:] * int(diff_x/3)
-                vehicle.a_intermediate_list = vehicle.a_intermediate_list + vehicle.a_intermediate_list[-single_len_a:] * int(diff_a/single_len_a)
-                
-                
-                if max_len_a != len(vehicle.a_intermediate_list):
-                    kappa = True
-                    print('Baj van főnök!')
-                
-                
-                vehicle.t_intermediate_list = vehicle.t_intermediate_list + [vehicle.t_intermediate_list[-1]] * diff_t
-                vehicle.t_real_intermediate_list = vehicle.t_real_intermediate_list + [vehicle.t_real_intermediate_list[-1]] * diff_t
-                
-                
-            
-            
-            assert max_len_x == len(vehicle.x_intermediate_list)
-            if max_len_a != len(vehicle.a_intermediate_list):
-                kappa = True
-            # assert max_len_a == len(vehicle.a_intermediate_list)
-            assert max_len_t == len(vehicle.t_intermediate_list)
-            
-            # Updating the intermediate lists with value, that have the correct length.
-            vehicle.variable_history['x_intermediate_list'][-1] = vehicle.x_intermediate_list
-            vehicle.variable_history['a_intermediate_list'][-1] = vehicle.a_intermediate_list
-            vehicle.variable_history['t_intermediate_list'][-1] = vehicle.t_intermediate_list
-            vehicle.variable_history['t_real_intermediate_list'][-1] = vehicle.t_real_intermediate_list
-            # We don't do anything with this... Probably we shouldn't even, because of Step 3.
-            # vehicle.variable_history['t_real_activation_list'][-1] = vehicle.t_real_activation_list 
-            
-            
-        return self
-        
-    
-    
-    
+
     # Okay, this will be the version, where we look, whether the obstacle has entered the danger zone.
     # How large is the danger zone?
     # Well, the size of the maximum formation size.
@@ -2135,49 +1953,10 @@ class Group(Environment):
         plt.show()
 
     def plot_frenet_view(self):
-        fig, ax = self.figures["figures"]
-        
-        for i in range(self.stage):
-            ax.clear()
-            
-            for vehicle in self.vehicles:
-                ax = vehicle.visualize_x_problem(ax, i)
-                
-            fig.savefig(self.cwd + '/figures/frenet_view_' + '{:0>2d}'.format(i) +'.png', dpi = 200)
+        return render_plot_frenet_view(self)
     
     def plot_moovie_frames(self, n_frames, iternum : int = 0, seed = ''):
-        fig, ax = self.figures["figures"]
-        ax.clear()
-        frame_num = 0
-        horizon_num = 0
-        for t in np.linspace(0, 1, n_frames):
-
-            # Then we plot the vehicles
-            for i in range(len(self.vehicles)):
-                t_start, ax = self.vehicles[i].plot_moovie_frames_mooving_horizon(ax, horizon_num)
-            horizon_num += 1
-
-            # Axis related stuff
-            # ax.set_title("Trajectories of the vehicles after iteration {} with seed {}".format(iternum, seed))
-            # Or setting the ax limits 
-            ax.set_xlim(self.border_x[0] * 1.2, self.border_x[1] * 1.2)
-            ax.set_ylim(self.border_y[0] * 1.2, self.border_y[1] * 1.2)
-            ax.set_xlim(self.vehicles[0].fp.fx_spline(t_start)[0][0] - 2, self.vehicles[0].fp.fx_spline(t_start)[0][0] + 2*3)
-            ax.set_ylim(self.vehicles[0].fp.fy_spline(t_start)[0][0] - 2.5, self.vehicles[0].fp.fy_spline(t_start)[0][0] + 2.5)
-            # ax.set_xlabel("x axis")
-            # ax.set_ylabel("y axis")
-            ax.set_aspect('equal', adjustable='box')
-            plt.axis('off')
-            ax.axes.xaxis.set_visible(False)
-            ax.axes.yaxis.set_visible(False)
-            # Saving figure to folder
-            # fig.savefig(self.cwd + '/video/' + '{:0>1d}'.format(self.stage) + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
-            fig.savefig(self.cwd + '/video/' + '{:0>2d}'.format(frame_num) +'.png', dpi = 200)
-            ax.clear()
-            frame_num += 1
-            # print('t_start, fx(t_start)' + str(t_start) + ',' + str(self.vehicles[0].fp.fx_spline(t_start)[0][0]))
-
-        return self
+        return render_plot_moovie_frames(self, n_frames, iternum=iternum, seed=seed)
     
     
     

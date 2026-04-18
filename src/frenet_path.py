@@ -5,12 +5,19 @@ import matplotlib.pyplot as plt
 from math import hypot
 from numpy import interp
 from scipy.integrate import quad
-from .frenet_spline import SplineFitter
+from .spline_fitter import SplineFitter
 
 from casadi import MX, SX, Function, vertcat, cos, sin, nlpsol
-from .spline import BSpline, BSplineBasis
-
-from .spline_extra import definite_integral, shift_spline, shift_knot1_fwd, shift_knot1_bwd, shift_over_knot, extrapolate
+from .bspline import (
+    BSpline,
+    BSplineBasis,
+    definite_integral,
+    extrapolate,
+    shift_knot1_bwd,
+    shift_knot1_fwd,
+    shift_over_knot,
+    shift_spline,
+)
 
 
 
