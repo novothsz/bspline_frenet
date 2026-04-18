@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from .environment import Environment
 from numpy import interp
 import time
-import csv
 import random
 import copy
 
@@ -16,6 +15,10 @@ except Exception:
     yaml = None
 
 from .obstacle import Obstacle
+from .admm import data_exchange_x as run_data_exchange_x
+from .admm import lambda_update_data_exchange_z as run_lambda_update_data_exchange_z
+from .admm import solve as run_solve
+from .timing import write_iteration_times as run_write_iteration_times
 from .warm_start import run_acc_mpc_t_param
 from .visualization import plot_frenet_view as render_plot_frenet_view
 from .visualization import plot_moovie_frames as render_plot_moovie_frames
@@ -1622,102 +1625,15 @@ class Group(Environment):
             self.vehicles[i].shift_enabled = simulation
         
     def data_exchange_x(self):
-        # self.plot_frenet_view()
-        """
-        2) data_exchange_x(), where these values are shared between agents.
-        """
-        message_container = []
-        # Collecting messages
-        for i in range(len(self.vehicles)):
-            message_container += self.vehicles[i].data_exchange_x_send()
-
-        # Broadcasting messages
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].data_exchange_x_receive(message_container)
-            
-        return self
+        return run_data_exchange_x(self)
     
     def lambda_update_data_exchange_z(self):
-        """
-        4) lambda_update(), which updates the lambda values.
-        """
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].lambda_update()
-
-        """
-        5) data_exchange_z, where z_i, z_ij, lambda_i, lambda_ij are shared.
-        """
-        message_container = []
-        # Collecting messages
-        for i in range(len(self.vehicles)):
-            message_container += self.vehicles[i].data_exchange_z_send()
-
-        # Broadcasting messages
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].data_exchange_z_receive(message_container)
-        
-        return self
+        return run_lambda_update_data_exchange_z(self)
         
         
 
     def solve(self):
-        
-        # self.intermediate_position_generator()
-        """
-        1) x_update(), which optimizes the trajectory of the given vehicle.
-        """
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].x_update_prior()
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].x_update()
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].x_update_posterior()
-            
-        # self.plot_frenet_view()
-
-
-        """
-        2) data_exchange_x(), where these values are shared between agents.
-        """
-        message_container = []
-        # Collecting messages
-        for i in range(len(self.vehicles)):
-            message_container += self.vehicles[i].data_exchange_x_send()
-
-        # Broadcasting messages
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].data_exchange_x_receive(message_container)
-
-        """
-        3) z_update(), optimizing the the duplicate variables z and z_ij.
-        """
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].z_update_prior()
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].z_update()
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].z_update_posterior()
-
-        """
-        4) lambda_update(), which updates the lambda values.
-        """
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].lambda_update()
-
-        """
-        5) data_exchange_z, where z_i, z_ij, lambda_i, lambda_ij are shared.
-        """
-        message_container = []
-        # Collecting messages
-        for i in range(len(self.vehicles)):
-            message_container += self.vehicles[i].data_exchange_z_send()
-
-        # Broadcasting messages
-        for i in range(len(self.vehicles)):
-            self.vehicles[i].data_exchange_z_receive(message_container)
-
-
-        return self
+        return run_solve(self)
 
 
     ###########################################################################
@@ -1729,73 +1645,7 @@ class Group(Environment):
     ###########################################################################
 
     def write_iteration_times(self, prefix = ''):
-        # first_line = "vehicle 1; vehicle 2; vehicle 3; vehicle 4; worst; sum"
-        first_line = ["vehicle 1", "vehicle 2", "vehicle 3", "vehicle 4", "worst", "best", "worst - best", "sum", "worst * 4"]
-        mode = 'w'
-        n_steps = math.floor(1 / self.vehicles[0].t_step)
-        horizon_num = n_steps
-        horizon_num_original = int(horizon_num)    
-        
-        # x update
-        with open(self.cwd + '/log/' + prefix + 'x_update_times.csv', mode = mode) as csvfile:
-            writer = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            writer.writerow(first_line)
-            for i in range(horizon_num_original):
-                horizon_num = int(i * self.vehicles[0].n_intermediate_ADMM + self.vehicles[0].n_intermediate_ADMM - 1)
-                line = []
-                worst = 0
-                best = 1e6
-                sum_ = 0
-                for vehicle in self.vehicles:
-                    sol_time = vehicle.variable_history["x_update_time"][horizon_num]
-                    line += [sol_time]
-                    worst = worst * (worst > sol_time) + sol_time * (sol_time > worst)
-                    best = best * (best < sol_time) + sol_time * (sol_time < best)
-                    sum_ += sol_time
-                line += [worst, best, worst - best, sum_, worst * 4]
-                writer.writerow(line)
-                
-                
-        # z update
-        with open(self.cwd + '/log/' + prefix + 'z_update_times.csv', mode = mode) as csvfile:
-            writer = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            writer.writerow(first_line)
-            for i in range(horizon_num_original):
-                horizon_num = int(i * self.vehicles[0].n_intermediate_ADMM + self.vehicles[0].n_intermediate_ADMM - 1)
-                line = []
-                worst = 0
-                best = 1e6
-                sum_ = 0
-                for vehicle in self.vehicles:
-                    sol_time = vehicle.variable_history["z_update_time"][horizon_num]
-                    line += [sol_time]
-                    worst = worst * (worst > sol_time) + sol_time * (sol_time > worst)
-                    best = best * (best < sol_time) + sol_time * (sol_time < best)
-                    sum_ += sol_time
-                line += [worst, best, worst - best, sum_, worst * 4]
-                writer.writerow(line)
-                
-                
-        # combined update
-        first_line = ["worst x", "worst z", "(worst x + worst z)", "(worst x + worst z) * 4"]
-        with open(self.cwd + '/log/' + prefix + 'combined_update_times.csv', mode = mode) as csvfile:
-            writer = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            writer.writerow(first_line)
-            for i in range(horizon_num_original):
-                horizon_num = int(i * self.vehicles[0].n_intermediate_ADMM + self.vehicles[0].n_intermediate_ADMM - 1)
-                line = []
-                worst_x = 0
-                worst_z = 0
-                for vehicle in self.vehicles:
-                    sol_time = vehicle.variable_history["x_update_time"][horizon_num]
-                    sol_time_z = vehicle.variable_history["z_update_time"][horizon_num]
-                    worst_x = worst_x * (worst_x > sol_time) + sol_time * (sol_time > worst_x)
-                    worst_z = worst_z * (worst_z > sol_time_z) + sol_time_z * (sol_time_z > worst_z)
-                line += [worst_x, worst_z, worst_x + worst_z, (worst_x + worst_z) * 4]
-                writer.writerow(line)
-                # writer.writerow(['{:3.4e}'.format(x) for x in line])
-                
-                
+        return run_write_iteration_times(self, prefix=prefix)
 
 
 
