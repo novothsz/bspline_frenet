@@ -1,0 +1,12 @@
+You will have a complex task to do.
+First of all, you will need to read the repo and understand, what its purpose is. To help that, I have provided root.pdf.
+
+The code however is badly written and your job is to clean it up.
+The goal is to have a simple structure and minimal amount of code.
+At the end of the cleanup, you should make sure however, that the results is the same, within a margin of error.
+
+1. First run ACC_example_2.py and save its result. Save the trajectory for every timestamps for each agent. These you should be able to reproduce after the cleanup. (Probably after every cleanup step you should compare to this, to make sure, that every one of your change is pure simplification.)
+2. Save the output of the DFG algorithm for each timestamp and replace it with a look-up table (timestamp —> agent coordinates). Reason: later we will need to think of a better algorithm, than the current DFG implementation. It is currently too much code and very confusing.
+3. Improve the algorithm, that fits a B-spline onto a trajectory. Currently it is using nonlinear optimization. Your job is to research and implement a computationally less expensive method. I believe in the current implementation we take the sinusoidal trajectory of the frenet frame (this is a time series if I can call it like that) and fit a B-spline on this sinusoidal time series. I would assume there is a more simple approach  to fit a B-spline onto a time series, than the current implementation. One, that is possibly a convex optimization algorithm or some other fitting algorithm, that is less expensive.
+4. Create a new branch and commit important steps. Before every commit, make sure that the results are the same as on the original commit. Start from commit: 1b4a006243f58ea0e763517e08f688f059e00a91
+5. /Users/szilard/Documents/Python/bspline_frenet/figures/0/ holds images for the frenet view, I think ACC_example_2.py is able to generate images that is in the “global” view if I can call it like that… Make sure that also this is generated and also .gif files out of the images.
